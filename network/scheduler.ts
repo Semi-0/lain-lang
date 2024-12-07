@@ -1,4 +1,4 @@
-import type { Propagator, Scheduler } from "./type";
+import type { Propagator, Scheduler } from "../type";
 
 // TODO: pause execute
 
