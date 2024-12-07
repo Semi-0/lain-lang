@@ -1,6 +1,7 @@
 import { register_predicate } from "generic-handler/Predicates";
-import type { CellValue } from "./type";
-import { the_contradiction, the_nothing } from "./type";
+import type { CellValue } from "../type";
+import { the_contradiction, the_nothing } from "../type";
+import { is_layered_object as is_layered } from "sando-layer/Basic/LayeredObject";
 
 
 export const is_nothing = register_predicate("is_nothing", (value: CellValue<any>) => {
@@ -22,3 +23,6 @@ export const is_cell = register_predicate("is_cell", (value: any) => {
 export const is_propagator = register_predicate("is_propagator", (value: any) => {
     return typeof value === "object" && value !== null && "id" in value && "name" in value && "input" in value && "output" in value && "activate" in value && "children" in value && "neighbors" in value && "disposer" in value;
 });
+
+// make sure registered in local generic store
+export const is_layered_object = register_predicate("is_layered_object", is_layered);

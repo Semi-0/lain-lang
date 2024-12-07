@@ -5,7 +5,7 @@ import { to_string } from "generic-handler/built_in_generics/generic_conversatio
 import { first } from "generic-handler/built_in_generics/generic_array_operation";
 import { register_predicate } from "generic-handler/Predicates";
 import { guard, throw_error } from "generic-handler/built_in_generics/other_generic_helper";
-
+import { is_layered_object } from "./predicates";
 
 export enum LispType{
     string = "String",

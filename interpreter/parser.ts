@@ -1,7 +1,9 @@
 import { Parser, charCode, oneOf, skipMany1,  seq, char, many, noneOf, parse, State, choice, letter, digit, fmap, many1, sepBy } from "parse-combinator"
-import  { SchemeElement, schemeStr, schemeNumber, schemeBoolean, schemeSymbol, schemeList } from "./definition/SchemeElement"
+import  {  LispType, as_type } from "../shared/type_layer"
 import * as util from 'util';
-
+import type { LayeredObject } from "sando-layer/Basic/LayeredObject";
+import type { Layer } from "sando-layer/Basic/Layer";
+import { mark_error } from "sando-layer/Specified/ErrorLayer"
 const symbol = oneOf("!#$%&|*+-/:<=>?@^_~\"")
 const space = oneOf("\t\r\n ")
 const spaces = skipMany1(space)
@@ -12,7 +14,7 @@ const parseString = seq(m =>{
         noneOf("\"")
     ));
     m(char('"'));
-    return x == undefined ? x : schemeStr(x.join(""))
+    return x == undefined ? x : as_type(x, LispType.string)
 })
 
 const parseBoolean = seq(m => {
@@ -21,7 +23,7 @@ const parseBoolean = seq(m => {
         char("t"),
         char("f"),
     ]))
-    return rest === "t" ? schemeBoolean(true) : schemeBoolean(false)
+    return rest === "t" ? as_type(true, LispType.boolean) : as_type(false, LispType.boolean)
 })
 
 const parseAtom = seq(m =>{
@@ -30,26 +32,26 @@ const parseAtom = seq(m =>{
     symbol,
     digit
    ])))
-   return all == undefined ? all : schemeSymbol(all.join(""))
+   return all == undefined ? all : as_type(all.join(""), LispType.symbol)
 })
 
-const parseNumber : Parser<SchemeElement> = fmap(x => schemeNumber(Number(x.join(""))), many1(digit))
+const parseNumber : Parser<LayeredObject> = fmap(x => as_type(Number(x.join("")), LispType.number), many1(digit))
 
-const parseQuoted : Parser<SchemeElement> = seq(m => {
+const parseQuoted : Parser<LayeredObject> = seq(m => {
     m(char("'"));
     const x = m(parseExpr);
-    return schemeList([schemeSymbol("quote"), x])
+    return as_type([as_type("quote", LispType.quoted), x], LispType.list)
 })
 
-const parseList : Parser<SchemeElement> = seq(m => {
+const parseList : Parser<LayeredObject> = seq(m => {
     m(char("("));
     const x = m(sepBy(parseExpr, spaces));
     m(char(")"));
-    return schemeList(x)
+    return as_type(x, LispType.list)
 })
 
 
-export const parseExpr: Parser<SchemeElement> = choice([
+export const parseExpr: Parser<LayeredObject> = choice([
     parseNumber,
     parseBoolean,
     parseString,
@@ -59,8 +61,12 @@ export const parseExpr: Parser<SchemeElement> = choice([
 ])
 
 
-
-
-// const test = parse(parseExpr, new State("(lambda (x) (+ 1 2))"))
-// console.log(test.toString())
-// console.log(util.inspect(test, {showHidden: true, depth: 8}))
+export function parseAST(str: string){
+    let result = parse(parseExpr, new State(str))
+    if (result.value){
+        return result.value
+    } 
+    else{
+        return mark_error(str, Error("failed to parse"))
+    }
+}
