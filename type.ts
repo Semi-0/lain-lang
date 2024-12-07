@@ -25,13 +25,12 @@ export interface Propagator{
     children: Propagator[],
     neighbors: Cell<any>[],
     activate: () => void,
-    input: Cell<any>[],
-    output: Cell<any>[],
+    cells: Cell<any>[],
     disposer: () => void
 }
 
 export interface PropagatorConstructor{
-    (input: Cell<any>[], output: Cell<any>[]): Propagator
+    (...cells: Cell<any>[]): Propagator
 }
 
 export interface Scheduler{

@@ -46,8 +46,8 @@ export function cell_constructor<E>(
         var content = construct_primitive_cell<E>(value);
         var strongest_value = construct_primitive_cell<E>(the_nothing);
         var new_value = construct_primitive_cell<E>(the_nothing);
-        const merge_propagator = merge([new_value], [content]);
-        const strongest_propagator = strongest([strongest_value], [content]);
+        const merge_propagator = merge(new_value, content);
+        const strongest_propagator = strongest(strongest_value, content);
         var children = [content, strongest_value, new_value];
         var neighbors: Propagator[] = [];
         const cell = {
@@ -76,7 +76,7 @@ export function cell_constructor<E>(
                 }   
         }
 
-        const handle_contradiction_propagator = handle_contradiction([cell], [cell]);
+        const handle_contradiction_propagator = handle_contradiction(cell, cell);
 
         return cell;
     }

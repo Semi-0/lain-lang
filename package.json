@@ -12,7 +12,7 @@
     "fp-ts": "^2.16.9",
     "generic-handler": "^0.3.13",
     "parse-combinator": "^1.0.1",
-    "pmatcher": "^0.3.9",
+    "pmatcher": "0.4.0",
     "sando-layer": "^0.1.6"
   }
 }
