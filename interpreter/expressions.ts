@@ -12,12 +12,12 @@ function name_tag(name: string) {
     return ":" + name
 }
 
-function parameter(name: string, matcher_expr: string[]) {
+function parameter(name: string, matcher_expr: any[]) {
     // optional name tag
     return  [P.choose, [[P.constant, name_tag(name)], matcher_expr], matcher_expr]
 }
 
-function optional_parameter(name: string, matcher_expr: string[]) {
+function optional_parameter(name: string, matcher_expr: any[]) {
     return [P.choose, parameter(name, matcher_expr), [P.segment, "empty"]]
 }
 
@@ -26,21 +26,24 @@ function propagator_tag() {
 }
 
 // defaultly cell is curried
+// (<-> [:name _] [:cell []] [:activate ...])
+// or (<-> <name> [<cell>] <activate> )
 export const expr_propagator_constructor = make_matcher([
     propagator_tag(),
     parameter("name", [P.element, "name"]),
-    parameter("cells", [P.segment, "cells"]),
+    parameter("cells", [[P.segment_independently, "cells"]]),
     parameter("activate", [P.element, "unwrapped_activate"])
 ])
 
 export const expr_detailed_propagator_constructor = make_matcher([
     propagator_tag(),
     parameter("name", [P.element, "name"]),
-    parameter("inputs", [P.segment, "inputs"]),
-    parameter("outputs", [P.segment, "outputs"]),
+    parameter("inputs", [[P.segment_independently, "inputs"]]),
+    parameter("outputs", [[P.segment_independently, "outputs"]]),
     parameter("activate", [P.element, "unwrapped_activate"])
 ])
 
+// (cell [:name _] [:value _]) or (cell <name> <value>)
 // cell constructor is defaultly curried
 export const expr_cell_constructor = make_matcher([
     keyword(["cell", "<>"]),
@@ -55,8 +58,8 @@ export const expr_apply_propagator = make_matcher([
 
 export const expr_detailed_apply_propagator = make_matcher([
     [P.element, "propagator"],
-    parameter("inputs", [P.segment, "inputs"]),
-    parameter("outputs", [P.segment, "outputs"])
+    parameter("inputs", [[P.segment, "inputs"]]),
+    parameter("outputs", [[P.segment, "outputs"]])
 ])
 
 export const expr_tell_cell = make_matcher([
@@ -65,8 +68,10 @@ export const expr_tell_cell = make_matcher([
 ])
 
 // analogouly to lambda expression and let expression
+// (network [:cells []] [:body ...])
+// or (network [<cells>] [<body>])
 export const expr_network = make_matcher([
     [P.constant, "network"],
-    parameter("cells", [P.segment, "cells"]),
-    parameter("body", [P.segment, "body"])
+    parameter("cells", [[P.segment_independently, "cells"]]),
+    parameter("body", [[P.segment_independently, "body"]])
 ])
