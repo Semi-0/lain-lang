@@ -11,18 +11,7 @@ export function construct_propagator(name: string,
         name: name,
         cells: cells,
         activate: activate,
-        children: [],
         neighbors: [],
-        disposer() {
-            this.children.forEach((child: Propagator) => {
-                child.disposer();
-            });
-            this.children = [];
-            this.neighbors.forEach((cell: Cell<any>) => {
-                cell.disposer();
-            });
-            this.neighbors = [];
-        }
     }
 }
 

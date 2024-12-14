@@ -13,20 +13,16 @@ export type CellValue<E> = E | Nothing | Contradiction;
 export interface Cell<E>{
     id: string,
     name: string,
-    children: Cell<E>[],
     value: CellValue<E>,
     neighbors: Propagator[],
-    disposer: () => void
 }
 
 export interface Propagator{
     id: string,
     name: string,
-    children: Propagator[],
     neighbors: Cell<any>[],
     activate: () => void,
     cells: Cell<any>[],
-    disposer: () => void
 }
 
 export interface PropagatorConstructor{
