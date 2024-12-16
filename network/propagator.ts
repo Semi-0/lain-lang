@@ -15,7 +15,6 @@ export function construct_propagator(name: string,
         inputs: inputs,
         outputs: outputs,
         activate: activate,
-        neighbors: [],
     }
 
     inputs.forEach(cell => {

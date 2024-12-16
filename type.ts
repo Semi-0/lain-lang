@@ -26,7 +26,6 @@ export interface Subnet<E>{
 export interface Propagator{
     id: string,
     name: string,
-    neighbors: Cell<any>[],
     activate: () => void,
     inputs: Cell<any>[],
     outputs: Cell<any>[],

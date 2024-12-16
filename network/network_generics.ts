@@ -31,7 +31,7 @@ const is_propagator = register_predicate("is_propagator", (x: any) => {
 define_generic_procedure_handler(dispose, match_args(is_cell), 
 (x: Cell<any>) => {
     x.neighbors.forEach((neighbor: Propagator) => {
-       neighbor.neighbors = neighbor.neighbors.filter(n => n !== x);
+       neighbor.inputs = neighbor.inputs.filter(n => n !== x);
     });
 
     x.neighbors = [];
