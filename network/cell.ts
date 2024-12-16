@@ -1,6 +1,7 @@
 import { reference_store } from "../shared/helper";
 import { alert_propagator } from "./scheduler";
 import { the_nothing, type Cell, type CellValue, type Propagator, type PropagatorConstructor } from "../type";
+import { deep_equal } from "sando-layer/Equality";
 
 const get_new_id = reference_store();
 
@@ -36,7 +37,12 @@ export function construct_primitive_cell<E>(): (name: string) => Cell<E>{
     var value: CellValue<E> = the_nothing
     return (name: string) => {
         return cell_constructor<E>(() => value as E, 
-                              (update: CellValue<E>) => value = update)(name);
+                              (update: CellValue<E>) => {
+                                if (deep_equal(value, update)) {
+                                    return;
+                                }
+                                value = update;
+                              })(name);
     }
 }
 
