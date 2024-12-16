@@ -25,8 +25,8 @@ function propagator_tag() {
 }
 
 // defaultly cell is curried
-// (<-> [:name _] [:cell []] [:activate ...])
-// or (<-> <name> [<cell>] <activate> )
+// (<-> [:name _] [:network ...]) => [:cells []]
+// or (<-> <name>  <network> )
 export const expr_propagator_constructor = make_matcher([
     propagator_tag(),
     parameter("name", [P.element, "name"]),
@@ -42,7 +42,7 @@ export const expr_detailed_propagator_constructor = make_matcher([
     parameter("activate", [P.element, "unwrapped_activate"])
 ])
 
-// (cell [:name _] [:value _]) or (cell <name> <value>)
+// (<> [:name _] [:value _]) or (<> <name> <value>) or (<> <name>) (with value as nothing) or (<> [:name _] [:subnet _])
 // cell constructor is defaultly curried
 export const expr_cell_constructor = make_matcher([
     keyword(["cell", "<>"]),

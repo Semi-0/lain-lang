@@ -34,7 +34,7 @@ export function alert_propagator(propagator: Propagator): void {
     the_scheduler.alert_propagator(propagator);
 }
 
-export function execute(): void {
+export function execute_all(): void {
     the_scheduler.execute();
 }
 

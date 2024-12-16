@@ -4,28 +4,11 @@ import { the_nothing, type Cell, type CellValue, type Propagator, type Propagato
 
 const get_new_id = reference_store();
 
-export function construct_primitive_cell<E>(value: CellValue<E>): Cell<E>{
-    const id = get_new_id();
-    return {
-        id: id.toString(),
-        name: `primitive_${id}`,
-        get value(): CellValue<E> {
-            return value;
-        },
-        set value(v: CellValue<E>) {
-            value = v;
-            this.neighbors.forEach(neighbor => {
-                alert_propagator(neighbor);
-            });
-        },
-        neighbors: [],
-    }
-}
 
-export function cell_constructor<E>(get_subnet: (state: Cell<E>) => E, set_subnet: (state: Cell<E>) => (update: E) => void): 
-    (value: CellValue<E>, name: string) => Cell<E> {
+export function cell_constructor<E>(get: () => E, set: (update: E) => void): 
+    (name: string) => Cell<E> {
 
-    return (value: CellValue<E>, name: string): Cell<E> => {
+    return (name: string): Cell<E> => {
         const id = get_new_id();
 
         var neighbors: Propagator[] = [];
@@ -34,10 +17,13 @@ export function cell_constructor<E>(get_subnet: (state: Cell<E>) => E, set_subne
                 name: name,
          
                 get value(): CellValue<E> {
-                    return get_subnet(cell);
+                    return get();
                 },
                 set value(v: CellValue<E>) {
-                    set_subnet(cell)(v as E);
+                    set(v as E);
+                    this.neighbors.forEach(neighbor => {
+                        alert_propagator(neighbor);
+                    });
                 },
                 neighbors: neighbors,
         }
@@ -46,3 +32,22 @@ export function cell_constructor<E>(get_subnet: (state: Cell<E>) => E, set_subne
     }
 }
 
+export function construct_primitive_cell<E>(): (name: string) => Cell<E>{
+    var value: CellValue<E> = the_nothing
+    return (name: string) => {
+        return cell_constructor<E>(() => value as E, 
+                              (update: CellValue<E>) => value = update)(name);
+    }
+}
+
+export function construct_primitive_cell_with_value<E>(value: E): (name: string) => Cell<E>{
+    return (name: string) => {
+        const cell = construct_primitive_cell<E>()(name);
+        cell.value = value;
+        return cell;
+    }
+}
+
+export function update_cell(v: any, cell: Cell<any>){
+    cell.value = v
+}

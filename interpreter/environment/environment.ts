@@ -1,7 +1,6 @@
 import { register_predicate } from "generic-handler/Predicates"
 import { create_dict_value, default_ref, extend_scoped_value, type scoped_value, type ScopeReference } from "./scoped_reference"
-import type { Env } from "bun"
-import { isElementAccessExpression } from "typescript"
+
 
 export type Environment = {
     dict: Map<string, scoped_value>,

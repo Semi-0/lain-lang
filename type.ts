@@ -17,12 +17,19 @@ export interface Cell<E>{
     neighbors: Propagator[],
 }
 
+export interface Subnet<E>{
+    update: (update: E) => void,
+    get: () => E,
+}
+
+
 export interface Propagator{
     id: string,
     name: string,
     neighbors: Cell<any>[],
     activate: () => void,
-    cells: Cell<any>[],
+    inputs: Cell<any>[],
+    outputs: Cell<any>[],
 }
 
 export interface PropagatorConstructor{
@@ -37,3 +44,5 @@ export interface Scheduler{
     step_execute: () => void
     summarize: () => string
 }
+
+
