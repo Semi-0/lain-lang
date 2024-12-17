@@ -4,16 +4,46 @@ import { construct_advice, install_advice } from "generic-handler/built_in_gener
 import { MatchResult } from "pmatcher/MatchResult/MatchResult"
 import { match_args, register_predicate } from "generic-handler/Predicates"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
-import { construct_simple_generic_procedure, define_generic_procedure_handler } from "generic-handler/GenericProcedure"
+import { construct_simple_generic_procedure, define_generic_procedure_handler } from "pmatcher/node_modules/generic-handler/GenericProcedure"
 import { compile } from "pmatcher/MatchBuilder"
 import type { MatchDict } from "pmatcher/MatchDict/MatchDict"
 import { apply } from "pmatcher/MatchResult/MatchGenericProcs"
+import type { LayeredObject } from "sando-layer/Basic/LayeredObject"
+import { createMatcherInstance, internal_match, type matcher_instance } from "pmatcher/MatchCallback"
+import { _is_type, get_value, is_lisp_list, LispType } from "../shared/type_layer"
+import type { MatchEnvironment } from "pmatcher/MatchEnvironment"
+import { match_array } from "pmatcher/MatchCombinator"
+import { createMatchFailure, FailedReason } from "pmatcher/MatchResult/MatchFailure"
+import { MatcherName } from "pmatcher/NameDict"
+import { isArray } from "pmatcher/GenericArray"
 function no_change(a: any) {
     return a
 }
 
-export function make_matcher(expr: any[]) {
-    const matcher = (args: any[]) => {
+
+export function match_layered_array(all_matcher: matcher_instance[]): matcher_instance{
+    const proc = (data: any, 
+            dictionary: MatchDict, 
+            match_env: MatchEnvironment, 
+            succeed: (dictionary: MatchDict, nEaten: number) => any): any => {
+        if (is_lisp_list(data)){
+            //@ts-ignore
+            return internal_match(match_array(all_matcher), get_value(data), dictionary, match_env, succeed)
+        }
+        else{
+            return createMatchFailure("layered_array_matcher", 
+                FailedReason.UnexpectedInput, data, null)
+        }
+    }
+    //@ts-ignore
+    return createMatcherInstance("layered_array_matcher", proc, new Map<string, any>([["matchers",all_matcher]]))
+}
+
+define_generic_procedure_handler(compile, isArray, match_layered_array)
+
+
+export function make_matcher_register(expr: any[]): MatcherRegister {
+    const matcher = (args: LayeredObject) => {
         return run_matcher(compile(expr), args, (d: MatchDict, e: number) => {return new MatchResult(d, e)})
     }
 
@@ -23,16 +53,20 @@ export function make_matcher(expr: any[]) {
     }
 }
 
-interface MatcherInstance { 
+interface MatcherRegister { 
     expr: any[], 
-    matcher: (args: any[]) => MatchResult
+    matcher: (args: LayeredObject) => MatchResult
+}
+
+export function match(expr: LayeredObject, matcher_instance: MatcherRegister): MatchResult{
+    return matcher_instance.matcher(expr)
 }
 
 export function matcher_advice(): any[]{
     var matchResult: MatchResult | null = null  
     const input_modifers =  [no_change,
-        (i: MatcherInstance) => {
-           const matcher = register_predicate(to_string(i.expr), (input: any[], ...args: any[]) => {
+        (i: MatcherRegister) => {
+           const matcher = register_predicate(to_string(i.expr), (input: LayeredObject, ...args: any[]) => {
                 matchResult = i.matcher(input)
                 return isSucceed(matchResult)
             })

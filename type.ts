@@ -12,7 +12,6 @@ export type CellValue<E> = E | Nothing | Contradiction;
 
 export interface Cell<E>{
     id: string,
-    name: string,
     value: CellValue<E>,
     neighbors: Propagator[],
 }
@@ -25,7 +24,6 @@ export interface Subnet<E>{
 
 export interface Propagator{
     id: string,
-    name: string,
     activate: () => void,
     inputs: Cell<any>[],
     outputs: Cell<any>[],

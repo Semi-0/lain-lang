@@ -1,5 +1,5 @@
 import { make } from "fp-ts/lib/Tree";
-import { make_matcher } from "./matcher";
+import { make_matcher_register } from "./matcher";
 import { match, P } from "pmatcher/MatchBuilder";
 
 function keyword(names: string[]) {
@@ -27,14 +27,14 @@ function propagator_tag() {
 // defaultly cell is curried
 // (<-> [:name _] [:network ...]) => [:cells []]
 // or (<-> <name>  <network> )
-export const expr_propagator_constructor = make_matcher([
+export const expr_propagator_constructor = make_matcher_register([
     propagator_tag(),
-    parameter("name", [P.element, "name"]),
-    parameter("cells", [[P.segment_independently, "cells"]]),
+    parameter("inputs", [[P.segment_independently, "inputs"]]),
+    parameter("outputs", [[P.segment_independently, "outputs"]]),
     parameter("activate", [P.element, "unwrapped_activate"])
 ])
 
-export const expr_detailed_propagator_constructor = make_matcher([
+export const expr_detailed_propagator_constructor = make_matcher_register([
     propagator_tag(),
     parameter("name", [P.element, "name"]),
     parameter("inputs", [[P.segment_independently, "inputs"]]),
@@ -44,24 +44,24 @@ export const expr_detailed_propagator_constructor = make_matcher([
 
 // (<> [:name _] [:value _]) or (<> <name> <value>) or (<> <name>) (with value as nothing) or (<> [:name _] [:subnet _])
 // cell constructor is defaultly curried
-export const expr_cell_constructor = make_matcher([
+export const expr_cell_constructor = make_matcher_register([
     keyword(["cell", "<>"]),
     parameter("name", [P.element, "name"]),
     optional_parameter("value", [P.element, "value"])
 ])
 
-export const expr_apply_propagator = make_matcher([
+export const expr_apply_propagator = make_matcher_register([
     [P.element, "propagator"],
     parameter("cells", [P.segment, "cells"])
 ])
 
-export const expr_detailed_apply_propagator = make_matcher([
+export const expr_detailed_apply_propagator = make_matcher_register([
     [P.element, "propagator"],
     parameter("inputs", [[P.segment, "inputs"]]),
     parameter("outputs", [[P.segment, "outputs"]])
 ])
 
-export const expr_tell_cell = make_matcher([
+export const expr_tell_cell = make_matcher_register([
     [P.element, "cell"],
     parameter("value", [P.element, "value"])
 ])
@@ -69,7 +69,7 @@ export const expr_tell_cell = make_matcher([
 // analogouly to lambda expression and let expression
 // (network [:cells []] [:body ...])
 // or (network [<cells>] [<body>])
-export const expr_network = make_matcher([
+export const expr_network = make_matcher_register([
     [P.constant, "network"],
     parameter("cells", [[P.segment_independently, "cells"]]),
     parameter("body", [[P.segment_independently, "body"]])

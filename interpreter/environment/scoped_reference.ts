@@ -36,3 +36,15 @@ export function extend_scoped_value(dict: scoped_value, scope: ScopeReference, v
     return dict
 }
 
+export function get_largest_scope(dict: scoped_value): ScopeReference{
+    return Math.max(...dict.keys())
+}
+
+export function get_value_in_scope(dict: scoped_value, scope: ScopeReference): any{
+    return dict.get(scope)
+}
+
+export function get_value_in_largest_scope(dict: scoped_value): any{
+    return get_value_in_scope(dict, get_largest_scope(dict))
+}
+

@@ -8,23 +8,23 @@ import type { Pair } from "./data_types";
 import { execute_all, summarize } from "./scheduler";
 
 export function p_plus(a: Cell<number>, b: Cell<number>, o: Cell<number>) {
-    return lift_propagator_a("plus", (a: number, b: number) => a + b)(a, b, o);
+    return lift_propagator_a((a: number, b: number) => a + b)(a, b, o);
 }
 
 export function cons(ca: Cell<any>, cb: Cell<any>, o: Cell<any>) {
-    return lift_propagator_a("cons", (a: any, b: any) => 
+    return lift_propagator_a((a: any, b: any) => 
         construct_pair(ca, cb)
     )(ca, cb, o);
 }
 
 export function first(c: Cell<Pair<any>>, o: Cell<any>) {
-    return lift_propagator_a("first", (c: Pair<any>) => {
+    return lift_propagator_a((c: Pair<any>) => {
         return get_fst(c);
     })(c, o);
 }
 
 export function rest(c: Cell<Pair<any>>, o: Cell<any>) {
-    return lift_propagator_a("rest", (c: Pair<any>) => {
+    return lift_propagator_a((c: Pair<any>) => {
         return get_snd(c);
     })(c, o);
 }

@@ -6,16 +6,12 @@ import { deep_equal } from "sando-layer/Equality";
 const get_new_id = reference_store();
 
 
-export function cell_constructor<E>(get: () => E, set: (update: E) => void): 
-    (name: string) => Cell<E> {
-
-    return (name: string): Cell<E> => {
+export function cell_constructor<E>(get: () => E, set: (update: E) => void): Cell<E> {
         const id = get_new_id();
 
         var neighbors: Propagator[] = [];
         const cell = {
                 id: id.toString(),
-                name: name,
          
                 get value(): CellValue<E> {
                     return get();
@@ -31,27 +27,24 @@ export function cell_constructor<E>(get: () => E, set: (update: E) => void):
 
         return cell;
     }
-}
 
-export function construct_primitive_cell<E>(): (name: string) => Cell<E>{
+export function construct_primitive_cell<E>(): Cell<E>{
     var value: CellValue<E> = the_nothing
-    return (name: string) => {
-        return cell_constructor<E>(() => value as E, 
+
+    return cell_constructor<E>(() => value as E, 
                               (update: CellValue<E>) => {
                                 if (deep_equal(value, update)) {
                                     return;
                                 }
                                 value = update;
-                              })(name);
-    }
+                              }
+    )
 }
 
-export function construct_primitive_cell_with_value<E>(value: E): (name: string) => Cell<E>{
-    return (name: string) => {
-        const cell = construct_primitive_cell<E>()(name);
-        cell.value = value;
-        return cell;
-    }
+export function construct_primitive_cell_with_value<E>(value: E): Cell<E>{
+    const cell = construct_primitive_cell<E>();
+    cell.value = value;
+    return cell;
 }
 
 export function update_cell(v: any, cell: Cell<any>){
