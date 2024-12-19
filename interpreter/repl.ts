@@ -1,13 +1,13 @@
 import { compose } from "generic-handler/built_in_generics/generic_combinator";
-import { parseAST } from "./parser";
-import { evaluate } from "./evaluator";
+import { parse_AST } from "./parser";
+import { eval_expr } from "./evaluator";
 import { get_error_layer_value } from "sando-layer/Specified/ErrorLayer";
 import { has_error_layer } from "sando-layer/Specified/ErrorLayer";
 import type { LayeredObject } from "sando-layer/Basic/LayeredObject";
 import * as readline from "readline"
 
 // @ts-ignore
-export const execute_repl: (str: string) => LayeredObject = compose(parseAST, evaluate)
+export const execute_repl: (str: string) => LayeredObject = compose(parse_AST, eval_expr)
 
 export function repl(){
     const rl = readline.createInterface({

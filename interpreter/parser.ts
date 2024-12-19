@@ -72,7 +72,7 @@ export const parseExpr: Parser<LayeredObject> = choice([
 ])
 
 
-export function parseAST(str: string){
+export function parse_AST(str: string){
     let result = parse(parseExpr, new State(str))
     if (result.value){
         return result.value

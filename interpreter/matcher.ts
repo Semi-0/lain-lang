@@ -20,39 +20,11 @@ import { createMatchFailure, FailedReason } from "pmatcher/MatchResult/MatchFail
 import { is_any, is_array } from "generic-handler/built_in_generics/generic_predicates"
 import { inspect } from "bun"
 import { get_element, get_length, isArray, set_element } from "pmatcher/GenericArray"
-import { is_scheme_list } from "../shared/type_predicates"
+import { is_scheme_list, is_scheme_symbol } from "../shared/type_predicates"
 
 function no_change(a: any) {
     return a
 }
-
-
-// export function match_layered_array(all_matcher: matcher_instance[]): matcher_instance{
-//     const proc = (data: any, 
-//             dictionary: MatchDict, 
-//             match_env: MatchEnvironment, 
-//             succeed: (dictionary: MatchDict, nEaten: number) => any): any => {
-//         if (is_lisp_list(data)){
-//             //@ts-ignore
-//             return internal_match(match_array(all_matcher), get_value(data), dictionary, match_env, succeed)
-//         }
-//         else if (is_array(data)){
-//             console.log(data)
-//             return internal_match(match_array(all_matcher), data, dictionary, match_env, succeed)
-//         }
-//         else{
-//             return createMatchFailure("layered_array_matcher", 
-//                 FailedReason.UnexpectedInput, data, null)
-//         }
-//     }
-//     //@ts-ignore
-//     return createMatcherInstance("layered_array_matcher", proc, new Map<string, any>([["matchers",all_matcher]]))
-// }
-
-// define_compile_handler(compile, is_array, (pattern: any[]) => {
-//     // this unexpected covered other sub-pattern
-//     return match_layered_array(pattern.map(compile))
-// })
 
 
 // confirm layered array to generic array
@@ -84,6 +56,17 @@ define_compile_handler(isArray,
         return true
     }
 )
+
+import { equal, isString } from "pmatcher/utility"
+
+define_compile_handler(equal,
+    pmatcher_match_args(is_scheme_symbol, isString),
+    (a: any, b: any) => {
+        console.log(get_value(a))
+        return get_value(a) === b
+    }
+)
+
 
 
 export function make_matcher_register(expr: any[]): MatcherRegister {
@@ -135,21 +118,3 @@ const make_exec = (result: MatchResult) => {
     }
 }
 
-
-/// simple test
-
-// const try_match = construct_simple_generic_procedure("try_match", 1, (a: any[]) => {return a}) 
-
-// define_match_handler(try_match, 
-//     make_matcher_register([[P.element, "a"], [P.segment, "rest"]]),
-//     (exec: (...args: any[]) => any, ...args: any[]) => {
-//         return exec((a: any, rest: any[]) => {
-//             console.log("executed")
-//             console.log(a)
-//             console.log(rest)
-//             return a
-//         })
-//     }
-// )
-
-// try_match(["a", "b", "c"])

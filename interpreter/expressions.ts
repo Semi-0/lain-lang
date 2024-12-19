@@ -34,9 +34,9 @@ export const expr_var = make_matcher_register([
     [P.element, "expr", is_scheme_symbol]
 ]) 
 
-export const expr_quoted = make_matcher_register([
+export const expr_quoted = make_matcher_register(
     ["quote", [P.element, "expr"]]
-])
+)
 
 
 export const expr_application = make_matcher_register([

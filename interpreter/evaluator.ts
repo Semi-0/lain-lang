@@ -2,7 +2,7 @@
 
 import { construct_simple_generic_procedure } from "generic-handler/GenericProcedure"
 import type { LayeredObject } from "sando-layer/Basic/LayeredObject"
-import { define, environment_define, lookup, type Environment } from "./environment/environment"
+import { define, empty_environment, environment_define, lookup, type Environment } from "./environment/environment"
 import { define_match_handler, make_matcher_register, execute_match } from "./matcher"
 import { isSucceed } from "pmatcher/Predicates"
 import { apply as apply_matched} from "pmatcher/MatchResult/MatchGenericProcs"
@@ -14,6 +14,14 @@ import { construct_primitive_cell_with_value } from "../network/cell"
 import { tell_cell } from "./propagator_wrapper"
 import { mark_error } from "sando-layer/Specified/ErrorLayer"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
+import type { Layer } from "sando-layer/Basic/Layer"
+
+export const eval_expr = (expr: LayeredObject) => {
+    return evaluate(expr, empty_environment, (expr: LayeredObject, env: Environment) => {
+        return evaluate(expr, env)
+    })
+}
+
 export const evaluate = construct_simple_generic_procedure("evaluate", 3, (expr, env, continuation) => {
     return default_eval(expr, env, continuation)
 })
@@ -25,7 +33,7 @@ export function default_eval(expr: LayeredObject, env: Environment, continuation
     if (isSucceed(application)){
         return apply_matched((propagator: LayeredObject, cells: LayeredObject[]) => {
             return apply(continuation(propagator, env), cells, env, continuation)
-        })
+        }, application)
     }
     else{
         return mark_error(expr, Error("failed to apply, expr is not an application: " + to_string(expr)))
