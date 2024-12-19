@@ -47,6 +47,6 @@ export function construct_primitive_cell_with_value<E>(value: E): Cell<E>{
     return cell;
 }
 
-export function update_cell(v: any, cell: Cell<any>){
-    cell.value = v
+export function update_cell(cell: Cell<any>, value: any){
+    cell.value = value
 }

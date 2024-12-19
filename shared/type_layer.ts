@@ -15,7 +15,9 @@ export enum LispType{
     quoted = "Quoted",
     list = "List",
     expression = "Expression",
-    lambda = "Lambda",
+    cell = "Cell",
+    propagator = "Propagator",
+    cell_boolean = "CellBoolean",
     let = "Let",
     call = "Call",
     closure = "Closure",
@@ -87,7 +89,7 @@ export const as_type = construct_layer_ui(type_layer,
     }
 )
 
-export function _is_type(t: LispType){
+export function is_type(t: LispType){
     return (a: any) => {
         return is_typed_object(a) && type_layer.get_value(a) === t
     }
@@ -99,7 +101,7 @@ export function has_type_layer(a: LayeredObject): boolean{
 
 export const is_typed_object  = register_predicate("is_lisp_type", has_type_layer)
 
-export const is_lisp_list = register_predicate("is_lisp_list", _is_type(LispType.list))
+export const is_lisp_list = register_predicate("is_lisp_list", is_type(LispType.list))
 
 
 

@@ -26,3 +26,7 @@ export const is_propagator = register_predicate("is_propagator", (value: any) =>
 
 // make sure registered in local generic store
 export const is_layered_object = register_predicate("is_layered_object", is_layered);
+
+export const is_continuation = register_predicate("is_continuation", (value: any) => {
+    return typeof value === "function";
+});

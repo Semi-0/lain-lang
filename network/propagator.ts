@@ -49,7 +49,7 @@ export function lift_propagator_a<E>(f: (...args: any[]) => E) {
         const inputs = get_input_cells(cells);
         const outputs = [get_output_cell(cells)];
         return construct_propagator(inputs, outputs, () => {
-            update_cell(f(...inputs.map(c => c.value)), outputs[0]);
+            update_cell(outputs[0], f(...inputs.map(c => c.value)));
         });
     }
 }

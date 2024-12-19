@@ -7,3 +7,9 @@ export function reference_store(){
         return r;
     }
 }
+
+export function throw_unimplemented(){
+    return () => {
+        throw new Error("Unimplemented")
+    }
+}

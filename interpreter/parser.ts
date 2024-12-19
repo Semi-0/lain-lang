@@ -4,6 +4,7 @@ import * as util from 'util';
 import type { LayeredObject } from "sando-layer/Basic/LayeredObject";
 import type { Layer } from "sando-layer/Basic/Layer";
 import { mark_error } from "sando-layer/Specified/ErrorLayer"
+import { string } from "parse-combinator"
 const symbol = oneOf("!#$%&|*+-/:<=>?@^_~\"")
 const space = oneOf("\t\r\n ")
 const spaces = skipMany1(space)
@@ -24,6 +25,15 @@ const parseBoolean = seq(m => {
         char("f"),
     ]))
     return rest === "t" ? as_type(true, LispType.boolean) : as_type(false, LispType.boolean)
+})
+
+const parseCellBoolean = seq(m => {
+    const first = m(char("^"));
+    const rest = m(choice([
+        string("contradiction"),
+        string("nothing")
+    ]))
+    return rest === "t" ? as_type(true, LispType.cell_boolean) : as_type(false, LispType.cell_boolean)
 })
 
 const parseAtom = seq(m =>{
@@ -54,6 +64,7 @@ const parseList : Parser<LayeredObject> = seq(m => {
 export const parseExpr: Parser<LayeredObject> = choice([
     parseNumber,
     parseBoolean,
+    parseCellBoolean,
     parseString,
     parseAtom,
     parseQuoted,
