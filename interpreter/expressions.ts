@@ -56,7 +56,7 @@ export const expr_propagator_constructor = make_matcher_register([
 // (<> [:name _] [:value _]) or (<> <name> <value>) or (<> <name>) (with value as nothing) or (<> [:name _] [:subnet _])
 // cell constructor is defaultly curried
 export const expr_primitive_cell_constructor = make_matcher_register([
-    keyword(["primtive-cell", "<>"]),
+    keyword(["primitive-cell", "<>"]),
     optional_parameter("value", [P.element, "value"])
 ])
 

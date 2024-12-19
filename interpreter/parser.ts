@@ -33,7 +33,7 @@ const parseCellBoolean = seq(m => {
         string("contradiction"),
         string("nothing")
     ]))
-    return rest === "t" ? as_type(true, LispType.cell_boolean) : as_type(false, LispType.cell_boolean)
+    return rest === "contradiction" ? as_type("contradiction", LispType.cell_boolean) : as_type("nothing", LispType.cell_boolean)
 })
 
 const parseAtom = seq(m =>{

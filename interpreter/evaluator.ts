@@ -3,17 +3,17 @@
 import { construct_simple_generic_procedure } from "generic-handler/GenericProcedure"
 import type { LayeredObject } from "sando-layer/Basic/LayeredObject"
 import { define, environment_define, lookup, type Environment } from "./environment/environment"
-import { define_match_handler, make_matcher_register, match } from "./matcher"
-import { P } from "pmatcher/MatchBuilder"
+import { define_match_handler, make_matcher_register, execute_match } from "./matcher"
 import { isSucceed } from "pmatcher/Predicates"
 import { apply as apply_matched} from "pmatcher/MatchResult/MatchGenericProcs"
 import { apply } from "./apply"
-import {  expr_define,  expr_primitive_cell_constructor, expr_propagator_constructor, expr_self_evaluate, expr_tell_cell, expr_var } from "./expressions"
+import { expr_define,  expr_primitive_cell_constructor, expr_propagator_constructor, expr_self_evaluate, expr_tell_cell, expr_var } from "./expressions"
 import { construct_closure, construct_propagator_expr } from "./environment/closure"
-import { get_value } from "../shared/type_layer"
 import { expr_application } from "./expressions"
-import { construct_primitive_cell, construct_primitive_cell_with_value } from "../network/cell"
+import { construct_primitive_cell_with_value } from "../network/cell"
 import { tell_cell } from "./propagator_wrapper"
+import { mark_error } from "sando-layer/Specified/ErrorLayer"
+import { to_string } from "generic-handler/built_in_generics/generic_conversation"
 export const evaluate = construct_simple_generic_procedure("evaluate", 3, (expr, env, continuation) => {
     return default_eval(expr, env, continuation)
 })
@@ -21,18 +21,21 @@ export const evaluate = construct_simple_generic_procedure("evaluate", 3, (expr,
 type EvalHandler = (exec: (...args: any[]) => any, env: Environment, continuation: (result: LayeredObject, env: Environment) => any) => any
 
 export function default_eval(expr: LayeredObject, env: Environment, continuation: (expr: LayeredObject, env: Environment) => LayeredObject): LayeredObject{
-    const application =  match(expr, expr_application)
+    const application =  execute_match(expr, expr_application)
     if (isSucceed(application)){
         return apply_matched((propagator: LayeredObject, cells: LayeredObject[]) => {
             return apply(continuation(propagator, env), cells, env, continuation)
         })
     }
-    return expr
+    else{
+        return mark_error(expr, Error("failed to apply, expr is not an application: " + to_string(expr)))
+    }
 }
 
 define_match_handler(evaluate, expr_self_evaluate,
     ((exec: (...args: any[]) => any, env: Environment, continuation: (result: LayeredObject, env: Environment) => any) => {
         return exec((expr: LayeredObject) => {
+            console.log("self evaluate")
             return expr
         })
     }) as EvalHandler

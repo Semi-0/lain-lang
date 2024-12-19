@@ -116,7 +116,7 @@ export function get_type_annotate(a: LayeredObject): LispType{
     return type_layer.get_value(a)
 }
 
-export function get_value(a: LayeredObject): LispType{
+export function get_value(a: LayeredObject): any{
     guarantee_type_object(a)
     return base_layer().get_value(a)
 }

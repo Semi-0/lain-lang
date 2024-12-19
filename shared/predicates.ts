@@ -4,6 +4,10 @@ import { the_contradiction, the_nothing } from "../type";
 import { is_layered_object as is_layered } from "sando-layer/Basic/LayeredObject";
 
 
+export const is_array = register_predicate("is_array", (value: any) => {
+    return Array.isArray(value);
+});
+
 export const is_nothing = register_predicate("is_nothing", (value: CellValue<any>) => {
     return value === the_nothing;
 });
