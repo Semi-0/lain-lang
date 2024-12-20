@@ -1,3 +1,5 @@
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
+
 export function reference_store(){
     var reference = 0;
 
@@ -9,7 +11,7 @@ export function reference_store(){
 }
 
 export function throw_unimplemented(){
-    return () => {
-        throw new Error("Unimplemented")
+    return (...args: any[]) => {
+        throw new Error("Unimplemented:" + to_string(args))
     }
 }

@@ -31,28 +31,27 @@ describe('Expression Matchers', () => {
 
     describe('expr_self_evaluate', () => {
         it('should match numbers', () => {
-            expect(isSucceed(expr_self_evaluate.matcher(scheme_list([scheme_number(3)])))).toBe(true);
-            expect(isSucceed(expr_self_evaluate.matcher(scheme_list([scheme_number(3.14)])))).toBe(true);
+            expect(isSucceed(expr_self_evaluate.matcher(scheme_number(3)))).toBe(true);
+            expect(isSucceed(expr_self_evaluate.matcher(scheme_number(3.14)))).toBe(true);
         });
 
         it('should match strings', () => {
-            expect(isSucceed(expr_self_evaluate.matcher(scheme_list([scheme_string("hello")])))).toBe(true);
+            expect(isSucceed(expr_self_evaluate.matcher(scheme_string("hello")))).toBe(true);
         });
 
         it('should not match symbols', () => {
-            expect(isSucceed(expr_self_evaluate.matcher(scheme_list([scheme_symbol('test')] )))).toBe(false);
+            expect(isSucceed(expr_self_evaluate.matcher(scheme_symbol('test')))).toBe(false);
         });
     });
 
     describe('expr_var', () => {
         it('should match Scheme symbols', () => {
-            const schemeSymbol = scheme_symbol('x');
-            expect(isSucceed(expr_var.matcher(scheme_list([scheme_symbol('x')] )))).toBe(true);
+            expect(isSucceed(expr_var.matcher(scheme_symbol('x')))).toBe(true);
         });
 
         it('should not match other types', () => {
-            expect(isSucceed(expr_var.matcher(scheme_list([scheme_number(42)])))).toBe(false);
-            expect(isSucceed(expr_var.matcher(scheme_list([scheme_string("x")])))).toBe(false);
+            expect(isSucceed(expr_var.matcher(scheme_number(42)))).toBe(false);
+            expect(isSucceed(expr_var.matcher(scheme_string("x")))).toBe(false);
         });
     });
 
@@ -130,7 +129,10 @@ describe('Expression Matchers', () => {
 
         it('should match alternative syntax with no tags', () => {
             const name = scheme_symbol('x');
-            expect(isSucceed(expr_define.matcher(scheme_list([scheme_symbol('define'), name, scheme_number(42)])))).toBe(true);
+            expect(isSucceed(expr_define.matcher(scheme_list([
+                scheme_symbol('define'), 
+                name, 
+                scheme_number(42)])))).toBe(true);
         });
     });
 

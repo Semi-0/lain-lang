@@ -48,5 +48,6 @@ export function construct_primitive_cell_with_value<E>(value: E): Cell<E>{
 }
 
 export function update_cell(cell: Cell<any>, value: any){
+    console.log("update_cell:", cell, value)
     cell.value = value
 }

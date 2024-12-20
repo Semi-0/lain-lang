@@ -58,8 +58,7 @@ define_match_handler(evaluate, expr_var,
             if (v === undefined){
                 return mark_error(expr, Error("variable not found: " + to_string(expr)))
             }
-            else{
-                console.log("v:", inspect(v))
+            else{ 
                 return v
             }
         })
@@ -76,8 +75,8 @@ define_match_handler(evaluate, expr_propagator_constructor,
 
 define_match_handler(evaluate, expr_primitive_cell_constructor,
     ((exec, env, continuation): EvalHandler => {
-        return exec((value: LayeredObject) => {
-            return construct_primitive_cell_with_value(value)
+        return exec((value: LayeredObject[]) => {
+            return construct_primitive_cell_with_value(value[0])
         })
     }) as EvalHandler
 )
@@ -85,6 +84,7 @@ define_match_handler(evaluate, expr_primitive_cell_constructor,
 define_match_handler(evaluate, expr_define,
     ((exec, env, continuation): EvalHandler => {
         return exec((name: LayeredObject, value: LayeredObject) => {
+            console.log("value:", continuation(value, env))
            return define(env, name, continuation(value, env))
         })
     }) as EvalHandler

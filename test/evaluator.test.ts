@@ -9,13 +9,13 @@ import { base_layer, get_base_value } from 'sando-layer/Basic/Layer';
 describe('Evaluator', () => {
     describe('self evaluating expressions', () => {
         it('should evaluate numbers', () => {
-            const expr = scheme_list([scheme_number(42)]);
+            const expr = scheme_number(42);
             const result = eval_expr(expr);
             expect(get_value(result)).toBe(42);
         });
 
         it('should evaluate strings', () => {
-            const expr = scheme_list([scheme_string('hello')]);
+            const expr = scheme_string('hello');
             const result = eval_expr(expr);
             expect(get_value(result)).toBe('hello');
         });
@@ -71,17 +71,24 @@ describe('Evaluator', () => {
     describe('tell cell expressions', () => {
         it('should evaluate tell cell expressions', () => {
             // First create a cell
-            const cellExpr = scheme_list([scheme_symbol('<>')]);
-            const cell = eval_expr(cellExpr);
+            const cellExpr = scheme_list([scheme_symbol("define"),
+                scheme_symbol("x"),
+                [scheme_symbol('<>'), scheme_number(0)]]);
+            const env = empty_environment();
+            const cell = evaluate(cellExpr, env, (expr: LayeredObject, env: Environment) => {
+                return evaluate(expr, env)
+            });
 
             // Then tell it a value
             const tellExpr = scheme_list([
                 scheme_symbol('tell'),
-                cell,
+                scheme_symbol('x'),
                 scheme_list([scheme_symbol(':value'), scheme_number(42)])
             ]);
             
-            const result = eval_expr(tellExpr);
+            const result = evaluate(tellExpr, env, (expr: LayeredObject, env: Environment) => {
+                return evaluate(expr, env)
+            });
             expect(result).toBeDefined();
             expect(get_value(cell).value).toBe(42);
         });

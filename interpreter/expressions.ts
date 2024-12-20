@@ -26,13 +26,13 @@ function propagator_tag() {
 }
 
 
-export const expr_self_evaluate = make_matcher_register([
+export const expr_self_evaluate = make_matcher_register(
     [P.element, "expr", is_self_evaluate]
-])
+)
 
-export const expr_var = make_matcher_register([
+export const expr_var = make_matcher_register(
     [P.element, "expr", is_scheme_symbol]
-]) 
+) 
 
 export const expr_quoted = make_matcher_register(
     ["quote", [P.element, "expr"]]
@@ -50,14 +50,15 @@ export const expr_propagator_constructor = make_matcher_register([
     propagator_tag(),
     parameter("inputs", [[P.segment_independently, "inputs"]]),
     parameter("outputs", [[P.segment_independently, "outputs"]]),
-    parameter("activate", [P.element, "unwrapped_activate"])
+    parameter("activate", [P.element, "activate"])
 ])
 
 // (<> [:name _] [:value _]) or (<> <name> <value>) or (<> <name>) (with value as nothing) or (<> [:name _] [:subnet _])
 // cell constructor is defaultly curried
+// perhaps primitive cell should like <p>
 export const expr_primitive_cell_constructor = make_matcher_register([
     keyword(["primitive-cell", "<>"]),
-    optional_parameter("value", [P.element, "value"])
+    parameter("value", [P.segment, "value"])
 ])
 
 export const expr_tell_cell = make_matcher_register([
@@ -67,7 +68,7 @@ export const expr_tell_cell = make_matcher_register([
 ])
 
 export const expr_define = make_matcher_register([
-    keyword(["define"]),
+    "define",
     parameter("name", [P.element, "name"]),
     parameter("value", [P.element, "value"])
 ])
