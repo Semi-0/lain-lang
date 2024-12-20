@@ -15,6 +15,7 @@ import { tell_cell } from "./propagator_wrapper"
 import { mark_error } from "sando-layer/Specified/ErrorLayer"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
 import type { Layer } from "sando-layer/Basic/Layer"
+import { inspect } from "bun"
 
 export const eval_expr = (expr: LayeredObject) => {
     return evaluate(expr, empty_environment, (expr: LayeredObject, env: Environment) => {
@@ -43,7 +44,7 @@ export function default_eval(expr: LayeredObject, env: Environment, continuation
 define_match_handler(evaluate, expr_self_evaluate,
     ((exec: (...args: any[]) => any, env: Environment, continuation: (result: LayeredObject, env: Environment) => any) => {
         return exec((expr: LayeredObject) => {
-            console.log("self evaluate")
+   
             return expr
         })
     }) as EvalHandler
@@ -52,7 +53,15 @@ define_match_handler(evaluate, expr_self_evaluate,
 define_match_handler(evaluate, expr_var, 
     ((exec: (...args: any[]) => any, env: Environment, continuation: (result: LayeredObject, env: Environment) => any) => {
         return exec((expr: LayeredObject) => {
-            return lookup(env, expr)
+    
+            const v = lookup(env, expr)
+            if (v === undefined){
+                return mark_error(expr, Error("variable not found: " + to_string(expr)))
+            }
+            else{
+                console.log("v:", inspect(v))
+                return v
+            }
         })
     }) as EvalHandler
 )

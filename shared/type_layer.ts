@@ -1,5 +1,5 @@
 import type { BetterSet } from "generic-handler/built_in_generics/generic_better_set";
-import { base_layer, make_annotation_layer, type Layer } from "sando-layer/Basic/Layer";
+import { base_layer, get_base_value, make_annotation_layer, type Layer } from "sando-layer/Basic/Layer";
 import { construct_layer_ui, type LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { to_string } from "generic-handler/built_in_generics/generic_conversation";
 import { first } from "generic-handler/built_in_generics/generic_array_operation";
@@ -112,11 +112,9 @@ export function guarantee_type_object(a: LayeredObject){
 }
 
 export function get_type_annotate(a: LayeredObject): LispType{
-    guarantee_type_object(a) 
     return type_layer.get_value(a)
 }
 
 export function get_value(a: LayeredObject): any{
-    guarantee_type_object(a)
     return base_layer().get_value(a)
 }

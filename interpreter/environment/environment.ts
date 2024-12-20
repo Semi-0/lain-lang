@@ -42,7 +42,7 @@ export function new_sub_environment(env: Environment): Environment{
 }
 
 export const is_environment = register_predicate("is_environment", (A: any): boolean => {
-    return A instanceof Map
+    return A !== undefined && A.dict !== undefined && A.ref !== undefined
 })
 
 export function lookup_scope(env: Environment, scope: ScopeReference, key: string): any | undefined {
@@ -52,7 +52,7 @@ export function lookup_scope(env: Environment, scope: ScopeReference, key: strin
 export function lookup_raw(env: Environment, key: string): any | undefined {
     if (env.dict.has(key)){
         const value = env.dict.get(key)
-        if ((value !== undefined) && (get_largest_scope(value) < env.ref)){
+        if ((value !== undefined) && (get_largest_scope(value) <= env.ref)){
             return get_value_in_largest_scope(value)
         }
         else{
@@ -64,13 +64,17 @@ export function lookup_raw(env: Environment, key: string): any | undefined {
     }
 }
 
-export const lookup = make_layered_procedure("lookup", 2, (env, key) => {
+export const lookup = construct_simple_generic_procedure("lookup", 2, throw_unimplemented())
+
+define_generic_procedure_handler(lookup, match_args(is_environment, is_string), (env, key) => {
     return lookup_raw(env, key)
 }) 
 
-define_layered_procedure_handler(lookup, type_layer, (base: LayeredObject, env: Layer, key: Layer) =>{
-    return get_type_annotate(base)
+define_generic_procedure_handler(lookup, match_args(is_environment, is_layered_object), (env, key) => {
+    return lookup(env, get_value(key))
 })
+
+
 
 export function has(env: Environment, key: string): boolean{
     return env.dict.has(key)
