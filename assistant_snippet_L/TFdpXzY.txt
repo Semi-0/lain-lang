@@ -1,0 +1,47 @@
+1|// Define handler
+2|define_match_handler(evaluate, expr_define,
+3|    ((exec, env, continuation): EvalHandler => {
+4|        return exec((name: LayeredObject, value: LayeredObject) => {
+5|            const evaluated_value = continuation(value, env);
+6|            return define(env, name, evaluated_value);
+7|        })
+8|    }) as EvalHandler
+9|)
+10|
+11|// Cell constructor handler
+12|define_match_handler(evaluate, expr_primitive_cell_constructor,
+13|    ((exec, env, continuation): EvalHandler => {
+14|        return exec((value?: LayeredObject) => {
+15|            if (!value || value === undefined) {
+16|                return construct_primitive_cell();
+17|            }
+18|            const evaluated_value = continuation(value, env);
+19|            return construct_primitive_cell_with_value(evaluated_value);
+20|        })
+21|    }) as EvalHandler
+22|)
+23|
+24|// Tell cell handler
+25|define_match_handler(evaluate, expr_tell_cell,
+26|    ((exec, env, continuation): EvalHandler => {
+27|        return exec((cell: LayeredObject, value: LayeredObject) => {
+28|            const evaluated_cell = continuation(cell, env);
+29|            const evaluated_value = continuation(value, env);
+30|            return tell_cell(evaluated_cell, evaluated_value);
+31|        })
+32|    }) as EvalHandler
+33|)
+34|
+35|// Propagator constructor handler
+36|define_match_handler(evaluate, expr_propagator_constructor,
+37|    ((exec, env, continuation): EvalHandler => {
+38|        return exec((inputs: LayeredObject[], outputs: LayeredObject[], activate: LayeredObject) => {
+39|            const evaluated_inputs = inputs.map(input => continuation(input, env));
+40|            const evaluated_outputs = outputs.map(output => continuation(output, env));
+41|            return construct_closure(
+42|                construct_propagator_expr(evaluated_inputs, evaluated_outputs, activate),
+43|                env
+44|            );
+45|        })
+46|    }) as EvalHandler
+47|) 

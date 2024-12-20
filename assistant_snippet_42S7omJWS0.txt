@@ -1,0 +1,29 @@
+1|// Define expression matcher
+2|export const expr_define = make_matcher_register([
+3|    [P.constant, "define"],
+4|    [P.element, "name"],
+5|    [P.element, "value"]
+6|])
+7|
+8|// Cell constructor matcher
+9|export const expr_primitive_cell_constructor = make_matcher_register([
+10|    keyword(["<>", "primitive-cell"]),
+11|    [P.choose,
+12|        [parameter("value", [P.element, "value"]),
+13|        [P.segment, "empty"]]
+14|])
+15|
+16|// Tell cell matcher
+17|export const expr_tell_cell = make_matcher_register([
+18|    keyword(["tell", "<~"]),
+19|    [P.element, "cell"],
+20|    parameter("value", [P.element, "value"])
+21|])
+22|
+23|// Propagator constructor matcher
+24|export const expr_propagator_constructor = make_matcher_register([
+25|    propagator_tag(),
+26|    parameter("inputs", [[P.segment_independently, "inputs"]]),
+27|    parameter("outputs", [[P.segment_independently, "outputs"]]),
+28|    [P.element, "activate"]
+29|]) 

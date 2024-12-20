@@ -44,6 +44,7 @@ describe('Evaluator', () => {
             ]);
             
             const result = eval_expr(expr);
+            console.log("result:", result)
             expect(result).toBeDefined();
         });
     });
@@ -57,7 +58,7 @@ describe('Evaluator', () => {
             
             const result = eval_expr(expr);
             expect(result).toBeDefined();
-            expect(get_value(result).value).toBe(42);
+            expect(get_base_value(get_value(result).value)).toBe(42);
         });
 
         it('should evaluate cell constructor without value', () => {
