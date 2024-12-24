@@ -24,8 +24,8 @@ export interface Pair<T>{
 
 export function construct_pair<T>(fst: Cell<T>, snd: Cell<T>): Pair<T>{
     return {
-        fst: construct_pointer(fst),
-        snd: construct_pointer(snd),
+        fst: fst.value,
+        snd: snd.value
     }
 }
 
@@ -36,7 +36,8 @@ export const is_pair = register_predicate("is_pair", (x: any) => {
 export function get_fst<T>(pair: Pair<Pointer<T>> | typeof the_nothing): CellValue<T>{
     if (is_pair(pair)) {
         // @ts-ignore
-        return pair.fst.get_value();
+        // return pair.fst.get_value();
+        return pair.fst
     }
     else {
         return the_nothing
@@ -46,7 +47,8 @@ export function get_fst<T>(pair: Pair<Pointer<T>> | typeof the_nothing): CellVal
 export function get_snd<T>(pair: Pair<T> | typeof the_nothing): CellValue<T>{
     if (is_pair(pair)) {
         // @ts-ignore
-        return pair.snd.get_value();
+        // return pair.snd.get_value();
+        return pair.snd
     }
     else {
         return the_nothing

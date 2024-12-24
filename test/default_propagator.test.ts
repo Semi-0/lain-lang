@@ -149,21 +149,25 @@ describe('Pair', () => {
         const result = ps_cons(ps_cons(a, b), ps_cons(c, d))
         // p_log(a, "a")
         update_cell(a, 5);
+        const fst = ps_first(result)
 
-        execute_all();
         console.log(summarize())
         // console.log(a.value)
+        console.log(fst.value)
         const should_be_a = ps_first(ps_first(result))
+        const pa = ps_first(ps_first(result))
+        execute_all();
+        console.log(pa.value)
         // const should_be_b = ps_rest(ps_first(result))
         // const should_be_c = ps_first(ps_rest(result))
         // const should_be_d = ps_rest(ps_rest(result))
 
         // p_tap(a, "a", primitive_cell())
-        // trace_cell_chain(a, (cell) => {
-        //     console.log("=>")
-        //     console.log(cell.id)
-        //     console.log(cell.value)
-        // })
+        trace_cell_chain(a, (cell) => {
+            console.log("=>")
+            console.log(cell.id)
+            console.log(cell.value)
+        })
         console.log("should be a id: ", should_be_a.id)
         expect(should_be_a.value).toBe(5);
         // expect(should_be_b.value).toBe(2);
