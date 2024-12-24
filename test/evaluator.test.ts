@@ -43,8 +43,7 @@ describe('Evaluator', () => {
                 scheme_number(42)
             ]);
             
-            const result = eval_expr(expr);
-            console.log("result:", result)
+            const result = eval_expr(expr)
             expect(result).toBeDefined();
         });
     });

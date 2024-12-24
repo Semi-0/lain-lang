@@ -3,7 +3,7 @@
 import type { Cell, Propagator } from "../type";
 import { primitive_cell, constant_cell, update_cell } from "./cell";
 import { construct_pair, get_fst, get_snd } from "./data_types";
-import { construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
+import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
 import type { Pair } from "./data_types";
 import { execute_all, summarize } from "./scheduler";
 
@@ -33,6 +33,11 @@ export function p_divide(a: Cell<number>, b: Cell<number>, o: Cell<number>) {
 }
 
 export function p_cons(ca: Cell<any>, cb: Cell<any>, o: Cell<any>) {
+
+    // return construct_compound_propagator([ca, cb], [o], () => {
+    //     update_cell(o, construct_pair(ca, cb));
+    // });
+
     return lift_propagator_a((a: any, b: any) => 
         construct_pair(ca, cb)
     )(ca, cb, o);
@@ -47,6 +52,13 @@ export function p_first(c: Cell<Pair<any>>, o: Cell<any>) {
 export function p_rest(c: Cell<Pair<any>>, o: Cell<any>) {
     return lift_propagator_a((c: Pair<any>) => {
         return get_snd(c);
+    })(c, o);
+}
+
+export function p_tap(c: Cell<any>, tag: string, o: Cell<any>){
+    return lift_propagator_a((c: any) => {
+        console.log(tag, c)
+        return c;
     })(c, o);
 }
 

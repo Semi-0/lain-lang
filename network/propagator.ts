@@ -32,6 +32,7 @@ export function construct_compound_propagator(
     var built = false;
     return construct_propagator(inputs, outputs, () => {
         if (!built) {
+            console.log("activate compound propagator")
             activate();
             built = true;
         }
@@ -64,3 +65,4 @@ export function lift_propagator_b<E>(f: (next: (update: E) => void, ...args: any
     return f(next, ...args);
    });
 }
+

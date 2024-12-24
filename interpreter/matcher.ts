@@ -62,7 +62,7 @@ import { equal, isString } from "pmatcher/utility"
 define_compile_handler(equal,
     pmatcher_match_args(is_scheme_symbol, isString),
     (a: any, b: any) => {
-        console.log(get_value(a))
+ 
         return get_value(a) === b
     }
 )

@@ -17,7 +17,9 @@ export function cell_constructor<E>(get: () => E, set: (update: E) => void): Cel
                     return get();
                 },
                 set value(v: CellValue<E>) {
+                    console.log("set value", v,  "cell id", this.id)
                     set(v as E);
+
                     this.neighbors.forEach(neighbor => {
                         alert_propagator(neighbor);
                     });
@@ -83,3 +85,12 @@ export function get_value(cell: Cell<any>){
     return cell.value;
 }
 
+
+export function trace_cell_chain(cell: Cell<any>, f: (cell: Cell<any>) => void){
+    f(cell);
+    cell.neighbors.forEach(neighbor => {
+        neighbor.outputs.forEach(output => {
+            trace_cell_chain(output, f);
+        });
+    });
+}
