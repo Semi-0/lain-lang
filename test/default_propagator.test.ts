@@ -1,11 +1,12 @@
 import { primitive_cell, constant_cell, update_cell, trace_cell_chain } from "../network/cell";
 import { describe, it, expect } from 'bun:test';
-import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_tap } from "../network/default_propagator";
+import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_tap, p_if } from "../network/default_propagator";
 import { execute_all, summarize } from "../network/scheduler";
 import { construct_pair, get_fst, get_snd, type Pair } from "../network/data_types";
 import { ps_cons, ps_first, ps_rest } from "../network/default_propagator";
 import { the_nothing } from "../type";
 import { constant } from "fp-ts/lib/function";
+import { construct_compound_propagator } from "../network/propagator";
 
 
 
@@ -196,4 +197,39 @@ describe("switch", () => {
         execute_all();
         expect(c.value).toBe(2);
     })
+})
+
+
+describe("compound propagator", () => {
+    it("compound propagator", () => {
+        const a = constant_cell(1);
+        const b = constant_cell(2);
+        const c = primitive_cell<number>();
+        const compound = construct_compound_propagator([a, b], [c], () => {
+           p_plus(a, b, c); 
+        })
+
+        update_cell(a, 1);
+        execute_all();
+
+        expect(c.value).toBe(3);
+
+        update_cell(b, 4);
+        execute_all();
+        expect(c.value).toBe(5);
+    })
+
+        it("if", () => {
+            const a = constant_cell(true);
+            const b = constant_cell(2);
+            const c = constant_cell(3);
+            const d = primitive_cell<number>();
+            const p = p_if(a, b, c, d);
+            execute_all();
+            expect(d.value).toBe(2);
+
+            update_cell(a, false);
+            execute_all();
+            expect(d.value).toBe(3);
+        })
 })

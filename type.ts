@@ -4,16 +4,21 @@ export const the_nothing = "$the_nothing"
 
 export const the_contradiction = "$the_contradiction"
 
+export const dispose = "$dispose"
+
 export type Nothing = typeof the_nothing;
 
 export type Contradiction = typeof the_contradiction;
 
-export type CellValue<E> = E | Nothing | Contradiction;
+export type Dispose = typeof dispose;
+
+export type CellValue<E> = E | Nothing | Contradiction | Dispose;
 
 export interface Cell<E>{
     id: string,
     value: CellValue<E>,
     neighbors: Propagator[],
+
 }
 
 export interface Subnet<E>{

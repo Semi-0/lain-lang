@@ -1,6 +1,6 @@
 // default network to make cells
 
-import type { Cell, Propagator } from "../type";
+import { the_nothing, type Cell, type Propagator } from "../type";
 import { primitive_cell, constant_cell, update_cell } from "./cell";
 import { construct_pair, get_fst, get_snd } from "./data_types";
 import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
@@ -32,6 +32,10 @@ export function p_divide(a: Cell<number>, b: Cell<number>, o: Cell<number>) {
     return lift_propagator_a((a: number, b: number) => a / b)(a, b, o);
 }
 
+export function p_equal(a: Cell<any>, b: Cell<any>, o: Cell<boolean>) {
+    return lift_propagator_a((a: any, b: any) => a === b)(a, b, o);
+}
+
 export function p_cons(ca: Cell<any>, cb: Cell<any>, o: Cell<any>) {
     return lift_propagator_a((a: any, b: any) => 
         construct_pair(ca, cb)
@@ -52,15 +56,21 @@ export function p_rest(c: Cell<Pair<any>>, o: Cell<any>) {
 
 export function p_tap(c: Cell<any>, tag: string, o: Cell<any>){
     return lift_propagator_a((c: any) => {
-        console.log(tag, c)
         return c;
     })(c, o);
+}
+
+export function p_not(c: Cell<boolean>, o: Cell<boolean>) {
+    return lift_propagator_a((c: boolean) => !c)(c, o);
 }
 
 
 export const ps_cons = prop_sugar_transformer(p_cons);
 export const ps_first = prop_sugar_transformer(p_first);
 export const ps_rest = prop_sugar_transformer(p_rest);
+export const ps_equal = prop_sugar_transformer(p_equal);
+export const ps_plus = prop_sugar_transformer(p_plus);
+export const ps_not = prop_sugar_transformer(p_not);
 
 export function p_switch(switch_cell: Cell<boolean>, value_cell: Cell<any>, output_cell: Cell<any>) {
     return lift_propagator_b((next: (update: any) => void, c:boolean, v: any) => {
@@ -68,6 +78,24 @@ export function p_switch(switch_cell: Cell<boolean>, value_cell: Cell<any>, outp
             next(v);
         }
     })(switch_cell, value_cell, output_cell);
+}
+
+// export function c_length(c: Cell<any>, o: Cell<number>, last: Cell<any>) {
+//     return construct_compound_propagator([c], [o], () => {
+//         const done = constant_cell(false);
+//         const accumulator = constant_cell(0);
+//         const fst = ps_first(c)
+//         const m_last = ps_first
+//         const length = ps_plus(accumulator, constant_cell(1))
+//         switch(ps_equal(fst, constant_cell(the_nothing)))
+//     })
+// }
+
+export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
+    return construct_compound_propagator([condition], [output], () => {
+        p_switch(condition, then_cell, output);
+        p_switch(ps_not(condition), else_cell, output);
+    })
 }
 // boolean 
 

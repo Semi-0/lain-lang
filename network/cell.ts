@@ -17,6 +17,7 @@ export function cell_constructor<E>(get: () => E, set: (update: E) => void): Cel
                     return get();
                 },
                 set value(v: CellValue<E>) {
+           
                     set(v as E);
 
                     this.neighbors.forEach(neighbor => {
