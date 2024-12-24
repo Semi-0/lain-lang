@@ -1,14 +1,15 @@
 import type { Cell, Propagator } from "../type";
 import { reference_store } from "../shared/helper";
-import { update_cell } from "./cell";
+import { add_propagator, update_cell } from "./cell";
 
 const get_new_id = reference_store();
 
 // perhaps propagator should be defaultly anonymous?
 export function construct_propagator(
-                                    inputs: Cell<any>[], 
-                                    outputs: Cell<any>[],
-                                    activate: () => void): Propagator{
+    inputs: Cell<any>[], 
+    outputs: Cell<any>[],
+    activate: () => void
+): Propagator{
     const propagator: Propagator = {
         id: get_new_id().toString(),
 
@@ -18,7 +19,7 @@ export function construct_propagator(
     }
 
     inputs.forEach(cell => {
-        cell.neighbors.push(propagator);
+        add_propagator(cell, propagator);
     });
     return propagator;
 }
@@ -26,7 +27,8 @@ export function construct_propagator(
 export function construct_compound_propagator(
     inputs: Cell<any>[], 
     outputs: Cell<any>[],
-    activate: () => void): Propagator{
+    activate: () => void
+): Propagator{
     var built = false;
     return construct_propagator(inputs, outputs, () => {
         if (!built) {
@@ -54,11 +56,11 @@ export function lift_propagator_a<E>(f: (...args: any[]) => E) {
     }
 }
 
-export function lift_propagator_b<E>(f: (next: (update: E) => void) => void) {
+export function lift_propagator_b<E>(f: (next: (update: E) => void, ...args: any[]) => void) {
    return lift_propagator_a((...args: any[]) => {
     const next = (update: E) => {
         get_output_cell(args).value = update;
     }
-    return f(next);
+    return f(next, ...args);
    });
 }

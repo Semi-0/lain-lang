@@ -10,7 +10,7 @@ import { apply } from "./apply"
 import { expr_define,  expr_primitive_cell_constructor, expr_propagator_constructor, expr_self_evaluate, expr_tell_cell, expr_var } from "./expressions"
 import { construct_closure, construct_propagator_expr } from "./environment/closure"
 import { expr_application } from "./expressions"
-import { construct_primitive_cell_with_value } from "../network/cell"
+import { constant_cell } from "../network/cell"
 import { tell_cell } from "./propagator_wrapper"
 import { mark_error } from "sando-layer/Specified/ErrorLayer"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
@@ -76,7 +76,7 @@ define_match_handler(evaluate, expr_propagator_constructor,
 define_match_handler(evaluate, expr_primitive_cell_constructor,
     ((exec, env, continuation): EvalHandler => {
         return exec((value: LayeredObject[]) => {
-            return construct_primitive_cell_with_value(value[0])
+            return constant_cell(value[0])
         })
     }) as EvalHandler
 )

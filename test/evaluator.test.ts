@@ -21,7 +21,7 @@ describe('Evaluator', () => {
         });
     });
 
-    describe('variable expressions', () => {
+    describe('xiable expressions', () => {
         it('should evaluate variables in environment', () => {
             const env = empty_environment();
             env.dict.set('x', new Map([[0, scheme_number(42)]]));

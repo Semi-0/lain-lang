@@ -1,7 +1,5 @@
 import { the_contradiction, the_nothing, type CellValue } from "../type";
 
-
-
 export function default_merge(old_value: CellValue<any>, new_value: CellValue<any>): CellValue<any>{
     if (old_value === the_nothing) {
         return new_value;
