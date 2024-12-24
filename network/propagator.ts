@@ -58,11 +58,26 @@ export function lift_propagator_a<E>(f: (...args: any[]) => E) {
 }
 
 export function lift_propagator_b<E>(f: (next: (update: E) => void, ...args: any[]) => void) {
-   return lift_propagator_a((...args: any[]) => {
-    const next = (update: E) => {
-        get_output_cell(args).value = update;
+
+    return (...args: any[]) => {
+       const inputs = get_input_cells(args);
+       const output = get_output_cell(args);
+
+       return construct_propagator(inputs, [output], () => {
+            const next = (update: E) => {
+                update_cell(output, update);
+            }
+
+            f(next, ...inputs.map(c => c.value));
+       })
     }
-    return f(next, ...args);
-   });
+
+
+//    return lift_propagator_a((...args: any[]) => {
+//     const next = (update: E) => {
+//         update_cell(get_output_cell(args), update);
+//     }
+//     return f(next, ...args);
+//    });
 }
 

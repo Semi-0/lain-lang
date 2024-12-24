@@ -33,11 +33,6 @@ export function p_divide(a: Cell<number>, b: Cell<number>, o: Cell<number>) {
 }
 
 export function p_cons(ca: Cell<any>, cb: Cell<any>, o: Cell<any>) {
-
-    // return construct_compound_propagator([ca, cb], [o], () => {
-    //     update_cell(o, construct_pair(ca, cb));
-    // });
-
     return lift_propagator_a((a: any, b: any) => 
         construct_pair(ca, cb)
     )(ca, cb, o);
