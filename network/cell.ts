@@ -6,7 +6,7 @@ import { deep_equal } from "sando-layer/Equality";
 const get_new_id = reference_store();
 
 
-export function cell_constructor<E>(get: () => E, set: (update: E) => void): Cell<E> {
+export function cell_constructor<E>(get: () => E, set: (update: E, alert_propagators: () => void) => void): Cell<E> {
         const id = get_new_id();
 
         var neighbors: Propagator[] = [];
@@ -18,11 +18,15 @@ export function cell_constructor<E>(get: () => E, set: (update: E) => void): Cel
                 },
                 set value(v: CellValue<E>) {
            
-                    set(v as E);
-
-                    this.neighbors.forEach(neighbor => {
-                        alert_propagator(neighbor);
+                    set(v as E, () => {
+                        this.neighbors.forEach(neighbor => {
+                            alert_propagator(neighbor);
+                        });
                     });
+                    // console.log("cell set", this.id, v);
+                    // this.neighbors.forEach(neighbor => {
+                    //     alert_propagator(neighbor);
+                    // });
                 },
                 get neighbors(): Propagator[]{
                     return neighbors;
@@ -42,12 +46,13 @@ export function primitive_cell<E>(): Cell<E>{
     var value: CellValue<E> = the_nothing
 
     return cell_constructor<E>(() => value as E, 
-                              (update: CellValue<E>) => {
+                              (update: CellValue<E>, alert_propagators: () => void) => {
                                 if (deep_equal(value, update)) {
                                     return;
                                 }
                                 else{
                                     value = update;
+                                    alert_propagators();
                                 }
                               }
     )

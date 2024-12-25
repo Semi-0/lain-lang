@@ -1,10 +1,10 @@
 import { primitive_cell, constant_cell, update_cell, trace_cell_chain } from "../network/cell";
 import { describe, it, expect } from 'bun:test';
-import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_tap, p_if } from "../network/default_propagator";
+import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_log, p_if, p_length, ps_equal, ps_smaller, ps_write, ps_plus, ps_not, p_write, ps_when, p_when } from "../network/default_propagator";
 import { execute_all, summarize } from "../network/scheduler";
 import { construct_pair, get_fst, get_snd, type Pair } from "../network/data_types";
 import { ps_cons, ps_first, ps_rest } from "../network/default_propagator";
-import { the_nothing } from "../type";
+import { the_nothing, type Cell, type Propagator } from "../type";
 import { constant } from "fp-ts/lib/function";
 import { construct_compound_propagator } from "../network/propagator";
 
@@ -231,5 +231,48 @@ describe("compound propagator", () => {
             update_cell(a, false);
             execute_all();
             expect(d.value).toBe(3);
+        })
+
+        it("simple loop", () => {
+            function loop(index: Cell<number>, target: Cell<number>, output: Cell<number>) {
+                return construct_compound_propagator([index, target], [output], () => {
+                    // Check if we've reached target
+                    const is_done = ps_not(ps_smaller(index, target));
+                    p_log(index, "index", primitive_cell());
+                    // If not done, increment accumulator and feed it back
+                
+                    // p_log(is_done, "is_done", primitive_cell());
+                    ps_when(ps_not(is_done), c => {
+                        loop(ps_plus(ps_write(index), constant_cell(1)), target, output);
+                    })
+             
+                            
+                    // When done, output final value
+                    p_switch(is_done, index, output);
+                });
+            }
+
+            // Test case
+            const index = constant_cell(0);
+            const target = constant_cell(10);
+            const output = primitive_cell<number>();
+            const loop_propagator = loop(index, target, output);
+            execute_all();
+            expect(output.value).toBe(10);
+        })
+
+
+        it("length", () => {
+            const a = constant_cell(1);
+            const b = constant_cell(2);
+            const c = constant_cell(3);
+            const d = constant_cell(4);
+            const e = primitive_cell<number>();
+            const p = ps_cons(a, ps_cons(b, ps_cons(c, ps_cons(d, e))))
+            const l = primitive_cell<number>();
+            const pl = p_length(p, l);
+            execute_all();
+            console.log(l.value)
+            // expect(l.value).toBe(5);
         })
 })

@@ -7,7 +7,7 @@ export function construct_scheduler(): Scheduler{
         propagators_to_alert: [],
         alerted_propagators: [],
         alert_propagator(propagator: Propagator) {
-            this.propagators_to_alert.push(propagator);
+            this.propagators_to_alert.unshift(propagator);
         },
         execute(): void {
             while (this.propagators_to_alert.length > 0){
@@ -15,6 +15,7 @@ export function construct_scheduler(): Scheduler{
             }
         },
         step_execute(): void {
+            // console.log(this.propagators_to_alert)
             const propagator = this.propagators_to_alert.pop();
             if (propagator === undefined){
                 return;

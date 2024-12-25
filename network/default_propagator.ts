@@ -6,6 +6,7 @@ import { construct_pair, get_fst, get_snd } from "./data_types";
 import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
 import type { Pair } from "./data_types";
 import { execute_all, summarize } from "./scheduler";
+import { write } from "bun";
 
 
 export function prop_sugar_transformer(p: (...cells: Cell<any>[]) => Propagator): (...inputs: Cell<any>[]) => Cell<any> {
@@ -54,23 +55,33 @@ export function p_rest(c: Cell<Pair<any>>, o: Cell<any>) {
     })(c, o);
 }
 
-export function p_tap(c: Cell<any>, tag: string, o: Cell<any>){
+export function p_log(c: Cell<any>, tag: string, o: Cell<any>){
     return lift_propagator_a((c: any) => {
+        console.log(tag, c);
         return c;
     })(c, o);
+}
+
+export function p_when(when: Cell<boolean>, do_function: (c: any) => any, o: Cell<any>){
+    return lift_propagator_a((c: any) => {
+          if (when.value === true){
+            do_function(c);
+          }
+          return c;
+    })(when, o);
+}
+
+export function ps_when(when: Cell<boolean>, do_function: (c: any) => any){
+    const output = primitive_cell<any>();
+
+    p_when(when, do_function, output);
+    return output;
+   
 }
 
 export function p_not(c: Cell<boolean>, o: Cell<boolean>) {
     return lift_propagator_a((c: boolean) => !c)(c, o);
 }
-
-
-export const ps_cons = prop_sugar_transformer(p_cons);
-export const ps_first = prop_sugar_transformer(p_first);
-export const ps_rest = prop_sugar_transformer(p_rest);
-export const ps_equal = prop_sugar_transformer(p_equal);
-export const ps_plus = prop_sugar_transformer(p_plus);
-export const ps_not = prop_sugar_transformer(p_not);
 
 export function p_switch(switch_cell: Cell<boolean>, value_cell: Cell<any>, output_cell: Cell<any>) {
     return lift_propagator_b((next: (update: any) => void, c:boolean, v: any) => {
@@ -80,16 +91,12 @@ export function p_switch(switch_cell: Cell<boolean>, value_cell: Cell<any>, outp
     })(switch_cell, value_cell, output_cell);
 }
 
-// export function c_length(c: Cell<any>, o: Cell<number>, last: Cell<any>) {
-//     return construct_compound_propagator([c], [o], () => {
-//         const done = constant_cell(false);
-//         const accumulator = constant_cell(0);
-//         const fst = ps_first(c)
-//         const m_last = ps_first
-//         const length = ps_plus(accumulator, constant_cell(1))
-//         switch(ps_equal(fst, constant_cell(the_nothing)))
-//     })
-// }
+
+export function p_write(c: Cell<any>, o: Cell<any>) {
+    return lift_propagator_a((c: any) => {
+        return c;
+    })(c, o);
+}
 
 export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
     return construct_compound_propagator([condition], [output], () => {
@@ -97,6 +104,57 @@ export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: 
         p_switch(ps_not(condition), else_cell, output);
     })
 }
+
+export function p_smaller(a: Cell<number>, b: Cell<number>, o: Cell<boolean>) {
+    return lift_propagator_a((a: number, b: number) => a < b)(a, b, o);
+}
+
+export const ps_cons = prop_sugar_transformer(p_cons);
+export const ps_first = prop_sugar_transformer(p_first);
+export const ps_rest = prop_sugar_transformer(p_rest);
+export const ps_equal = prop_sugar_transformer(p_equal);
+export const ps_plus = prop_sugar_transformer(p_plus);
+export const ps_not = prop_sugar_transformer(p_not);
+export const ps_if = prop_sugar_transformer(p_if);
+export const ps_write = prop_sugar_transformer(p_write);
+export const ps_smaller = prop_sugar_transformer(p_smaller);
+
+
+export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>) {
+    return construct_compound_propagator([pairs], [o], () => {
+        // this is not tail recursive
+
+
+        const length = constant_cell(0);
+        const temp_pairs = ps_write(pairs);
+        const temp_pairs_2 = ps_write(temp_pairs);
+        const temp_length = ps_write(length);
+    
+
+        const first = ps_first(temp_pairs);
+        const rest = ps_rest(temp_pairs);
+        // p_tap(rest, "rest", primitive_cell());
+        // p_tap(temp_pairs, "temp_pairs", primitive_cell());
+        p_log(first, "first", primitive_cell());
+        // p_tap(length, "length", primitive_cell());
+
+        const done = ps_if(ps_equal(rest, constant_cell(the_nothing)),
+                            constant_cell(true), 
+                            constant_cell(false))
+
+        p_log(done, "done", primitive_cell());
+        // const temp2 = constant_cell(length.value);
+        // p_tap(temp2, "temp2", primitive_cell());
+        p_switch(done, length, o) 
+        p_switch(ps_not(done), 
+                ps_plus(temp_length, constant_cell(1)), 
+                length)
+        p_switch(ps_not(done), 
+                ps_rest(temp_pairs_2), 
+                temp_pairs)
+    })
+}
+
 // boolean 
 
 // loop
