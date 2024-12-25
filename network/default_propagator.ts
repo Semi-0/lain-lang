@@ -120,38 +120,18 @@ export const ps_write = prop_sugar_transformer(p_write);
 export const ps_smaller = prop_sugar_transformer(p_smaller);
 
 
-export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>) {
+export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<number>) {
     return construct_compound_propagator([pairs], [o], () => {
         // this is not tail recursive
+        const first = ps_first(pairs);
+        const is_done = ps_equal(first, constant_cell(the_nothing));
+        // p_log(is_done, "is_done", primitive_cell());
+  
+        ps_when(ps_not(is_done), () => {
+            p_length(ps_rest(ps_write(pairs)), o, ps_plus(ps_write(start), constant_cell(1)));
+        })
 
-
-        const length = constant_cell(0);
-        const temp_pairs = ps_write(pairs);
-        const temp_pairs_2 = ps_write(temp_pairs);
-        const temp_length = ps_write(length);
-    
-
-        const first = ps_first(temp_pairs);
-        const rest = ps_rest(temp_pairs);
-        // p_tap(rest, "rest", primitive_cell());
-        // p_tap(temp_pairs, "temp_pairs", primitive_cell());
-        p_log(first, "first", primitive_cell());
-        // p_tap(length, "length", primitive_cell());
-
-        const done = ps_if(ps_equal(rest, constant_cell(the_nothing)),
-                            constant_cell(true), 
-                            constant_cell(false))
-
-        p_log(done, "done", primitive_cell());
-        // const temp2 = constant_cell(length.value);
-        // p_tap(temp2, "temp2", primitive_cell());
-        p_switch(done, length, o) 
-        p_switch(ps_not(done), 
-                ps_plus(temp_length, constant_cell(1)), 
-                length)
-        p_switch(ps_not(done), 
-                ps_rest(temp_pairs_2), 
-                temp_pairs)
+        p_switch(is_done, start, o);
     })
 }
 

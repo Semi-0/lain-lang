@@ -238,16 +238,11 @@ describe("compound propagator", () => {
                 return construct_compound_propagator([index, target], [output], () => {
                     // Check if we've reached target
                     const is_done = ps_not(ps_smaller(index, target));
-                    p_log(index, "index", primitive_cell());
-                    // If not done, increment accumulator and feed it back
-                
-                    // p_log(is_done, "is_done", primitive_cell());
+
                     ps_when(ps_not(is_done), c => {
-                        loop(ps_plus(ps_write(index), constant_cell(1)), target, output);
+                        loop(ps_plus(ps_write(index), constant_cell(1)), ps_write(target), output);
                     })
              
-                            
-                    // When done, output final value
                     p_switch(is_done, index, output);
                 });
             }
@@ -267,12 +262,15 @@ describe("compound propagator", () => {
             const b = constant_cell(2);
             const c = constant_cell(3);
             const d = constant_cell(4);
-            const e = primitive_cell<number>();
-            const p = ps_cons(a, ps_cons(b, ps_cons(c, ps_cons(d, e))))
+            const e = constant_cell(5);
+            const f = primitive_cell<number>();
+            // a legal form should always have a nothing at the end
+            const p = ps_cons(a, ps_cons(b, ps_cons(c, ps_cons(d, ps_cons(e, f)))))
+
             const l = primitive_cell<number>();
-            const pl = p_length(p, l);
+            const pl = p_length(p, l, constant_cell(0));
             execute_all();
-            console.log(l.value)
-            // expect(l.value).toBe(5);
+
+            expect(l.value).toBe(5);
         })
 })
