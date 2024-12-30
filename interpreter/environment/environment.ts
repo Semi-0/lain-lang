@@ -124,7 +124,7 @@ define_generic_procedure_handler(define,
 
 
 export const extend = construct_simple_generic_procedure("extend", 3, throw_unimplemented)
-
+// TODO: scope exist before
 define_generic_procedure_handler(extend, 
     match_args(
         is_environment, is_string, is_layered_object

@@ -17,16 +17,11 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
                     return get();
                 },
                 set value(v: CellValue<E>) {
-           
                     set(v as E, () => {
                         this.neighbors.forEach(neighbor => {
                             alert_propagator(neighbor);
                         });
                     });
-                    // console.log("cell set", this.id, v);
-                    // this.neighbors.forEach(neighbor => {
-                    //     alert_propagator(neighbor);
-                    // });
                 },
                 get neighbors(): Propagator[]{
                     return neighbors;
@@ -36,6 +31,10 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
                     this.neighbors.forEach(neighbor => {
                         alert_propagator(neighbor);
                     });
+                },
+                children: [],
+                dispose: () => {
+                    neighbors = [];
                 }
         }
 
@@ -73,7 +72,7 @@ export function add_propagator(cell: Cell<any>, propagator: Propagator){
 } 
 
 export function remove_propagator(cell: Cell<any>, propagator: Propagator){
-    cell.neighbors = cell.neighbors.filter(n => n !== propagator);
+    cell.neighbors = cell.neighbors.filter(n => n.id !== propagator.id);
 }  
 
 export function get_neighbors(cell: Cell<any>){

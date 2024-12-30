@@ -25,6 +25,10 @@ export function construct_scheduler(): Scheduler{
         },
         summarize(): string {
             return `propagators_to_alert: ${this.propagators_to_alert.length}, alerted_propagators: ${this.alerted_propagators.length}`;
+        },
+        clear(): void {
+            this.propagators_to_alert = [];
+            this.alerted_propagators = [];
         }
     }
 }
@@ -33,6 +37,10 @@ export const the_scheduler = construct_scheduler();
 
 export function alert_propagator(propagator: Propagator): void {
     the_scheduler.alert_propagator(propagator);
+}
+
+export function clear_scheduler(): void {
+    the_scheduler.clear();
 }
 
 export function execute_all(): void {

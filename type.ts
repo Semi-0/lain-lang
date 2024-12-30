@@ -14,11 +14,15 @@ export type Dispose = typeof dispose;
 
 export type CellValue<E> = E | Nothing | Contradiction | Dispose;
 
+
+export type Disposable = Cell<any> | Propagator;
+
 export interface Cell<E>{
     id: string,
     value: CellValue<E>,
     neighbors: Propagator[],
-
+    children: Disposable[],
+    dispose: () => void,
 }
 
 export interface Subnet<E>{
@@ -32,6 +36,8 @@ export interface Propagator{
     activate: () => void,
     inputs: Cell<any>[],
     outputs: Cell<any>[],
+    children: Disposable[],
+    dispose: () => void,
 }
 
 export interface PropagatorConstructor{
@@ -45,6 +51,7 @@ export interface Scheduler{
     execute: () => void,
     step_execute: () => void
     summarize: () => string
+    clear: () => void
 }
 
 

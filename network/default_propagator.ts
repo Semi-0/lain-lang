@@ -1,6 +1,6 @@
 // default network to make cells
 
-import { the_nothing, type Cell, type Propagator } from "../type";
+import { the_nothing, type Cell, type Propagator, type Disposable } from "../type";
 import { primitive_cell, constant_cell, update_cell } from "./cell";
 import { construct_pair, get_fst, get_snd } from "./data_types";
 import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
@@ -99,9 +99,16 @@ export function p_write(c: Cell<any>, o: Cell<any>) {
 }
 
 export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
-    return construct_compound_propagator([condition], [output], () => {
-        p_switch(condition, then_cell, output);
-        p_switch(ps_not(condition), else_cell, output);
+    return construct_compound_propagator([condition], [output], (set_children: (children: Disposable[]) => void) => {
+     
+
+            const not_cell: Cell<boolean> = primitive_cell();
+            const not_propagator = p_not(condition, not_cell);
+            const switch_propagator = p_switch(condition, then_cell, output);
+            const switch_not_propagator = p_switch(not_cell, else_cell, output);
+
+            set_children([not_cell, not_propagator, switch_propagator, switch_not_propagator]);
+
     })
 }
 
@@ -120,20 +127,20 @@ export const ps_write = prop_sugar_transformer(p_write);
 export const ps_smaller = prop_sugar_transformer(p_smaller);
 
 
-export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<number>) {
-    return construct_compound_propagator([pairs], [o], () => {
-        // this is not tail recursive
-        const first = ps_first(pairs);
-        const is_done = ps_equal(first, constant_cell(the_nothing));
-        // p_log(is_done, "is_done", primitive_cell());
+// export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<number>) {
+//     return construct_compound_propagator([pairs], [o], (set_children: (children: Disposable[]) => void) => {
+//         // this is not tail recursive
+//         const first = ps_first(pairs);
+//         const is_done = ps_equal(first, constant_cell(the_nothing));
+//         // p_log(is_done, "is_done", primitive_cell());
   
-        ps_when(ps_not(is_done), () => {
-            p_length(ps_rest(ps_write(pairs)), o, ps_plus(ps_write(start), constant_cell(1)));
-        })
+//         ps_when(ps_not(is_done), () => {
+//             p_length(ps_rest(ps_write(pairs)), o, ps_plus(ps_write(start), constant_cell(1)));
+//         })
 
-        p_switch(is_done, start, o);
-    })
-}
+//         p_switch(is_done, start, o);
+//     })
+// }
 
 // boolean 
 

@@ -31,7 +31,7 @@ describe('Evaluator', () => {
                 return evaluate(expr, env)
             });
  
-            expect(get_base_value(get_base_value (result))).toBe(42);
+            expect(get_base_value(get_base_value(result))).toBe(42);
         });
     });
 
