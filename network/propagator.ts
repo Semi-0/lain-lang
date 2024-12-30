@@ -26,6 +26,8 @@ export function construct_propagator(
         activate: act,
         children,
         dispose: () => {
+            act = () => {};
+
             children.forEach(child => {
                 child.dispose();
             });
@@ -65,7 +67,7 @@ export function construct_compound_propagator(
     const propagator = construct_propagator(inputs, outputs, (set_children: (children: Disposable[]) => void) => {
         return () => { 
             if (!built) {
-                console.log("activate compound propagator")
+                console.log("activate compound propagator a")
                 activate(set_children);
                 built = true;
             }

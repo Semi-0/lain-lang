@@ -1,12 +1,14 @@
 import { primitive_cell, constant_cell, update_cell, trace_cell_chain } from "../network/cell";
 import { describe, it, expect } from 'bun:test';
-import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_log, p_if,  ps_equal, ps_smaller, ps_write, ps_plus, ps_not, p_write, ps_when, p_when } from "../network/default_propagator";
+import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, prop_sugar_transformer, p_log, p_if,  ps_equal, ps_smaller, ps_write, ps_plus, ps_not, p_write, ps_when, p_when, pc_simple_loop, pc_map, p_add_one } from "../network/default_propagator";
 import { clear_scheduler, execute_all, summarize } from "../network/scheduler";
-import { construct_pair, get_fst, get_snd, type Pair } from "../network/data_types";
+import { cons_cell, car, cdr, type Pair } from "../network/data_types";
 import { ps_cons, ps_first, ps_rest } from "../network/default_propagator";
-import { the_nothing, type Cell, type Propagator, type Disposable } from "../type";
+import { the_nothing, type Cell, type Propagator, type Disposable, type PropagatorFunction } from "../type";
 import { constant } from "fp-ts/lib/function";
 import { construct_compound_propagator } from "../network/propagator";
+import { lift_propagator_a } from "../network/propagator";
+import { p_apply } from "../network/default_propagator";
 
 
 describe('Basic Arithmetic', () => {
@@ -132,6 +134,8 @@ describe('Pair', () => {
         
         const result = ps_cons(a, ps_cons(b, d))
         update_cell(a, 1);
+        update_cell(b, 3);
+        update_cell(d, 4)
      
 
         const should_be_a = ps_first(result)
@@ -205,7 +209,7 @@ describe("compound propagator", () => {
         const b = constant_cell(2);
         const c = primitive_cell<number>();
         const compound = construct_compound_propagator([a, b], [c], (set_children: (children: Disposable[]) => void) => {
-        
+     
             const p: Propagator = p_plus(a, b, c); 
             set_children([p, a, b, c]);
        
@@ -235,28 +239,50 @@ describe("compound propagator", () => {
             expect(d.value).toBe(3);
         })
 
-        // it("simple loop", () => {
-        //     function loop(index: Cell<number>, target: Cell<number>, output: Cell<number>) {
-        //         return construct_compound_propagator([index, target], [output], () => {
-        //             // Check if we've reached target
-        //             const is_done = ps_not(ps_smaller(index, target));
+        it("simple loop", () => {
+            const a = constant_cell(1);
+            const f = primitive_cell<number>();
+            const p = pc_simple_loop(a, f);
+            update_cell(a, 3);
+            execute_all();
+            expect(f.value).toBe(12);
+        })
 
-        //             ps_when(ps_not(is_done), c => {
-        //                 loop(ps_plus(ps_write(index), constant_cell(1)), ps_write(target), output);
-        //             })
-             
-        //             p_switch(is_done, index, output);
-        //         });
-        //     }
+describe("pc_map", () => {
+    it("should map a function over a list of numbers", () => {
+        // Create input cells
+        const output = primitive_cell();
+        const add_one = constant_cell(p_add_one);
 
-        //     // Test case
-        //     const index = constant_cell(0);
-        //     const target = constant_cell(10);
-        //     const output = primitive_cell<number>();
-        //     const loop_propagator = loop(index, target, output);
-        //     execute_all();
-        //     expect(output.value).toBe(10);
-        // })
+        // Build input list: [1, 2, 3]
+        const three = ps_cons(constant_cell(3), constant_cell(the_nothing));
+        const two = ps_cons(constant_cell(2), three);
+        const one = ps_cons(constant_cell(1), two);
+        
+        // Set input and create map propagator
+     
+        pc_map(one, add_one, output);
+        
+        // Execute propagator network
+        execute_all();
+
+        // Expected: [2, 3, 4]
+        const result = output.value;
+        
+        // Helper function to convert linked list to array
+        const listToArray = (pair: any): any[] => {
+            const results = [];
+            let current = pair;
+            while (current && current.first !== the_nothing) {
+                results.push(current.first);
+                current = current.rest;
+            }
+            return results;
+        };
+
+        expect(listToArray(result)).toEqual([2, 3, 4]);
+    });
+}); 
 
 
         // it("length", () => {
@@ -327,5 +353,83 @@ describe("disposal", () => {
         // Check that memory usage hasn't grown significantly
         // Allow for some overhead, but should be well under 1MB of growth
         expect(finalMemory - initialMemory).toBeLessThan(1024 * 1024);
+    });
+});
+
+describe("p_apply", () => {
+    it("should apply a lifted propagator function to a cell value", () => {
+        // Setup
+        const input = primitive_cell<number>();
+        const output = primitive_cell<number>();
+        
+        // Create add_one using lift_propagator_a
+        const add_one = lift_propagator_a((x: number) => x + 1);
+        const funcCell = constant_cell(add_one);
+
+        // Create the apply propagator
+        p_apply(input, funcCell, output);
+
+        // Test initial application
+        input.value = 5;
+        execute_all();
+        expect(output.value).toBe(6);
+
+        // Test with a different input
+        input.value = 10;
+        execute_all();
+        expect(output.value).toBe(11);
+    });
+
+    it("should handle switching between different lifted propagator functions", () => {
+        // Setup
+        const input = primitive_cell<number>();
+        const output = primitive_cell<number>();
+        const funcCell = primitive_cell<PropagatorFunction>();
+        
+        // Create two different propagator functions
+        const add_one = lift_propagator_a((x: number) => x + 1);
+        const multiply_by_two = lift_propagator_a((x: number) => x * 2);
+
+        // Create the apply propagator
+        p_apply(input, funcCell, output);
+
+        // Test with add_one function
+        input.value = 5;
+        funcCell.value = add_one;
+        execute_all();
+        expect(output.value).toBe(6);
+
+        // Test with multiply_by_two function
+        funcCell.value = multiply_by_two;
+        execute_all();
+        expect(output.value).toBe(10);
+
+        // Test that it continues to work with new inputs
+        input.value = 7;
+        execute_all();
+        expect(output.value).toBe(14);
+    });
+
+    it("should properly clean up when disposed", () => {
+        // Setup
+        const input = primitive_cell<number>();
+        const output = primitive_cell<number>();
+        const funcCell = constant_cell(lift_propagator_a((x: number) => x + 1));
+
+        // Create the apply propagator
+        const propagator = p_apply(input, funcCell, output);
+
+        // Test initial state
+        input.value = 5;
+        execute_all();
+        expect(output.value).toBe(6);
+
+        // Dispose of the propagator
+        propagator.dispose();
+
+        // Update input - should not affect output anymore
+        input.value = 10;
+        execute_all();
+        expect(output.value).toBe(6); // Output should remain unchanged
     });
 });

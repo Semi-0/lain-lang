@@ -1,12 +1,14 @@
 // default network to make cells
 
-import { the_nothing, type Cell, type Propagator, type Disposable } from "../type";
-import { primitive_cell, constant_cell, update_cell } from "./cell";
-import { construct_pair, get_fst, get_snd } from "./data_types";
+import { the_nothing, type Cell, type Propagator, type Disposable, type PropagatorFunction, type CellValue } from "../type";
+import { primitive_cell, constant_cell, update_cell, trace_cell_chain } from "./cell";
+import { cons_cell, car, cdr, map } from "./data_types";
 import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
 import type { Pair } from "./data_types";
 import { execute_all, summarize } from "./scheduler";
 import { write } from "bun";
+import { is_function } from "generic-handler/built_in_generics/generic_predicates";
+import { apply_propagator } from "./utility";
 
 
 export function prop_sugar_transformer(p: (...cells: Cell<any>[]) => Propagator): (...inputs: Cell<any>[]) => Cell<any> {
@@ -15,6 +17,10 @@ export function prop_sugar_transformer(p: (...cells: Cell<any>[]) => Propagator)
         p(...inputs, output);
         return output;
     }
+}
+
+export function p_add_one(a: Cell<number>, o: Cell<number>) {
+    return lift_propagator_a((a: number) => a + 1)(a, o);
 }
 
 export function p_plus(a: Cell<number>, b: Cell<number>, o: Cell<number>) {
@@ -39,20 +45,114 @@ export function p_equal(a: Cell<any>, b: Cell<any>, o: Cell<boolean>) {
 
 export function p_cons(ca: Cell<any>, cb: Cell<any>, o: Cell<any>) {
     return lift_propagator_a((a: any, b: any) => 
-        construct_pair(ca, cb)
+        cons_cell(ca, cb)
     )(ca, cb, o);
 }
 
 export function p_first(c: Cell<Pair<any>>, o: Cell<any>) {
     return lift_propagator_a((c: Pair<any>) => {
-        return get_fst(c);
+        return car(c);
     })(c, o);
 }
 
 export function p_rest(c: Cell<Pair<any>>, o: Cell<any>) {
     return lift_propagator_a((c: Pair<any>) => {
-        return get_snd(c);
+        return cdr(c);
     })(c, o);
+}
+
+export function p_pass(c: Cell<any>, o: Cell<any>){
+    return lift_propagator_a((c: any) => {
+        return c;
+    })(c, o);
+}
+
+export function p_apply(c: Cell<any>, f: Cell<PropagatorFunction>, o: Cell<any>){
+    // for garbage collection
+    var prev_propagator: Propagator | undefined = undefined;
+    return construct_propagator([c, f], [o], (set_children: (children: Disposable[]) => void) => {
+        return () => {
+            if (is_function(f.value)){     
+                //@ts-ignore           
+
+                if (prev_propagator !== undefined){
+                    // @ts-ignore
+                    prev_propagator.dispose();
+                }
+                // @ts-ignore
+                const p = apply_propagator([c, o], f.value);
+        
+                prev_propagator = p;
+                set_children([p])
+            
+            }
+        }
+    })
+}
+
+
+export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Propagator{
+    return construct_compound_propagator([c_input], [c_output], (set_children: (children: Disposable[]) => void) => {
+            const c_ten = constant_cell(10); 
+            const c_done = primitive_cell<boolean>();
+            const c_not_done = primitive_cell<boolean>();
+         
+            const c_m = primitive_cell()
+            const c_r = primitive_cell() 
+            const c_two = constant_cell(2);
+
+            p_greater(c_input, c_ten, c_done)
+            p_not(c_done, c_not_done)
+            p_switch(c_done, c_input, c_output)
+            p_times(c_input, c_two, c_m)
+            p_switch(c_not_done, c_m, c_input)
+            set_children([ c_ten, c_done, c_not_done, c_m, c_r])
+            set_children([c_done])
+      
+    })
+}
+
+
+
+export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<any>){
+    return construct_compound_propagator([c, f], [o], (set_children: (children: Disposable[]) => void) => {
+        
+          const done = primitive_cell<boolean>(); 
+          const input = primitive_cell<Pair<any>>(); 
+          const target = constant_cell(the_nothing);
+          const accum = primitive_cell();
+          const not_done = primitive_cell<boolean>();
+          const cdr_cell = primitive_cell();
+          const car_cell = primitive_cell();
+          const applied_cell = primitive_cell();
+          const copy_accum = primitive_cell();
+
+          // Initialize input with the input list
+          p_write(c, input)
+          
+          p_log(applied_cell, "applied_cell", primitive_cell())
+          // Check if we're done
+          p_equal(input, target, done)
+          p_not(done, not_done)
+          
+        //   // If done, write result to output
+          p_switch(done, accum, o)
+          
+        //   // If not done, process current element
+          p_first(input, car_cell)
+          p_apply(car_cell, f, applied_cell)
+          
+        //   // Build up result
+        //   p_write(accum, copy_accum)
+        //   p_cons(applied_cell, copy_accum, accum)
+          
+        //   // Move to next element
+        //   p_rest(input, cdr_cell)
+        //   p_switch(not_done, cdr_cell, input)
+
+          set_children([done, input, target, accum, not_done, cdr_cell, car_cell, applied_cell, copy_accum])
+        
+    })
 }
 
 export function p_log(c: Cell<any>, tag: string, o: Cell<any>){
@@ -98,8 +198,11 @@ export function p_write(c: Cell<any>, o: Cell<any>) {
     })(c, o);
 }
 
+
+
+
 export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
-    return construct_compound_propagator([condition], [output], (set_children: (children: Disposable[]) => void) => {
+    return construct_compound_propagator([condition, then_cell, else_cell], [output], (set_children: (children: Disposable[]) => void) => {
      
 
             const not_cell: Cell<boolean> = primitive_cell();
@@ -115,6 +218,11 @@ export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: 
 export function p_smaller(a: Cell<number>, b: Cell<number>, o: Cell<boolean>) {
     return lift_propagator_a((a: number, b: number) => a < b)(a, b, o);
 }
+
+export function p_greater(a: Cell<number>, b: Cell<number>, o: Cell<boolean>) {
+    return lift_propagator_a((a: number, b: number) => a > b)(a, b, o);
+}
+
 
 export const ps_cons = prop_sugar_transformer(p_cons);
 export const ps_first = prop_sugar_transformer(p_first);

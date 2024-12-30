@@ -20,7 +20,9 @@ export type Disposable = Cell<any> | Propagator;
 export interface Cell<E>{
     id: string,
     value: CellValue<E>,
-    neighbors: Propagator[],
+    add_neighbor: (propagator: Propagator) => void,
+    remove_neighbor: (propagator: Propagator) => void,
+    get_neighbors: () => Set<Propagator>,
     children: Disposable[],
     dispose: () => void,
 }
@@ -40,7 +42,8 @@ export interface Propagator{
     dispose: () => void,
 }
 
-export interface PropagatorConstructor{
+
+export interface PropagatorFunction{
     (...cells: Cell<any>[]): Propagator
 }
 
