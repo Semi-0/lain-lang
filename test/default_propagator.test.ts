@@ -12,6 +12,8 @@ import { p_apply } from "../network/default_propagator";
 import { beforeEach, afterEach } from "bun:test";
 import { tell_cell } from "../interpreter/propagator_wrapper";
 import { dispose } from "../network/dispose";
+import { inspect } from "bun";
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
 
 describe('Basic Arithmetic', () => {
     it("basic arithmetic plus", () => {
@@ -432,6 +434,8 @@ describe("disposal", () => {
         const weakC = new WeakRef(c);
         const weakCompound = new WeakRef(compound);
 
+        execute_all()
+
         // Dispose everything
         dispose(compound);
         dispose(c);
@@ -450,6 +454,8 @@ describe("disposal", () => {
         c = null;
 
         if (global.gc) global.gc();
+
+        console.log(to_string(weakA.deref()))
 
         // Check that weak references are gone
         expect(weakA.deref()).toBeUndefined();
@@ -529,7 +535,7 @@ describe("p_apply", () => {
         expect(output.value).toBe(6);
 
         // Dispose of the propagator
-        dispose(output);
+        dispose(propagator);
 
         // Update input - should not affect output anymore
         input.value = 10;

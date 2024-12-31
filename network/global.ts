@@ -14,8 +14,16 @@ export function empty_global_env(): Global_Env {
 }   
 
 export function get_global_parent(): O.Option<Relation>{
-    return O.fromNullable(global_env.get("parent"));
+    const parent = global_env.get("parent"); 
+
+    if (parent === undefined){
+        return O.none;
+    }
+    else{
+        return O.some(parent);
+    }
 } 
+ 
 
 export function set_global_parent(parent: Relation): void{
     global_env.set("parent", parent);

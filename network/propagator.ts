@@ -6,6 +6,10 @@ import { add_primitive, get_global_parent, global_env, parameterize, set_global_
 import { v4 as uuidv4 } from 'uuid';
 
 import { get_id } from "./relation";
+import { define_generic_procedure_handler } from "generic-handler/GenericProcedure";
+import { is_propagator } from "../shared/predicates";
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
+import { match_args } from "generic-handler/Predicates";
 // perhaps propagator should be defaultly anonymous?
 export function construct_propagator(
     inputs: Set<Cell<any>>, 
@@ -27,6 +31,7 @@ export function construct_propagator(
             return get_id(x.relation) === get_id(y.relation);
         }
     }
+ 
 
     add_primitive(relation.get_id(), propagator);
 
@@ -37,8 +42,16 @@ export function construct_propagator(
 }
 
 
+define_generic_procedure_handler(to_string, match_args(is_propagator), (propagator: Propagator) => {
+    const inputs = Array.from(propagator.inputs).map(input => to_string(input)).join(', ');
+    const outputs = Array.from(propagator.outputs).map(output => to_string(output)).join(', ');
+    return 'Propagator(' + propagator.relation.get_id() + ')' + ' with ' + inputs + ' inputs and ' + outputs + ' outputs' ;
+})
+
+
 // gabage collection perhaps pass a propagator and cell constructor and keep them tracked?
 // perhaps use prototype to pass env as a local object
+// how to not build when tail recursive?
 export function construct_compound_propagator(
     inputs: Set<Cell<any>>, 
     outputs: Set<Cell<any>>,
@@ -46,11 +59,13 @@ export function construct_compound_propagator(
 ): Propagator{
     var built = false;
 
-    const propagator = construct_propagator(inputs, outputs, () => {if (!built) {
-        console.log("activate compound propagator a")
-        activate();
-        built = true;
-    }});
+    const propagator = construct_propagator(inputs, outputs, () => {
+        if (!built) {
+            console.log("activate compound propagator a")
+            activate();
+            built = true;
+        }
+    });
 
     return propagator;
 }

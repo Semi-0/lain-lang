@@ -45,7 +45,6 @@ define_generic_procedure_handler(_dispose, match_args(is_propagator), (propagato
     if (relation) {
         const id = get_id(relation);
         _dispose(relation);
-        remove_primitive(id);
     }
 
     // safely remove self from neighbors
@@ -74,6 +73,7 @@ define_generic_procedure_handler(_dispose, match_args(is_propagator), (propagato
     propagator.outputs?.clear();
     propagator.inputs?.clear();
     propagator.activate = () => {};
+
 
 })
 
@@ -105,6 +105,8 @@ define_generic_procedure_handler(_dispose, match_args(is_relation), (relation: R
             })
         }
    )
+   remove_primitive(get_id(relation));
+   relation.get_children().clear();
 })
 
 define_generic_procedure_handler(dispose, match_args(is_cell), (cell: Cell<any>) => {

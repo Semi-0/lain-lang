@@ -2,9 +2,10 @@ import { describe, it, expect } from 'bun:test';
 import { eval_expr, evaluate } from '../interpreter/evaluator';
 import { scheme_list, scheme_number, scheme_string, scheme_symbol } from '../shared/type_constructor';
 import { get_type_annotate, get_value, type_layer } from '../shared/type_layer';
-import { empty_environment, type Environment } from '../interpreter/environment/environment';
+import { empty_environment, extend, type Environment } from '../interpreter/environment/environment';
 import { is_layered_object, type LayeredObject } from 'sando-layer/Basic/LayeredObject';
 import { base_layer, get_base_value } from 'sando-layer/Basic/Layer';
+import { execute_all } from '../network/scheduler';
 
 describe('Evaluator', () => {
     describe('self evaluating expressions', () => {
@@ -21,13 +22,13 @@ describe('Evaluator', () => {
         });
     });
 
-    describe('xiable expressions', () => {
+    describe('variable expressions', () => {
         it('should evaluate variables in environment', () => {
             const env = empty_environment();
-            env.dict.set('x', new Map([[0, scheme_number(42)]]));
+            const extended = extend(env, 'x', scheme_number(42));
             
-            const expr = scheme_list([scheme_symbol('x')]);
-            const result = evaluate(expr, env, (expr: LayeredObject, env: Environment) => {
+            const expr = scheme_symbol('x');
+            const result = evaluate(expr, extended, (expr: LayeredObject, env: Environment) => {
                 return evaluate(expr, env)
             });
  
@@ -86,6 +87,7 @@ describe('Evaluator', () => {
             ]);
             
             const result = evaluate(tellExpr, env, (expr: LayeredObject, env: Environment) => {
+                execute_all()
                 return evaluate(expr, env)
             });
             expect(result).toBeDefined();

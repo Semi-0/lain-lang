@@ -1,11 +1,14 @@
 import { reference_store } from "../shared/helper";
 import { alert_propagator } from "./scheduler";
-import { the_nothing, type Cell, type CellValue, type Propagator, type PropagatorFunction, type Relation } from "../type";
+import { is_cell, the_nothing, type Cell, type CellValue, type Propagator, type PropagatorFunction, type Relation } from "../type";
 import { deep_equal } from "sando-layer/Equality";
 import { construct_relation, get_parent } from "./relation";
 import { add_primitive, get_global_parent, global_env } from "./global";
 import { v4 as uuidv4 } from 'uuid';
 import { get_id } from "./relation";
+import { define_generic_procedure_handler } from "generic-handler/GenericProcedure";
+import { match_args } from "generic-handler/Predicates";
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
 
 export function cell_constructor<E>(get: () => E, set: (update: E, alert_propagators: () => void) => void): Cell<E> {
         var neighbors: Set<Propagator> = new Set();
@@ -44,6 +47,11 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
         return cell;
     }
 
+
+define_generic_procedure_handler(to_string, match_args(is_cell), (cell: Cell<any>) => {
+    return 'Cell(' + cell.relation.get_id() + ')' + ' with ' + cell.get_neighbors().size + ' neighbors' ;
+})
+
 export function primitive_cell<E>(): Cell<E>{
     var value: CellValue<E> = the_nothing
 
@@ -67,6 +75,7 @@ export function constant_cell<E>(value: E): Cell<E>{
 }
 
 export function update_cell(cell: Cell<any>, value: any){
+    console.log("update_cell", cell, value)
     cell.value = value
 }
 

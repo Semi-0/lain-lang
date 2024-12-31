@@ -77,91 +77,22 @@ export function p_pass(c: Cell<any>, o: Cell<any>){
 
 export function p_apply(c: Cell<any>, f: Cell<PropagatorFunction>, o: Cell<any>){
     // for garbage collection
-    var prev_propagator: Propagator | undefined = undefined;
     return construct_propagator(new Set([c, f]), new Set([o]),  () => {
-            if (is_function(f.value)){     
-                //@ts-ignore           
-
-                if (prev_propagator !== undefined){
-                    // @ts-ignore
-                    dispose(prev_propagator);
-                }
+            if (is_function(f.value)){         
                 // @ts-ignore
                 const p = apply_propagator([c, o], f.value);
-        
-                prev_propagator = p;
-        
-            
             }
         }
     )
 }
 
+export function p_and(a: Cell<boolean>, b: Cell<boolean>, o: Cell<boolean>){
+    return lift_propagator_a((a: boolean, b: boolean) => a && b)(a, b, o);
+} 
 
-
-export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Propagator{
-    return construct_compound_propagator(new Set([c_input]), new Set([c_output]), () => {
-            const c_ten = constant_cell(10); 
-            const c_done = primitive_cell<boolean>();
-            const c_not_done = primitive_cell<boolean>();
-         
-            const c_m = primitive_cell()
-            const c_r = primitive_cell() 
-            const c_two = constant_cell(2);
-
-            p_greater(c_input, c_ten, c_done)
-            p_not(c_done, c_not_done)
-            p_switch(c_done, c_input, c_output)
-            //@ts-ignore
-            p_times(c_input, c_two, c_m)
-            p_switch(c_not_done, c_m, c_input)
-
-      
-    })
-}
-
-
-
-export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<any>){
-    return construct_compound_propagator(new Set([c, f]), new Set([o]), () => {
-        
-          const done = primitive_cell<boolean>(); 
-          const input = primitive_cell<Pair<any>>(); 
-          const target = constant_cell(the_nothing);
-          const accum = primitive_cell();
-          const new_accum = primitive_cell();
-          const not_done = primitive_cell<boolean>();
-          const cdr_cell = primitive_cell();
-          const car_cell = primitive_cell();
-          const applied_cell = primitive_cell();
-          const copy_accum = primitive_cell();
-
-          // Initialize input with the input list
-          p_write(c, input)
-
-          // Check if we're done
-          p_equal(input, target, done)
-          p_not(done, not_done)
-          
-        //   // If done, write result to output
-          p_switch(done, accum, o)
-          
-        //   // If not done, process current element
-          p_first(input, car_cell)
-          p_rest(input, cdr_cell)
-          p_apply(car_cell, f, applied_cell)
-          
-        //   // Build up result
-        // this is not working because applied cell is not a new cell, its always the same cell with different value
-        //   p_write(accum, copy_accum)
-        // @ts-ignore
-          p_append(accum, applied_cell, new_accum)
-          p_switch(not_done, new_accum, accum)
-        //   // Move to next element
-          p_switch(not_done, cdr_cell, input)
-        
-    })
-}
+export function p_or(a: Cell<boolean>, b: Cell<boolean>, o: Cell<boolean>){
+    return lift_propagator_a((a: boolean, b: boolean) => a || b)(a, b, o);
+} 
 
 export function p_log(c: Cell<any>, tag: string, o: Cell<any>){
     return lift_propagator_a((c: any) => {
@@ -206,14 +137,9 @@ export function p_write(c: Cell<any>, o: Cell<any>) {
     })(c, o);
 }
 
-
-
-
 export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
     return construct_compound_propagator(new Set([condition, then_cell, else_cell]), new Set([output]), () => {
             const not_cell: Cell<boolean> = primitive_cell();
-            p_log(condition, "condition", primitive_cell());
-            p_log(not_cell, "not_cell", primitive_cell());
             p_not(condition, not_cell);
             p_switch(condition, then_cell, output);
             p_switch(not_cell, else_cell, output);
@@ -255,6 +181,89 @@ export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<nu
     })
 }
 
+
+
+export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Propagator{
+    return construct_compound_propagator(new Set([c_input]), new Set([c_output]), () => {
+            const c_ten = constant_cell(10); 
+            const c_done = primitive_cell<boolean>();
+            const c_not_done = primitive_cell<boolean>();
+         
+            const c_m = primitive_cell()
+            const c_r = primitive_cell() 
+            const c_two = constant_cell(2);
+
+            p_greater(c_input, c_ten, c_done)
+            p_not(c_done, c_not_done)
+            p_switch(c_done, c_input, c_output)
+            //@ts-ignore
+            p_times(c_input, c_two, c_m)
+            p_switch(c_not_done, c_m, c_input)
+
+      
+    })
+}
+
+
+
+
+
+export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<any>){
+    return construct_compound_propagator(new Set([c, f]), new Set([o]), () => {
+        
+          const done = primitive_cell<boolean>(); 
+          const input = primitive_cell<Pair<any>>(); 
+          const target = constant_cell(the_nothing);
+          const accum = primitive_cell();
+          const new_accum = primitive_cell();
+          const not_done = primitive_cell<boolean>();
+          const cdr_cell = primitive_cell();
+          const car_cell = primitive_cell();
+          const applied_cell = primitive_cell();
+          const copy_accum = primitive_cell();
+
+          // Initialize input with the input list
+          p_write(c, input)
+
+          // Check if we're done
+          p_equal(input, target, done)
+          p_not(done, not_done)
+          
+        //   // If done, write result to output
+          p_switch(done, accum, o)
+          
+        //   // If not done, process current element
+          p_first(input, car_cell)
+          p_rest(input, cdr_cell)
+          p_apply(car_cell, f, applied_cell)
+          
+        //   // Build up result
+        // this is not working because applied cell is not a new cell, its always the same cell with different value
+        //   p_write(accum, copy_accum)
+        // @ts-ignore
+          p_append(accum, applied_cell, new_accum)
+          p_switch(not_done, new_accum, accum)
+        //   // Move to next element
+          p_switch(not_done, cdr_cell, input)
+        
+    })
+}
+
+
+// export function pc_map2(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<any>){
+//     return construct_compound_propagator(new Set([c, f]), new Set([o]), () => {
+//         const input = primitive_cell<Pair<any>>()
+
+//         p_write(c, input)
+//         const done = ps_if(ps_equal(input, constant_cell(the_nothing)),
+//                              constant_cell(true),
+//                              ps_if
+    
+    
+//     )
+
+//     })
+// }
 // boolean 
 
 // loop

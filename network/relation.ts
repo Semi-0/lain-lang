@@ -1,9 +1,12 @@
-import type { Relation } from "../type";
+import { is_relation, type Relation } from "../type";
 import { v4 as uuidv4 } from 'uuid';
 import * as O from "fp-ts/Option";
 import { pipe } from "fp-ts/lib/function";
 import { map } from "fp-ts/Set";
 import { getEq } from "fp-ts/Set";
+import { define_generic_procedure_handler } from "generic-handler/GenericProcedure";
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
+import { match_args } from "generic-handler/Predicates";
 
 export function construct_relation(id: string, parent: O.Option<Relation> ): Relation{
     var children: Set<Relation> = new Set();
@@ -32,9 +35,23 @@ export function construct_relation(id: string, parent: O.Option<Relation> ): Rel
         }
     }
 
+    pipe(
+        parent,
+        O.map(p => {
+            p.add_child(relation);
+        }),
+        O.getOrElse(() => {})
+    )
+
     return relation;
 
 }
+
+
+define_generic_procedure_handler(to_string, match_args(is_relation), (relation: Relation) => {
+    const children = Array.from(relation.get_children()).map(child => to_string(child)).join(', ');
+    return 'Relation(' + relation.get_id() + ')' + ' with ' + children + ' children' ;
+})
 
 export function universal_ancestor(): Relation{
     const id = uuidv4();

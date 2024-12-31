@@ -1,0 +1,31 @@
+
+(define map
+    (propagator (input function output)
+         (p:write output 
+            (ps:cons (ps:apply function (ps:first input) 
+            (map (ps:rest input) function))
+       )
+    )
+))
+
+
+(define find 
+    (propagator (input function output)
+        (p:write output 
+           (p:one_of input 
+             (p:match function))
+        )
+    )
+)
+
+(define one_of 
+    (propagator (input function output)
+        (let-cell (done)
+            
+        
+        )
+    )
+)
+
+
+// should the cell receive execution?
