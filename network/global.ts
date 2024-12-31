@@ -1,43 +1,58 @@
-import { reference_store } from "../shared/helper";
+import type { Cell, PrimitiveObject, Relation } from "../type";
+import { universal_ancestor } from "./relation";
+import  * as O from "fp-ts/Option";
+import { pipe } from "fp-ts/lib/function";
 
-type Observer = {
-    id: string,
-    children: ((update: any) => void)[],
-    update: (update: any) => void,
-    subscribe: (subscriber: (update: any) => void) => void,
-    dispose: () => void,
+
+type Global_Env = Map<string, any>;
+
+export function empty_global_env(): Global_Env {
+    const env = new Map<string, any>();
+    env.set("parent", universal_ancestor());
+    env.set("disposables", new Map<string, PrimitiveObject>());
+    return env;
+}   
+
+export function get_global_parent(): O.Option<Relation>{
+    return O.fromNullable(global_env.get("parent"));
+} 
+
+export function set_global_parent(parent: Relation): void{
+    global_env.set("parent", parent);
+} 
+
+export function add_child(child: Relation): void{
+    pipe(
+        get_global_parent(),
+        O.map(parent => {
+            parent.add_child(child);
+        }),
+        O.getOrElse(() => {})
+    )
 }
 
-const get_new_id = reference_store();
-
-export function create_observer(): Observer{
-
-    const id = get_new_id();
-    var children: ((update: any) => void)[] = [];
-
-    const observer: Observer = {
-        id: id.toString(),
-        children: children,
-        update: (update: any) => {
-            children.forEach(child => {
-                child(update);
-            });
-        },
-        subscribe: (subscriber: (update: any) => void) => {
-            children.push(subscriber);
-        },
-        dispose: () => {
-            children = [];
-        }
-    }
-    return observer;
+export function add_primitive(id: string, primitive: PrimitiveObject): void{
+    global_env.get("disposables").set(id, primitive);
 }
 
+export function get_primitive(id: string): O.Option<PrimitiveObject>{
+    return O.fromNullable(global_env.get("disposables").get(id));
+} 
 
-// type Global_Env = Map<string, any>;
+export function remove_primitive(id: string): void{
+    global_env.get("disposables").delete(id);
+}
 
-// export function empty_global_env(): Global_Env{
-//     return {
+export var global_env: Global_Env = empty_global_env();
 
-//     }
-// }
+
+export function parameterize(
+    env: Global_Env, 
+    action: (env: Global_Env) => void, 
+    execute: () => void
+): void{
+    const original = new Map(env);
+    action(env);
+    execute();
+    env = original;  
+}

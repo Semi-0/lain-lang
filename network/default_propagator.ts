@@ -1,6 +1,6 @@
 // default network to make cells
 
-import { the_nothing, type Cell, type Propagator, type Disposable, type PropagatorFunction, type CellValue } from "../type";
+import { the_nothing, type Cell, type Propagator, type PropagatorFunction, type CellValue } from "../type";
 import { primitive_cell, constant_cell, update_cell, trace_cell_chain } from "./cell";
 import { cons_cell, car, cdr, map } from "./data_types";
 import { construct_compound_propagator, construct_propagator, get_input_cells, get_output_cell, lift_propagator_a, lift_propagator_b } from "./propagator";
@@ -10,6 +10,7 @@ import { write } from "bun";
 import { is_function } from "generic-handler/built_in_generics/generic_predicates";
 import { apply_propagator } from "./utility";
 import { append } from "./data_types";
+import { dispose } from "./dispose";
 
 
 export function prop_sugar_transformer(p: (...cells: Cell<any>[]) => Propagator): (...inputs: Cell<any>[]) => Cell<any> {
@@ -77,30 +78,29 @@ export function p_pass(c: Cell<any>, o: Cell<any>){
 export function p_apply(c: Cell<any>, f: Cell<PropagatorFunction>, o: Cell<any>){
     // for garbage collection
     var prev_propagator: Propagator | undefined = undefined;
-    return construct_propagator([c, f], [o], (set_children: (children: Disposable[]) => void) => {
-        return () => {
+    return construct_propagator(new Set([c, f]), new Set([o]),  () => {
             if (is_function(f.value)){     
                 //@ts-ignore           
 
                 if (prev_propagator !== undefined){
                     // @ts-ignore
-                    prev_propagator.dispose();
+                    dispose(prev_propagator);
                 }
                 // @ts-ignore
                 const p = apply_propagator([c, o], f.value);
         
                 prev_propagator = p;
-                set_children([p])
+        
             
             }
         }
-    })
+    )
 }
 
 
 
 export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Propagator{
-    return construct_compound_propagator([c_input], [c_output], (set_children: (children: Disposable[]) => void) => {
+    return construct_compound_propagator(new Set([c_input]), new Set([c_output]), () => {
             const c_ten = constant_cell(10); 
             const c_done = primitive_cell<boolean>();
             const c_not_done = primitive_cell<boolean>();
@@ -112,10 +112,10 @@ export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Prop
             p_greater(c_input, c_ten, c_done)
             p_not(c_done, c_not_done)
             p_switch(c_done, c_input, c_output)
+            //@ts-ignore
             p_times(c_input, c_two, c_m)
             p_switch(c_not_done, c_m, c_input)
-            set_children([ c_ten, c_done, c_not_done, c_m, c_r])
-            set_children([c_done])
+
       
     })
 }
@@ -123,7 +123,7 @@ export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Prop
 
 
 export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<any>){
-    return construct_compound_propagator([c, f], [o], (set_children: (children: Disposable[]) => void) => {
+    return construct_compound_propagator(new Set([c, f]), new Set([o]), () => {
         
           const done = primitive_cell<boolean>(); 
           const input = primitive_cell<Pair<any>>(); 
@@ -138,8 +138,7 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
 
           // Initialize input with the input list
           p_write(c, input)
-          
-          p_log(accum, "accum", primitive_cell())
+
           // Check if we're done
           p_equal(input, target, done)
           p_not(done, not_done)
@@ -155,18 +154,11 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
         //   // Build up result
         // this is not working because applied cell is not a new cell, its always the same cell with different value
         //   p_write(accum, copy_accum)
+        // @ts-ignore
           p_append(accum, applied_cell, new_accum)
           p_switch(not_done, new_accum, accum)
-          p_log(input, "input", primitive_cell())
-          p_log(applied_cell, "applied_cell", primitive_cell())
-          p_log(car_cell, "car_cell", primitive_cell())
-          p_log(cdr_cell, "cdr_cell", primitive_cell())
-          p_log(accum, "accum", primitive_cell()) 
         //   // Move to next element
           p_switch(not_done, cdr_cell, input)
-
-
-          set_children([done, input, target, accum, not_done, cdr_cell, car_cell, applied_cell, copy_accum])
         
     })
 }
@@ -218,16 +210,13 @@ export function p_write(c: Cell<any>, o: Cell<any>) {
 
 
 export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: Cell<any>, output: Cell<any>) {
-    return construct_compound_propagator([condition, then_cell, else_cell], [output], (set_children: (children: Disposable[]) => void) => {
-     
-
+    return construct_compound_propagator(new Set([condition, then_cell, else_cell]), new Set([output]), () => {
             const not_cell: Cell<boolean> = primitive_cell();
-            const not_propagator = p_not(condition, not_cell);
-            const switch_propagator = p_switch(condition, then_cell, output);
-            const switch_not_propagator = p_switch(not_cell, else_cell, output);
-
-            set_children([not_cell, not_propagator, switch_propagator, switch_not_propagator]);
-
+            p_log(condition, "condition", primitive_cell());
+            p_log(not_cell, "not_cell", primitive_cell());
+            p_not(condition, not_cell);
+            p_switch(condition, then_cell, output);
+            p_switch(not_cell, else_cell, output);
     })
 }
 
@@ -251,20 +240,20 @@ export const ps_write = prop_sugar_transformer(p_write);
 export const ps_smaller = prop_sugar_transformer(p_smaller);
 
 
-// export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<number>) {
-//     return construct_compound_propagator([pairs], [o], (set_children: (children: Disposable[]) => void) => {
-//         // this is not tail recursive
-//         const first = ps_first(pairs);
-//         const is_done = ps_equal(first, constant_cell(the_nothing));
-//         // p_log(is_done, "is_done", primitive_cell());
+export function p_length(pairs: Cell<Pair<any>>, o: Cell<number>, start: Cell<number>) {
+    return construct_compound_propagator(new Set([pairs]), new Set([o]), () => {
+        // this is not tail recursive
+        const first = ps_first(pairs);
+        const is_done = ps_equal(first, constant_cell(the_nothing));
+        // p_log(is_done, "is_done", primitive_cell());
   
-//         ps_when(ps_not(is_done), () => {
-//             p_length(ps_rest(ps_write(pairs)), o, ps_plus(ps_write(start), constant_cell(1)));
-//         })
+        ps_when(ps_not(is_done), () => {
+            p_length(ps_rest(ps_write(pairs)), o, ps_plus(ps_write(start), constant_cell(1)));
+        })
 
-//         p_switch(is_done, start, o);
-//     })
-// }
+        p_switch(is_done, start, o);
+    })
+}
 
 // boolean 
 

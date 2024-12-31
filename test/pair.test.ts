@@ -21,6 +21,7 @@ describe('Data Types', () => {
         it('should create a pair from two cells', () => {
             const cell1 = { value: 1 };
             const cell2 = { value: 2 };
+            //@ts-ignore
             const pair = cons_cell(cell1, cell2);
             expect(pair.fst).toBe(1);
             expect(pair.snd).toBe(2);
@@ -44,12 +45,16 @@ describe('Data Types', () => {
     describe('car and cdr', () => {
         it('should extract first and second elements from a pair', () => {
             const pair = cons(1, 2);
+            //@ts-ignore
             expect(car(pair)).toBe(1);
+            //@ts-ignore
             expect(cdr(pair)).toBe(2);
         });
 
         it('should return the_nothing for non-pairs', () => {
+            //@ts-ignore
             expect(car(undefined)).toBe(the_nothing);
+            //@ts-ignore
             expect(cdr(undefined)).toBe(the_nothing);
         });
     });
@@ -59,10 +64,15 @@ describe('Data Types', () => {
             const array = [1, 2, 3];
             const result = array_to_pair(array);
             
+            //@ts-ignore
             expect(is_pair(result)).toBe(true);
+            //@ts-ignore
             expect(car(result)).toBe(1);
+            //@ts-ignore
             expect(car(cdr(result))).toBe(2);
+            //@ts-ignore
             expect(car(cdr(cdr(result)))).toBe(3);
+            //@ts-ignore
             expect(cdr(cdr(cdr(result)))).toBe(the_nothing);
         });
 
@@ -74,16 +84,20 @@ describe('Data Types', () => {
     describe('map', () => {
         it('should apply function to each element in the pair structure', () => {
             const pair = array_to_pair([1, 2, 3]);
+            //@ts-ignore
             const doubled = map(pair, x => x * 2);
-            console.log(pair);
-            console.log(doubled);
+
+            //@ts-ignore
             expect(car(doubled)).toBe(2);
+            //@ts-ignore
             expect(car(cdr(doubled))).toBe(4);
+            //@ts-ignore
             expect(car(cdr(cdr(doubled)))).toBe(6);
             expect(cdr(cdr(cdr(doubled)))).toBe(the_nothing);
         });
 
         it('should handle empty pairs', () => {
+            //@ts-ignore
             const result = map(the_nothing, x => x * 2);
             expect(result).toBe(the_nothing);
         });
@@ -91,9 +105,11 @@ describe('Data Types', () => {
         it('should work with type transformations', () => {
             const pair = array_to_pair([1, 2, 3]);
             const stringified = map(pair, x => x.toString());
-            
+            //@ts-ignore
             expect(car(stringified)).toBe("1");
+            //@ts-ignore
             expect(car(cdr(stringified))).toBe("2");
+            //@ts-ignore
             expect(car(cdr(cdr(stringified)))).toBe("3");
         });
     });
@@ -103,8 +119,11 @@ import { filter } from '../network/data_types';
 describe('filter', () => {
     it('should filter elements in the pair structure', () => {
         const pair = array_to_pair([1, 2, 3, 4, 5]);
+        //@ts-ignore
         const filtered = filter(pair, x => x % 2 === 0);
+        //@ts-ignore
         expect(car(filtered)).toBe(2);
+        //@ts-ignore
         expect(car(cdr(filtered))).toBe(4);
     });
 });

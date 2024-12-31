@@ -1,23 +1,23 @@
 import { reference_store } from "../shared/helper";
 import { alert_propagator } from "./scheduler";
-import { the_nothing, type Cell, type CellValue, type Propagator, type PropagatorFunction } from "../type";
+import { the_nothing, type Cell, type CellValue, type Propagator, type PropagatorFunction, type Relation } from "../type";
 import { deep_equal } from "sando-layer/Equality";
-
-const get_new_id = reference_store();
-
+import { construct_relation, get_parent } from "./relation";
+import { add_primitive, get_global_parent, global_env } from "./global";
+import { v4 as uuidv4 } from 'uuid';
+import { get_id } from "./relation";
 
 export function cell_constructor<E>(get: () => E, set: (update: E, alert_propagators: () => void) => void): Cell<E> {
-        const id = get_new_id();
-
         var neighbors: Set<Propagator> = new Set();
+        var relation: Relation = construct_relation(uuidv4(), get_global_parent());
+  
         const cell = {
-                id: id.toString(),
-         
+                relation: relation,
                 get value(): CellValue<E> {
                     return get();
                 },
                 set value(v: CellValue<E>) {
-                    set(v as E, () => {
+                    set(v as E, () => { 
                         neighbors.forEach(neighbor => {
                             alert_propagator(neighbor);
                         });
@@ -34,12 +34,12 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
                 get_neighbors: () => {
                     return neighbors;
                 },
-                children: [],
-                dispose: () => {
-                   
-                    neighbors.clear();
+                equals: (x: Cell<E>, y: Cell<E>) => {
+                    return get_id(x.relation) === get_id(y.relation);
                 }
         }
+
+        add_primitive(relation.get_id(), cell);
 
         return cell;
     }
@@ -70,30 +70,32 @@ export function update_cell(cell: Cell<any>, value: any){
     cell.value = value
 }
 
-export function add_propagator(cell: Cell<any>, propagator: Propagator){
+export function add_neighbor(cell: Cell<any>, propagator: Propagator){
    cell.add_neighbor(propagator);
 } 
 
-export function remove_propagator(cell: Cell<any>, propagator: Propagator){
+export function remove_neighbor(cell: Cell<any>, propagator: Propagator){
     cell.remove_neighbor(propagator);
 }  
 
 export function get_neighbors(cell: Cell<any>){
     return cell.get_neighbors();
 }
- 
 
 export function get_propagators(cell: Cell<any>){
     return cell.get_neighbors();
 }
- 
 
 export function get_value(cell: Cell<any>){
     return cell.value;
 }
 
+export function get_relation(cell: Cell<any>){
+    return cell.relation;
+}
 
 export function trace_cell_chain(cell: Cell<any>, f: (cell: Cell<any>) => void){
+    //TODO: handle cyclic references
     f(cell);
     cell.get_neighbors().forEach(neighbor => {
         neighbor.outputs.forEach(output => {

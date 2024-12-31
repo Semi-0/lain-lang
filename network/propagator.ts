@@ -1,74 +1,62 @@
-import type { Cell, Propagator, Disposable } from "../type";
+import type { Cell, Propagator,  Relation } from "../type";
 import { reference_store } from "../shared/helper";
-import { add_propagator, update_cell, remove_propagator } from "./cell";
-
-const get_new_id = reference_store();
-
+import { add_neighbor, update_cell, remove_neighbor } from "./cell";
+import { construct_relation, get_children } from "./relation";
+import { add_primitive, get_global_parent, global_env, parameterize, set_global_parent } from "./global";
+import { v4 as uuidv4 } from 'uuid';
+import { get_primitive } from "./global";
+import { pipe } from "fp-ts/lib/function";
+import * as O from "fp-ts/Option";
+import { get_id } from "./relation";
 // perhaps propagator should be defaultly anonymous?
 export function construct_propagator(
-    inputs: Cell<any>[], 
-    outputs: Cell<any>[],
-    activate: (set_children: (children: Disposable[]) => void) => () => void
+    inputs: Set<Cell<any>>, 
+    outputs: Set<Cell<any>>,
+    activate: () => void
 ): Propagator{
-
-    var children: Disposable[] = [];
-
-    var act: () => void = activate(set_children);
-
-    function set_children(new_children: Disposable[]){
-        children = new_children;
-    }
+    var relation: Relation = construct_relation(uuidv4(), get_global_parent());
 
     const propagator: Propagator = {
-        id: get_new_id().toString(),
+        relation: relation,
         inputs: inputs,
         outputs: outputs,
-        activate: act,
-        children,
-        dispose: () => {
-            act = () => {};
-
-            children.forEach(child => {
-                child.dispose();
-            });
-            children = [];
-
-            inputs.forEach(cell => {
-                remove_propagator(cell, propagator);
-            });
-
-
-            if (global.gc) {
-                global.gc();
-            }
+        activate: activate,
+        equals: (x: Propagator, y: Propagator) => {
+            return get_id(x.relation) === get_id(y.relation);
         }
     }
 
+    add_primitive(relation.get_id(), propagator);
+
     inputs.forEach(cell => {
-        add_propagator(cell, propagator);
+        add_neighbor(cell, propagator);
     });
     return propagator;
 }
 
+
 // gabage collection perhaps pass a propagator and cell constructor and keep them tracked?
 // perhaps use prototype to pass env as a local object
 export function construct_compound_propagator(
-    inputs: Cell<any>[], 
-    outputs: Cell<any>[],
-    activate: (set_children: (children: Disposable[]) => void) => void
+    inputs: Set<Cell<any>>, 
+    outputs: Set<Cell<any>>,
+    activate: () => void
 ): Propagator{
     var built = false;
 
-    const propagator = construct_propagator(inputs, outputs, (set_children: (children: Disposable[]) => void) => {
-        return () => { 
+    const propagator = construct_propagator(inputs, outputs, () => {});
+
+    const compound_activate = () => {
+        parameterize(global_env, (env) => {set_global_parent(propagator.relation);}, () => {
             if (!built) {
                 console.log("activate compound propagator a")
-                activate(set_children);
+                activate();
                 built = true;
             }
-        }
-    });
+        })
+    }
 
+    propagator.activate = compound_activate;
 
     return propagator;
 }
@@ -81,15 +69,19 @@ export function get_input_cells<E>(cells: Cell<any>[]) {
     return cells.slice(0, cells.length - 1);
 }
 
+export function get_relation(propagator: Propagator) {
+    return propagator.relation;
+}
+
 export function lift_propagator_a<E>(f: (...args: any[]) => E) {
     return (...cells: Cell<any>[]) => {
         const inputs = get_input_cells(cells);
         const outputs = [get_output_cell(cells)];
-        return construct_propagator(inputs, outputs, 
-            (set_children: (children: Disposable[]) => void) => {
-                return () => {
-                    update_cell(outputs[0], f(...inputs.map(c => c.value)));
-                }
+        return construct_propagator(new Set(inputs), new Set(outputs), 
+            () => {
+                outputs.forEach(output => {
+                    update_cell(output, f(...inputs.map(c => c.value)));
+                })
             }
         );
     }
@@ -100,17 +92,15 @@ export function lift_propagator_b<E>(f: (next: (update: E) => void, ...args: any
     return (...args: any[]) => {
        const inputs = get_input_cells(args);
        const output = get_output_cell(args);
-
-       return construct_propagator(inputs, [output], (set_children: (children: Disposable[]) => void) => {
-            return () => {
-                const next = (update: E) => {
+       return construct_propagator(new Set(inputs), new Set([output]), () => {
+            const next = (update: E) => {
                     update_cell(output, update);
                 }
 
-                f(next, ...inputs.map(c => c.value));
-            }
-       })
-    }
+            f(next, ...inputs.map(c => c.value));
+        }
+    )
+}
 
 
 //    return lift_propagator_a((...args: any[]) => {

@@ -4,13 +4,14 @@ import { p_divide, p_minus, p_plus, p_times, p_cons, p_first, p_rest, p_switch, 
 import { clear_scheduler, execute_all, summarize } from "../network/scheduler";
 import { cons_cell, car, cdr, type Pair } from "../network/data_types";
 import { ps_cons, ps_first, ps_rest } from "../network/default_propagator";
-import { the_nothing, type Cell, type Propagator, type Disposable, type PropagatorFunction } from "../type";
+import { the_nothing, type Cell, type Propagator, type PropagatorFunction } from "../type";
 import { constant } from "fp-ts/lib/function";
 import { construct_compound_propagator } from "../network/propagator";
 import { lift_propagator_a } from "../network/propagator";
 import { p_apply } from "../network/default_propagator";
 import { beforeEach, afterEach } from "bun:test";
 import { tell_cell } from "../interpreter/propagator_wrapper";
+import { dispose } from "../network/dispose";
 
 describe('Basic Arithmetic', () => {
     it("basic arithmetic plus", () => {
@@ -205,14 +206,14 @@ describe("switch", () => {
 
 
 describe("compound propagator", () => {
-    it("compound propagator", () => {
+    it("basic compound propagator", () => {
         const a = constant_cell(1);
         const b = constant_cell(2);
         const c = primitive_cell<number>();
-        const compound = construct_compound_propagator([a, b], [c], (set_children: (children: Disposable[]) => void) => {
+        const compound = construct_compound_propagator(new Set([a, b]), new Set([c]), () => {
      
             const p: Propagator = p_plus(a, b, c); 
-            set_children([p, a, b, c]);
+          
        
         })
 
@@ -329,18 +330,17 @@ describe("disposal", () => {
             const b = constant_cell(2);
             const c = primitive_cell<number>();
             
-            const compound = construct_compound_propagator([a, b], [c], (set_children: (children: Disposable[]) => void) => {
+            const compound = construct_compound_propagator(new Set([a, b]), new Set([c]), () => {
                 const p = p_plus(a, b, c);
-                set_children([p]);
             });
 
             execute_all();
             
             // Dispose of everything
-            compound.dispose();
-            c.dispose();
-            a.dispose();
-            b.dispose();
+            dispose(compound);
+            dispose(c);
+            dispose(a);
+            dispose(b);
             clear_scheduler();
         }
 
@@ -393,10 +393,9 @@ describe("disposal", () => {
         let b = constant_cell(2);
         let c = primitive_cell<number>();
         
-        let compound = construct_compound_propagator([a, b], [c], 
-            (set_children: (children: Disposable[]) => void) => {
+        let compound = construct_compound_propagator(new Set([a, b]), new Set([c]), 
+            () => {
                 const p = p_plus(a, b, c);
-                set_children([p]);
             });
 
         // Store weak references
@@ -406,16 +405,20 @@ describe("disposal", () => {
         const weakCompound = new WeakRef(compound);
 
         // Dispose everything
-        compound.dispose();
-        c.dispose();
-        a.dispose();
-        b.dispose();
+        dispose(compound);
+        dispose(c);
+        dispose(a);
+        dispose(b);
         clear_scheduler();
 
         // Clear references
+        //@ts-ignore
         compound = null;
+        //@ts-ignore
         a = null;
+        //@ts-ignore
         b = null;
+        //@ts-ignore
         c = null;
 
         if (global.gc) global.gc();
@@ -497,7 +500,7 @@ describe("p_apply", () => {
         expect(output.value).toBe(6);
 
         // Dispose of the propagator
-        propagator.dispose();
+        dispose(propagator);
 
         // Update input - should not affect output anymore
         input.value = 10;
