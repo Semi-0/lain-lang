@@ -121,6 +121,7 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
           const input = primitive_cell<Pair<any>>(); 
           const target = constant_cell(the_nothing);
           const accum = primitive_cell();
+          const new_accum = primitive_cell();
           const not_done = primitive_cell<boolean>();
           const cdr_cell = primitive_cell();
           const car_cell = primitive_cell();
@@ -130,7 +131,7 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
           // Initialize input with the input list
           p_write(c, input)
           
-          p_log(applied_cell, "applied_cell", primitive_cell())
+          p_log(accum, "accum", primitive_cell())
           // Check if we're done
           p_equal(input, target, done)
           p_not(done, not_done)
@@ -143,12 +144,15 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
           p_apply(car_cell, f, applied_cell)
           
         //   // Build up result
-        //   p_write(accum, copy_accum)
-        //   p_cons(applied_cell, copy_accum, accum)
+        // this is not working because applied cell is not a new cell, its always the same cell with different value
+          p_write(accum, copy_accum)
+          p_cons(applied_cell, copy_accum, new_accum)
+          p_switch(not_done, new_accum, accum)
           
         //   // Move to next element
-        //   p_rest(input, cdr_cell)
-        //   p_switch(not_done, cdr_cell, input)
+          p_rest(input, cdr_cell)
+          p_switch(not_done, cdr_cell, input)
+
 
           set_children([done, input, target, accum, not_done, cdr_cell, car_cell, applied_cell, copy_accum])
         

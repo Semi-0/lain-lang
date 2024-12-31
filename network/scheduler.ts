@@ -4,31 +4,33 @@ import type { Propagator, Scheduler } from "../type";
 
 export function construct_scheduler(): Scheduler{
     return {
-        propagators_to_alert: [],
-        alerted_propagators: [],
+        propagators_to_alert: new Set<Propagator>(),
+        alerted_propagators: new Set<Propagator>(),
         alert_propagator(propagator: Propagator) {
-            this.propagators_to_alert.unshift(propagator);
+            this.propagators_to_alert.add(propagator);
         },
         execute(): void {
-            while (this.propagators_to_alert.length > 0){
+            while (this.propagators_to_alert.size > 0) {
                 this.step_execute();
             }
         },
         step_execute(): void {
-            // console.log(this.propagators_to_alert)
-            const propagator = this.propagators_to_alert.pop();
-            if (propagator === undefined){
+            // Get and remove first propagator from set
+            const propagator = this.propagators_to_alert.values().next().value;
+            this.propagators_to_alert.delete(propagator);
+            
+            if (propagator === undefined) {
                 return;
             }
             propagator.activate();
-            this.alerted_propagators.push(propagator);
+            this.alerted_propagators.add(propagator);
         },
         summarize(): string {
-            return `propagators_to_alert: ${this.propagators_to_alert.length}, alerted_propagators: ${this.alerted_propagators.length}`;
+            return `propagators_to_alert: ${this.propagators_to_alert.size}, alerted_propagators: ${this.alerted_propagators.size}`;
         },
         clear(): void {
-            this.propagators_to_alert = [];
-            this.alerted_propagators = [];
+            this.propagators_to_alert.clear();
+            this.alerted_propagators.clear();
         }
     }
 }

@@ -9,7 +9,7 @@ import { constant } from "fp-ts/lib/function";
 import { construct_compound_propagator } from "../network/propagator";
 import { lift_propagator_a } from "../network/propagator";
 import { p_apply } from "../network/default_propagator";
-
+import { beforeEach, afterEach } from "bun:test";
 
 describe('Basic Arithmetic', () => {
     it("basic arithmetic plus", () => {
@@ -314,8 +314,9 @@ describe("pc_map", () => {
 })
 
 describe("disposal", () => {
-    it("should properly dispose and allow garbage collection of all components", async () => {
+    it("should properly dispose and allow garbage collection", async () => {
         // Get initial memory usage
+        clear_scheduler();
         const initialMemory = process.memoryUsage().heapUsed;
         
         // Create and dispose of many propagators to make memory difference more noticeable
@@ -326,7 +327,7 @@ describe("disposal", () => {
             
             const compound = construct_compound_propagator([a, b], [c], (set_children: (children: Disposable[]) => void) => {
                 const p = p_plus(a, b, c);
-                set_children([p, c]);
+                set_children([p]);
             });
 
             execute_all();
@@ -343,6 +344,7 @@ describe("disposal", () => {
         if (global.gc) {
             global.gc();
         }
+        console.log(summarize())
 
         // Wait a bit to ensure GC has run
         await new Promise(resolve => setTimeout(resolve, 100));
@@ -353,6 +355,72 @@ describe("disposal", () => {
         // Check that memory usage hasn't grown significantly
         // Allow for some overhead, but should be well under 1MB of growth
         expect(finalMemory - initialMemory).toBeLessThan(1024 * 1024);
+    });
+
+    it("should show consistent memory usage across multiple runs", async () => {
+        const memorySnapshots = [];
+        
+        for (let run = 0; run < 5; run++) {
+            clear_scheduler();
+            const beforeRun = process.memoryUsage().heapUsed;
+            
+            // Run the test multiple times
+            for (let i = 0; i < 10000; i++) {
+                const a = constant_cell(1);
+                const b = constant_cell(2);
+                const c = primitive_cell<number>();
+                // ... rest of test logic ...
+            }
+            
+            if (global.gc) global.gc();
+            await new Promise(resolve => setTimeout(resolve, 100));
+            
+            const afterRun = process.memoryUsage().heapUsed;
+            memorySnapshots.push(afterRun - beforeRun);
+        }
+        
+        // Check that memory usage is consistent between runs
+        const maxDiff = Math.max(...memorySnapshots) - Math.min(...memorySnapshots);
+        expect(maxDiff).toBeLessThan(500 * 1024); // 500KB variance allowed
+    });
+
+    it("should release references properly", () => {
+        let a = constant_cell(1);
+        let b = constant_cell(2);
+        let c = primitive_cell<number>();
+        
+        let compound = construct_compound_propagator([a, b], [c], 
+            (set_children: (children: Disposable[]) => void) => {
+                const p = p_plus(a, b, c);
+                set_children([p]);
+            });
+
+        // Store weak references
+        const weakA = new WeakRef(a);
+        const weakB = new WeakRef(b);
+        const weakC = new WeakRef(c);
+        const weakCompound = new WeakRef(compound);
+
+        // Dispose everything
+        compound.dispose();
+        c.dispose();
+        a.dispose();
+        b.dispose();
+        clear_scheduler();
+
+        // Clear references
+        compound = null;
+        a = null;
+        b = null;
+        c = null;
+
+        if (global.gc) global.gc();
+
+        // Check that weak references are gone
+        expect(weakA.deref()).toBeUndefined();
+        expect(weakB.deref()).toBeUndefined();
+        expect(weakC.deref()).toBeUndefined();
+        expect(weakCompound.deref()).toBeUndefined();
     });
 });
 

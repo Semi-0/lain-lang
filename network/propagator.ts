@@ -36,12 +36,7 @@ export function construct_propagator(
             inputs.forEach(cell => {
                 remove_propagator(cell, propagator);
             });
-            inputs = [];
 
-            outputs.forEach(cell => {
-                remove_propagator(cell, propagator);
-            });
-            outputs = [];
 
             if (global.gc) {
                 global.gc();

@@ -48,8 +48,8 @@ export interface PropagatorFunction{
 }
 
 export interface Scheduler{
-    propagators_to_alert: Propagator[],
-    alerted_propagators: Propagator[],
+    propagators_to_alert: Set<Propagator>,
+    alerted_propagators: Set<Propagator>,
     alert_propagator: (propagator: Propagator) => void, 
     execute: () => void,
     step_execute: () => void

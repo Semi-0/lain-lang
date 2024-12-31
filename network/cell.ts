@@ -28,6 +28,7 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
                     alert_propagator(propagator);
                 },
                 remove_neighbor: (propagator: Propagator) => {
+                    // console.log("remove_neighbor", propagator)
                     neighbors.delete(propagator);
                 },
                 get_neighbors: () => {
@@ -35,6 +36,7 @@ export function cell_constructor<E>(get: () => E, set: (update: E, alert_propaga
                 },
                 children: [],
                 dispose: () => {
+                   
                     neighbors.clear();
                 }
         }

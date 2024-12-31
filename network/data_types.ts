@@ -24,6 +24,7 @@ export interface Pair<T>{
 }
 
 export function cons<T>(fst: CellValue<T>, snd: CellValue<T>): Pair<CellValue<T>>{
+    console.log("cons", fst, snd)
     return {
         fst: fst,
         snd: snd
