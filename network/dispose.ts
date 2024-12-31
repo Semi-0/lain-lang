@@ -41,8 +41,11 @@ define_generic_procedure_handler(_dispose, match_args(is_propagator), (propagato
     disposedSet.add(get_id(get_relation(propagator)));
     
     // Update recursive calls to use _dispose
-    if (get_relation(propagator)) {
-        _dispose(get_relation(propagator));
+    const relation = get_relation(propagator);
+    if (relation) {
+        const id = get_id(relation);
+        _dispose(relation);
+        remove_primitive(id);
     }
 
     // safely remove self from neighbors
@@ -70,10 +73,8 @@ define_generic_procedure_handler(_dispose, match_args(is_propagator), (propagato
 
     propagator.outputs?.clear();
     propagator.inputs?.clear();
-    
-    // remove from global if id exists
-    const id = get_relation(propagator) ? get_id(get_relation(propagator)) : null;
-    if (id) remove_primitive(id);
+    propagator.activate = () => {};
+
 })
 
 define_generic_procedure_handler(_dispose, match_args(is_relation), (relation: Relation) => {

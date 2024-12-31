@@ -47,12 +47,11 @@ export var global_env: Global_Env = empty_global_env();
 
 
 export function parameterize(
-    env: Global_Env, 
-    action: (env: Global_Env) => void, 
+    action: () => void, 
     execute: () => void
 ): void{
-    const original = new Map(env);
-    action(env);
+    const original = new Map(global_env);
+    action();
     execute();
-    env = original;  
+    global_env = original;  
 }

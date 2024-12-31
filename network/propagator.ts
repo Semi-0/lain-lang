@@ -4,9 +4,7 @@ import { add_neighbor, update_cell, remove_neighbor } from "./cell";
 import { construct_relation, get_children } from "./relation";
 import { add_primitive, get_global_parent, global_env, parameterize, set_global_parent } from "./global";
 import { v4 as uuidv4 } from 'uuid';
-import { get_primitive } from "./global";
-import { pipe } from "fp-ts/lib/function";
-import * as O from "fp-ts/Option";
+
 import { get_id } from "./relation";
 // perhaps propagator should be defaultly anonymous?
 export function construct_propagator(
@@ -20,7 +18,11 @@ export function construct_propagator(
         relation: relation,
         inputs: inputs,
         outputs: outputs,
-        activate: activate,
+        activate: () => {
+            parameterize(() => {set_global_parent(propagator.relation)}, () => {
+                activate();
+            })
+        },
         equals: (x: Propagator, y: Propagator) => {
             return get_id(x.relation) === get_id(y.relation);
         }
@@ -44,19 +46,11 @@ export function construct_compound_propagator(
 ): Propagator{
     var built = false;
 
-    const propagator = construct_propagator(inputs, outputs, () => {});
-
-    const compound_activate = () => {
-        parameterize(global_env, (env) => {set_global_parent(propagator.relation);}, () => {
-            if (!built) {
-                console.log("activate compound propagator a")
-                activate();
-                built = true;
-            }
-        })
-    }
-
-    propagator.activate = compound_activate;
+    const propagator = construct_propagator(inputs, outputs, () => {if (!built) {
+        console.log("activate compound propagator a")
+        activate();
+        built = true;
+    }});
 
     return propagator;
 }

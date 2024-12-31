@@ -319,6 +319,34 @@ describe("pc_map", () => {
 })
 
 describe("disposal", () => {
+
+    it("should dispose of a propagator", () => {
+        const a = primitive_cell<number>();
+        const b = primitive_cell<number>();
+        const c = primitive_cell<number>();
+        const p = p_plus(a, b, c);
+        dispose(p);
+        update_cell(a, 1);
+        update_cell(b, 2);
+        execute_all();
+        expect(c.value).toBe(the_nothing);
+    })
+
+    it("should dispose compound propagator", () => {
+        const a = primitive_cell<number>();
+        const b = primitive_cell<number>();
+        const c = primitive_cell<number>();
+        const compound = construct_compound_propagator(new Set([a, b]), new Set([c]), () => {
+            const p = p_plus(a, b, c);
+        });
+        dispose(compound);
+        update_cell(a, 1);
+        update_cell(b, 2);
+        execute_all();
+        expect(c.value).toBe(the_nothing);
+    })
+
+
     it("should properly dispose and allow garbage collection", async () => {
         // Get initial memory usage
         clear_scheduler();
@@ -449,6 +477,7 @@ describe("p_apply", () => {
         execute_all();
         expect(output.value).toBe(6);
 
+
         // Test with a different input
         input.value = 10;
         execute_all();
@@ -500,7 +529,7 @@ describe("p_apply", () => {
         expect(output.value).toBe(6);
 
         // Dispose of the propagator
-        dispose(propagator);
+        dispose(output);
 
         // Update input - should not affect output anymore
         input.value = 10;
