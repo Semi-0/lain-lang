@@ -61,6 +61,22 @@ export function cdr<T>(pair: CellValue<Pair<T>>): CellValue<Pair<T>>{
     }
 }
 
+export function is_empty<T>(pair: CellValue<Pair<T>>): boolean{
+    return is_nothing(pair) || (is_pair(pair) && is_nothing(cdr(pair))) 
+    && is_nothing(car(pair))
+}
+
+export function append<T>(pair: CellValue<Pair<T>>, value: CellValue<T>): Pair<CellValue<T>>{
+    if (is_empty(pair)) {
+        return cons(value, the_nothing);
+    }
+    else {
+        // @ts-ignore
+        return cons(car(pair), append(cdr(pair), value));
+    }
+}
+
+
 export function array_to_pair<T>(array: CellValue<CellValue<T>[]>): CellValue<Pair<CellValue<T>>>{
    var pair: CellValue<Pair<CellValue<T>>> = the_nothing;
    for (let i = array.length - 1; i >= 0; i--) {

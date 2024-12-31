@@ -10,6 +10,7 @@ import { construct_compound_propagator } from "../network/propagator";
 import { lift_propagator_a } from "../network/propagator";
 import { p_apply } from "../network/default_propagator";
 import { beforeEach, afterEach } from "bun:test";
+import { tell_cell } from "../interpreter/propagator_wrapper";
 
 describe('Basic Arithmetic', () => {
     it("basic arithmetic plus", () => {
@@ -252,7 +253,7 @@ describe("pc_map", () => {
     it("should map a function over a list of numbers", () => {
         // Create input cells
         const output = primitive_cell();
-        const add_one = constant_cell(p_add_one);
+        const add_one = primitive_cell<PropagatorFunction>();
 
         // Build input list: [1, 2, 3]
         const three = ps_cons(constant_cell(3), constant_cell(the_nothing));
@@ -260,22 +261,25 @@ describe("pc_map", () => {
         const one = ps_cons(constant_cell(1), two);
         
         // Set input and create map propagator
-     
+        tell_cell(add_one, p_add_one);
         pc_map(one, add_one, output);
         
         // Execute propagator network
         execute_all();
 
         // Expected: [2, 3, 4]
+        console.log("output", output.value)
         const result = output.value;
         
         // Helper function to convert linked list to array
         const listToArray = (pair: any): any[] => {
             const results = [];
             let current = pair;
-            while (current && current.first !== the_nothing) {
-                results.push(current.first);
-                current = current.rest;
+           
+            while (current !== undefined && car(current) !== the_nothing) {
+                //  console.log(results)
+                results.push(car(current));
+                current = cdr(current);
             }
             return results;
         };

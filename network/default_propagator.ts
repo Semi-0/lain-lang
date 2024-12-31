@@ -9,6 +9,7 @@ import { execute_all, summarize } from "./scheduler";
 import { write } from "bun";
 import { is_function } from "generic-handler/built_in_generics/generic_predicates";
 import { apply_propagator } from "./utility";
+import { append } from "./data_types";
 
 
 export function prop_sugar_transformer(p: (...cells: Cell<any>[]) => Propagator): (...inputs: Cell<any>[]) => Cell<any> {
@@ -61,6 +62,12 @@ export function p_rest(c: Cell<Pair<any>>, o: Cell<any>) {
     })(c, o);
 }
 
+export function p_append(p: Cell<Pair<any>>, v: Cell<any>, o: Cell<any>){
+    return lift_propagator_a((pair: Pair<any>, value: CellValue<any>) => {
+        return append(pair, value);
+    })(p, v, o);
+}
+
 export function p_pass(c: Cell<any>, o: Cell<any>){
     return lift_propagator_a((c: any) => {
         return c;
@@ -89,6 +96,7 @@ export function p_apply(c: Cell<any>, f: Cell<PropagatorFunction>, o: Cell<any>)
         }
     })
 }
+
 
 
 export function pc_simple_loop(c_input: Cell<number>, c_output: Cell<any>): Propagator{
@@ -141,16 +149,20 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
           
         //   // If not done, process current element
           p_first(input, car_cell)
+          p_rest(input, cdr_cell)
           p_apply(car_cell, f, applied_cell)
           
         //   // Build up result
         // this is not working because applied cell is not a new cell, its always the same cell with different value
-          p_write(accum, copy_accum)
-          p_cons(applied_cell, copy_accum, new_accum)
+        //   p_write(accum, copy_accum)
+          p_append(accum, applied_cell, new_accum)
           p_switch(not_done, new_accum, accum)
-          
+          p_log(input, "input", primitive_cell())
+          p_log(applied_cell, "applied_cell", primitive_cell())
+          p_log(car_cell, "car_cell", primitive_cell())
+          p_log(cdr_cell, "cdr_cell", primitive_cell())
+          p_log(accum, "accum", primitive_cell()) 
         //   // Move to next element
-          p_rest(input, cdr_cell)
           p_switch(not_done, cdr_cell, input)
 
 
