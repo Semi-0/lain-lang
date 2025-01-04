@@ -74,8 +74,12 @@ export function constant_cell<E>(value: E): Cell<E>{
     return cell;
 }
 
+export function cell_id(cell: Cell<any>){
+    return get_id(cell.relation);
+}
+
 export function update_cell(cell: Cell<any>, value: any){
-    console.log("update_cell", cell, value)
+
     cell.value = value
 }
 

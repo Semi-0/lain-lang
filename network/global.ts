@@ -40,6 +40,8 @@ export function add_child(child: Relation): void{
 }
 
 export function add_primitive(id: string, primitive: PrimitiveObject): void{
+    // console.log("add_primitive", id, primitive)
+    // console.log(global_env.get("disposables"))
     global_env.get("disposables").set(id, primitive);
 }
 

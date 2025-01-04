@@ -1,6 +1,6 @@
 import type { Cell, Propagator,  Relation } from "../type";
 import { reference_store } from "../shared/helper";
-import { add_neighbor, update_cell, remove_neighbor } from "./cell";
+import { add_neighbor, update_cell, remove_neighbor, cell_id } from "./cell";
 import { construct_relation, get_children } from "./relation";
 import { add_primitive, get_global_parent, global_env, parameterize, set_global_parent } from "./global";
 import { v4 as uuidv4 } from 'uuid';
@@ -10,6 +10,7 @@ import { define_generic_procedure_handler } from "generic-handler/GenericProcedu
 import { is_propagator } from "../shared/predicates";
 import { to_string } from "generic-handler/built_in_generics/generic_conversation";
 import { match_args } from "generic-handler/Predicates";
+import { reduce } from "generic-handler/built_in_generics/generic_array_operation";
 // perhaps propagator should be defaultly anonymous?
 export function construct_propagator(
     inputs: Set<Cell<any>>, 
@@ -107,16 +108,14 @@ export function lift_propagator_b<E>(f: (next: (update: E) => void, ...args: any
                 }
 
             f(next, ...inputs.map(c => c.value));
-        }
-    )
+        })
+    }
 }
 
 
-//    return lift_propagator_a((...args: any[]) => {
-//     const next = (update: E) => {
-//         update_cell(get_output_cell(args), update);
-//     }
-//     return f(next, ...args);
-//    });
-}
+
+
+
+
+
 

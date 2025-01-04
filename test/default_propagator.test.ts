@@ -289,6 +289,42 @@ describe("pc_map", () => {
 
         expect(listToArray(result)).toEqual([2, 3, 4]);
     });
+
+    it("should map a function over a longer list of numbers", () => {
+        // Create input cells
+        const output = primitive_cell();
+        const add_one = primitive_cell<PropagatorFunction>();
+
+        // Build input list: [1, 2, 3, 4, 5, 6]
+        const nothing = constant_cell(the_nothing);
+        const six = ps_cons(constant_cell(6), nothing);
+        const five = ps_cons(constant_cell(5), six);
+        const four = ps_cons(constant_cell(4), five);
+        const three = ps_cons(constant_cell(3), four);
+        const two = ps_cons(constant_cell(2), three);
+        const one = ps_cons(constant_cell(1), two);
+        
+        // Set input and create map propagator
+        tell_cell(add_one, p_add_one);
+        pc_map(one, add_one, output);
+        
+        execute_all();
+
+        // Helper function to convert linked list to array
+        const listToArray = (pair: any): any[] => {
+            const results = [];
+            let current = pair;
+           
+            while (current !== undefined && car(current) !== the_nothing) {
+                results.push(car(current));
+                current = cdr(current);
+            }
+            return results;
+        };
+
+        // Expected: [2, 3, 4, 5, 6, 7]
+        expect(listToArray(output.value)).toEqual([2, 3, 4, 5, 6, 7]);
+    });
 }); 
 
 
@@ -502,7 +538,7 @@ describe("p_apply", () => {
 
         // Create the apply propagator
         p_apply(input, funcCell, output);
-
+        p_log(output, "output", primitive_cell())
         // Test with add_one function
         input.value = 5;
         funcCell.value = add_one;
@@ -541,5 +577,113 @@ describe("p_apply", () => {
         input.value = 10;
         execute_all();
         expect(output.value).toBe(6); // Output should remain unchanged
+    });
+
+    it("should handle switching between multiple different propagator functions", () => {
+        const input = primitive_cell<number>();
+        const output = primitive_cell<number>();
+        const funcCell = primitive_cell<PropagatorFunction>();
+        
+        // Create various propagator functions
+        const add_one = lift_propagator_a((x: number) => x + 1);
+        const multiply_by_two = lift_propagator_a((x: number) => x * 2);
+        const square = lift_propagator_a((x: number) => x * x);
+        const negate = lift_propagator_a((x: number) => -x);
+        const double_plus_one = lift_propagator_a((x: number) => 2 * x + 1);
+
+        p_apply(input, funcCell, output);
+
+        // Test sequence of different functions
+        input.value = 5;
+        funcCell.value = add_one;
+        execute_all();
+        expect(output.value).toBe(6);
+
+        funcCell.value = multiply_by_two;
+        execute_all();
+        expect(output.value).toBe(10);
+
+        funcCell.value = square;
+        execute_all();
+        expect(output.value).toBe(25);
+
+        funcCell.value = negate;
+        execute_all();
+        expect(output.value).toBe(-5);
+
+        funcCell.value = double_plus_one;
+        execute_all();
+        expect(output.value).toBe(11);
+
+        // Test that previous functions still work when switched back
+        funcCell.value = add_one;
+        execute_all();
+        expect(output.value).toBe(6);
+    });
+
+    it("should handle rapid switching between functions", () => {
+        const input = primitive_cell<number>();
+        const output = primitive_cell<number>();
+        const funcCell = primitive_cell<PropagatorFunction>();
+        
+        const add_one = lift_propagator_a((x: number) => x + 1);
+        const multiply_by_two = lift_propagator_a((x: number) => x * 2);
+        
+        p_apply(input, funcCell, output);
+
+        // Rapidly switch between functions with same input
+        input.value = 5;
+        
+        funcCell.value = add_one;
+        execute_all();
+        expect(output.value).toBe(6);
+        
+        funcCell.value = multiply_by_two;
+        execute_all();
+        expect(output.value).toBe(10);
+        
+        funcCell.value = add_one;
+        execute_all();
+        expect(output.value).toBe(6);
+        
+        funcCell.value = multiply_by_two;
+        execute_all();
+        expect(output.value).toBe(10);
+    });
+
+    it("should handle switching functions with different input types", () => {
+        const input = primitive_cell<any>();
+        const output = primitive_cell<any>();
+        const funcCell = primitive_cell<PropagatorFunction>();
+        
+        // Functions that handle different types
+        const toString = lift_propagator_a((x: any) => String(x));
+        const length = lift_propagator_a((x: string) => {
+            return x.length;
+        });
+        const parseNumber = lift_propagator_a((x: string) => parseInt(x));
+        
+        p_apply(input, funcCell, output);
+
+        // Test chain of type transformations
+        input.value = 42;
+        funcCell.value = toString;
+        execute_all();
+        expect(output.value).toBe("42");
+        console.log("output", output.value)
+
+      
+        input.value = "42"
+        funcCell.value = length;
+        execute_all();
+        console.log("output", output.value)
+        expect(output.value).toBe(2);
+
+        input.value = "123";
+        funcCell.value = parseNumber;
+        execute_all();
+        console.log(input.get_neighbors().size)
+        console.log("output", output.value)
+        expect(output.value).toBe(123);
     });
 });

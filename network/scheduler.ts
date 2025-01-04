@@ -38,6 +38,7 @@ export function construct_scheduler(): Scheduler{
 export const the_scheduler = construct_scheduler();
 
 export function alert_propagator(propagator: Propagator): void {
+    // console.log("alert_propagator", propagator)
     the_scheduler.alert_propagator(propagator);
 }
 

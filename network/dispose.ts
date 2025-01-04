@@ -69,6 +69,7 @@ define_generic_procedure_handler(_dispose, match_args(is_propagator), (propagato
             }
         )
     }
+    remove_primitive(get_id(get_relation(propagator)));
 
     propagator.outputs?.clear();
     propagator.inputs?.clear();
@@ -122,4 +123,5 @@ define_generic_procedure_handler(dispose, match_args(is_cell), (cell: Cell<any>)
             })
         }
     )
+    remove_primitive(get_id(cell.relation));
 })
