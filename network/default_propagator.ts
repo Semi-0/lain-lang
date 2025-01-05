@@ -76,19 +76,11 @@ export function p_pass(c: Cell<any>, o: Cell<any>){
 }
 
 export function p_apply(c: Cell<any>, f: Cell<PropagatorFunction>, o: Cell<any>){
-    let prev: Propagator | undefined = undefined
-
     // for garbage collection
     return construct_propagator(new Set([c, f]), new Set([o]),  () => {
-            if (is_function(f.value)){    
-          
-                const p = apply_propagator([c, o], f.value as PropagatorFunction);
-                // console.log("apply", c.value, o.value, f.value)
-             
-            }
-            else{
-                console.log("can't apply", f.value)
-
+            if (is_function(f.value)){         
+                // @ts-ignore
+                const p = apply_propagator([c, o], f.value);
             }
         }
     )
@@ -138,14 +130,6 @@ export function p_switch(switch_cell: Cell<boolean>, value_cell: Cell<any>, outp
     })(switch_cell, value_cell, output_cell);
 }
 
-export function p_switch_b(switch_cell: Cell<boolean>, procedure: Cell<PropagatorFunction>, args: Cell<any>[], output: Cell<any>) {
-    return lift_propagator_a((c: boolean, v: any) => {
-        if (c === true){
-            apply_propagator([...args, output], procedure.value as PropagatorFunction);
-        }
-    })(switch_cell, output);
-}
-
 
 export function p_write(c: Cell<any>, o: Cell<any>) {
     return lift_propagator_a((c: any) => {
@@ -161,8 +145,6 @@ export function p_if(condition: Cell<boolean>, then_cell: Cell<any>, else_cell: 
             p_switch(not_cell, else_cell, output);
     })
 }
-
-
 
 export function p_smaller(a: Cell<number>, b: Cell<number>, o: Cell<boolean>) {
     return lift_propagator_a((a: number, b: number) => a < b)(a, b, o);
@@ -254,7 +236,6 @@ export function pc_map(c: Cell<Pair<any>>, f: Cell<PropagatorFunction>, o: Cell<
           p_first(input, car_cell)
           p_rest(input, cdr_cell)
           p_apply(car_cell, f, applied_cell)
-          p_log(applied_cell, "applied_cell", primitive_cell())
           
         //   // Build up result
         // this is not working because applied cell is not a new cell, its always the same cell with different value
