@@ -1,23 +1,10 @@
 # lain-lang
 
-Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. 
+Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. 
 
-## Key Features
+One of lain-lang's most powerful features is its ability to **expand and hot-swap lexical closures across multiple peers** in real-time. Lexical closures can dynamically grow their captured environment as new definitions are added, and these expanded closures can be seamlessly synchronized and hot-swapped across the peer-to-peer network without losing state. This enables collaborative live coding where changes on one machine instantly propagate to others, with closures that adapt and evolve as the codebase grows.
 
-### Hot-Swappable Lexical Closures Across Peers
-
-One of lain-lang's most powerful features is its ability to **expand and hot-swap lexical closures across multiple peers** in real-time. Lexical closures can dynamically grow their captured environment as new definitions are added, and these expanded closures can be seamlessly synchronized and hot-swapped across the peer-to-peer network without losing state. This enables:
-
-- **Dynamic Closure Expansion**: Closures automatically capture new bindings as they're added to the lexical environment, allowing code to evolve organically
-- **Cross-Peer Hot-Swapping**: Updated closures are automatically synchronized across all connected peers, enabling collaborative live coding where changes on one machine instantly propagate to others
-- **State Preservation**: The system maintains closure state during hot-swapping, ensuring that running computations continue seamlessly even as their underlying closures are updated
-- **Incremental Synchronization**: Only the changed parts of closures are synchronized, making the system efficient even with large codebases
-
-This capability transforms distributed programming, allowing teams to collaboratively develop and debug code in real-time across multiple machines, with closures that adapt and evolve as the codebase grows.
-
-### Live Coding and Incremental Compilation
-
-The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
+Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
 
 ## Installation
 
