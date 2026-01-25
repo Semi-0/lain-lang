@@ -1,10 +1,6 @@
-# lain-lang
+# Lain-Lang
 
-Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. 
-
-One of lain-lang's most powerful features is its ability to **expand and hot-swap lexical closures across multiple peers** in real-time. Lexical closures can dynamically grow their captured environment as new definitions are added, and these expanded closures can be seamlessly synchronized and hot-swapped across the peer-to-peer network without losing state. This enables collaborative live coding where changes on one machine instantly propagate to others, with closures that adapt and evolve as the codebase grows.
-
-Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
+Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
 
 ## Installation
 
