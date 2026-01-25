@@ -1,0 +1,491 @@
+Graph Instance:
+- Contains:
+  - All cells
+  - All applied propagators
+
+Cells:
+- id: unique identifier
+- name: optional human-readable name
+- values: layered values with vector clocks
+- inputs: list of input cell ids
+- outputs: list of dependent cell ids
+- contradictions: layered contradictions if present
+- closure environment references (for compiler tracking)
+
+- combining cells maybe allow carried cell to receive patches? 
+- can it notify the propagator in patches then?
+- or maybe just fetch based with logic clock?
+
+Applied Propagators:
+- id: unique identifier
+- name
+- inputs: list of cell ids
+- outputs: list of cell ids
+- environment references tracked via cells
+
+SERIALIZATION RULES
+-------------------
+- For each cell:
+  - Serialize id, name, inputs, outputs
+  - Serialize each layered value:
+    - If normal primitive → store value
+    - If nothing → store special marker
+    - If disposed → store special marker
+    - If contradiction → store layered contradiction recursively
+    - If compound (map, carried objects) → serialize each entry recursively
+    - Attach vector clock for versioning
+
+- For each applied propagator:
+  - Serialize id, name, inputs, outputs
+  - Do NOT serialize executable code
+  - Env references are implied via connected cells
+
+- DB / LAN sync:
+  - Push/pull all serialized cells and applied propagators
+  - Merge layered values using vector clocks
+  - Reconstruct graph locally
+  - Contradictions and compound structures are preserved exactly
+
+================================================================================
+MULTI-MACHINE PROPAGATOR SYNC SPECIFICATION
+================================================================================
+
+REQUIREMENTS:
+-------------
+1. Different machines may have different propagator implementations
+2. Extend current architecture without modifying Cell/Propagator core
+3. Gun.js stores synced cell content (not just strongest values)
+4. Each machine only notifies its local propagators
+5. Support selective sync (only cells with local propagators)
+
+================================================================================
+GUN.JS DATA STRUCTURE
+================================================================================
+
+Namespace: "sync/"
+
+sync/
+├── cells/
+│   └── {cell_id}/
+│       ├── metadata: { id, name, type, version, createdAt, updatedAt }
+│       ├── content: { <layered_values> }  ← Full content, not just strongest
+│       ├── strongest: { <strongest_value> }  ← For quick access
+│       └── neighbors: { <neighbor_refs> }  ← Propagator references
+│
+├── propagators/
+│   └── {propagator_id}/
+│       ├── metadata: { id, name, inputs, outputs, version }
+│       └── machines: { <machine_id>: <registration_info> }  ← Per-machine registration
+│
+├── machines/
+│   └── {machine_id}/
+│       ├── metadata: { id, name, connectedAt, lastSeen }
+│       ├── propagators: [ <propagator_ids> ]  ← Propagators registered on this machine
+│       └── subscribed_cells: [ <cell_ids> ]  ← Cells this machine subscribes to
+│
+└── cell_propagator_map/
+    └── {cell_id}/
+        └── propagators: { <machine_id>: [ <propagator_ids> ] }  ← Which propagators on which machines care about this cell
+
+================================================================================
+CELL CONTENT STORAGE
+================================================================================
+
+Cell Content Structure in Gun.js:
+----------------------------------
+{
+  id: "cell_123",
+  name: "my_cell",
+  type: "value" | "closure" | "carried",
+  
+  // Full content (layered values)
+  content: {
+    layer_1: { value: <encoded>, timestamp: 1234567890, vector_clock: {...} },
+    layer_2: { value: <encoded>, timestamp: 1234567891, vector_clock: {...} },
+    // ... all layers
+  },
+  
+  // Strongest value (for quick access)
+  strongest: { <encoded_value> },
+  
+  // Neighbors (propagators that depend on this cell)
+  neighbors: {
+    "prop_1": { type: ["updated", "content_tested"], machine_id: "machine_A" },
+    "prop_2": { type: ["updated"], machine_id: "machine_B" },
+  },
+  
+  // Version tracking
+  version: 42,
+  updatedAt: 1234567890,
+  vectorClock: { machine_A: 10, machine_B: 5, ... }
+}
+
+================================================================================
+MACHINE IDENTIFICATION
+================================================================================
+
+Machine ID Generation:
+----------------------
+- Each machine generates a unique ID on first run
+- Stored locally: `machine_id.json` or environment variable
+- Format: `machine_<uuid>` or `machine_<hostname>_<timestamp>`
+- Persisted across restarts
+
+Machine Registration:
+---------------------
+When a machine connects:
+1. Register in `sync/machines/{machine_id}/metadata`
+2. Update `lastSeen` timestamp periodically (heartbeat)
+3. On disconnect, mark as inactive (but don't delete)
+
+================================================================================
+PROPAGATOR REGISTRATION (PER MACHINE)
+================================================================================
+
+When a propagator is created locally:
+-------------------------------------
+1. Register propagator in `sync/propagators/{prop_id}/metadata`
+   - Store: id, name, inputs, outputs
+   - DO NOT store executable code
+
+2. Register machine association:
+   - `sync/propagators/{prop_id}/machines/{machine_id}` = {
+       registeredAt: timestamp,
+       inputs: [cell_ids],
+       outputs: [cell_ids],
+     }
+
+3. Update machine's propagator list:
+   - `sync/machines/{machine_id}/propagators` += prop_id
+
+4. Update cell-propagator mapping:
+   - For each input cell: `sync/cell_propagator_map/{cell_id}/propagators/{machine_id}` += prop_id
+   - For each output cell: `sync/cell_propagator_map/{cell_id}/propagators/{machine_id}` += prop_id
+
+When a propagator is disposed locally:
+--------------------------------------
+1. Remove from `sync/machines/{machine_id}/propagators`
+2. Remove from `sync/cell_propagator_map/{cell_id}/propagators/{machine_id}`
+3. Keep propagator metadata in Gun (for history/debugging)
+
+================================================================================
+CELL CONTENT SYNC
+================================================================================
+
+Storing Cell Content:
+---------------------
+When a cell's content changes locally:
+1. Encode full content (all layers) using gun_db_schema_encode
+2. Store in `sync/cells/{cell_id}/content`
+3. Store strongest value in `sync/cells/{cell_id}/strongest`
+4. Update version and vector clock
+5. Update `sync/cells/{cell_id}/metadata`
+
+Receiving Remote Cell Updates:
+------------------------------
+When Gun.js receives update for `sync/cells/{cell_id}/content`:
+1. Decode content using gun_db_schema_decode
+2. Merge with local cell content (using vector clocks)
+3. Update local cell: `cell.update(merged_content)`
+4. **Only notify local propagators** (see notification section)
+
+================================================================================
+SELECTIVE NOTIFICATION (LOCAL PROPAGATORS ONLY)
+================================================================================
+
+Key Principle:
+--------------
+When a cell updates (locally or remotely), only notify propagators
+that are registered on THIS machine.
+
+Notification Flow:
+------------------
+1. Cell update occurs (local or remote)
+   ↓
+2. Check `sync/cell_propagator_map/{cell_id}/propagators/{this_machine_id}`
+   ↓
+3. Get list of local propagator IDs that care about this cell
+   ↓
+4. For each local propagator ID:
+   - Look up local propagator instance
+   - Call `alert_interested_propagators(neighbors, NeighborType.updated)`
+   ↓
+5. Remote machines handle their own notifications independently
+
+Implementation Extension Point:
+-------------------------------
+// Extension layer (doesn't modify Cell.ts)
+class CellSyncExtension {
+  private localPropagators: Map<string, Propagator> = new Map();
+  private machineId: string;
+  private gun: Gun;
+  
+  // Register a local propagator
+  registerPropagator(prop: Propagator, cellIds: string[]) {
+    const propId = propagator_id(prop);
+    this.localPropagators.set(propId, prop);
+    
+    // Register in Gun
+    this.gun.get(`sync/cell_propagator_map/${cellId}/propagators/${this.machineId}`)
+      .set(propId);
+  }
+  
+  // Hook into cell updates
+  onCellUpdate(cellId: string, cell: Cell<any>) {
+    // Get local propagators for this cell
+    const localProps = this.getLocalPropagatorsForCell(cellId);
+    
+    // Notify only local propagators
+    for (const prop of localProps) {
+      // Use existing Cell API
+      cell.addNeighbor(prop, [NeighborType.updated]);
+    }
+  }
+}
+
+================================================================================
+DIFFERENT PROPAGATOR IMPLEMENTATIONS
+================================================================================
+
+Problem:
+--------
+Machine A has propagator "add" that does: output = input1 + input2
+Machine B has propagator "add" that does: output = input1 + input2 + 1
+
+Both machines sync the same cells, but compute different results.
+
+Solution:
+---------
+1. Propagator names are just identifiers - implementations are local
+2. Each machine's propagator implementation is NOT synced
+3. Only propagator metadata (id, name, inputs, outputs) is synced
+4. Each machine runs its own propagator code when notified
+
+Example:
+--------
+Machine A:
+  - Creates propagator "add_1" with inputs [cell_x, cell_y], output [cell_z]
+  - Registers in Gun: { id: "add_1", name: "add", inputs: ["cell_x", "cell_y"], outputs: ["cell_z"] }
+  - When cell_x updates → runs local "add" implementation → updates cell_z
+
+Machine B:
+  - Creates propagator "add_2" with inputs [cell_x, cell_y], output [cell_w]
+  - Registers in Gun: { id: "add_2", name: "add", inputs: ["cell_x", "cell_y"], outputs: ["cell_w"] }
+  - When cell_x updates → runs local "add" implementation → updates cell_w
+
+Both machines see the same cell_x value, but produce different outputs
+because they have different propagator implementations.
+
+================================================================================
+SYNC WORKFLOW
+================================================================================
+
+Initialization:
+---------------
+1. Machine starts, loads machine_id
+2. Connect to Gun.js
+3. Register machine in `sync/machines/{machine_id}`
+4. Load subscribed cells from `sync/machines/{machine_id}/subscribed_cells`
+5. For each subscribed cell:
+   - Load content from `sync/cells/{cell_id}/content`
+   - Reconstruct local cell
+   - Subscribe to updates
+
+Creating a Propagator:
+----------------------
+1. Create propagator locally (using existing API)
+2. Register in Gun (metadata only)
+3. Register machine association
+4. Update cell-propagator mapping
+5. Subscribe to input cells if not already subscribed
+
+Cell Update (Local):
+--------------------
+1. Local cell.update(value) called
+2. Cell content changes locally
+3. Encode and store in Gun: `sync/cells/{cell_id}/content`
+4. Update strongest: `sync/cells/{cell_id}/strongest`
+5. Update version and vector clock
+6. Check local propagators for this cell
+7. Notify only local propagators
+8. Gun.js syncs to other machines automatically
+
+Cell Update (Remote):
+---------------------
+1. Gun.js receives update for `sync/cells/{cell_id}/content`
+2. Decode content
+3. Merge with local cell content (vector clock merge)
+4. Update local cell: `cell.update(merged_content)`
+5. Check local propagators for this cell
+6. Notify only local propagators (remote machines handle their own)
+
+Propagator Disposal:
+--------------------
+1. Local propagator disposed
+2. Remove from local registry
+3. Remove from Gun: `sync/machines/{machine_id}/propagators`
+4. Remove from cell-propagator mapping
+5. Keep propagator metadata in Gun (for history)
+
+================================================================================
+EXTENSION POINTS (NO MODIFICATION TO CORE)
+================================================================================
+
+Extension Layer Architecture:
+-----------------------------
+```
+┌─────────────────────────────────────────┐
+│  Existing Cell/Propagator Code          │
+│  (NO MODIFICATIONS)                     │
+└──────────────┬──────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────┐
+│  CellSyncExtension (NEW)                │
+│  - Wraps Cell.update()                  │
+│  - Wraps Propagator creation            │
+│  - Handles Gun.js sync                  │
+│  - Manages local propagator registry    │
+└──────────────┬──────────────────────────┘
+               │
+               ▼
+┌─────────────────────────────────────────┐
+│  Gun.js                                  │
+│  - Stores cell content                   │
+│  - Syncs across machines                 │
+└─────────────────────────────────────────┘
+```
+
+Extension Implementation:
+--------------------------
+// db_adapter.ts (extension layer)
+export class GunCellSyncAdapter {
+  private gun: Gun;
+  private machineId: string;
+  private localPropagators: Map<string, Propagator> = new Map();
+  private cellSubscriptions: Map<string, () => void> = new Map();
+  
+  // Wrap cell creation
+  createSyncedCell<A>(name: string, id?: string): Cell<A> {
+    const cell = construct_cell<A>(name, id);  // Use existing API
+    
+    // Extend with sync capability
+    this.setupCellSync(cell);
+    
+    return cell;
+  }
+  
+  // Wrap propagator creation
+  registerPropagator(prop: Propagator) {
+    const propId = propagator_id(prop);
+    this.localPropagators.set(propId, prop);
+    
+    // Register in Gun
+    this.registerPropagatorInGun(prop);
+  }
+  
+  // Setup sync for a cell
+  private setupCellSync(cell: Cell<any>) {
+    const cellId = cell_id(cell);
+    
+    // Hook into cell updates
+    const originalUpdate = cell.update.bind(cell);
+    cell.update = (value: any) => {
+      originalUpdate(value);  // Call original
+      this.syncCellToGun(cell);  // Sync to Gun
+      this.notifyLocalPropagators(cell);  // Notify local only
+    };
+    
+    // Subscribe to remote updates
+    this.subscribeToRemoteUpdates(cell);
+  }
+  
+  // Notify only local propagators
+  private notifyLocalPropagators(cell: Cell<any>) {
+    const cellId = cell_id(cell);
+    
+    // Get local propagators for this cell
+    this.gun.get(`sync/cell_propagator_map/${cellId}/propagators/${this.machineId}`)
+      .once((propIds: any) => {
+        if (propIds) {
+          const ids = Object.keys(propIds);
+          for (const propId of ids) {
+            const prop = this.localPropagators.get(propId);
+            if (prop) {
+              // Use existing Cell API to notify
+              cell.addNeighbor(prop, [NeighborType.updated]);
+            }
+          }
+        }
+      });
+  }
+}
+
+================================================================================
+COMPACTION STRATEGY
+================================================================================
+
+For Multi-Machine Setup:
+------------------------
+1. Each machine tracks its own subscribed cells
+2. Compaction runs on a designated "coordinator" machine
+3. Coordinator collects all active cells from all machines:
+   - Query `sync/machines/*/subscribed_cells`
+   - Union all cell IDs
+4. Migrate active cells to new Gun DB
+5. All machines switch to new DB
+6. Delete old DB
+
+Or Per-Machine Compaction:
+--------------------------
+1. Each machine compacts its own subscribed cells
+2. Use namespace: `sync/machine_{id}/cells/...`
+3. Each machine only syncs its own namespace
+4. Compaction is independent per machine
+
+================================================================================
+ERROR HANDLING
+================================================================================
+
+Network Failures:
+----------------
+- Gun.js handles network failures automatically
+- Cells continue working locally
+- When network recovers, Gun.js syncs automatically
+
+Propagator Mismatches:
+---------------------
+- If a cell updates but no local propagator exists → no notification (expected)
+- If a propagator expects a cell that doesn't exist → propagator waits (existing behavior)
+
+Version Conflicts:
+-----------------
+- Use vector clocks for conflict resolution
+- Merge layered values using existing merge logic
+- Strongest value computed from merged content
+
+================================================================================
+SUMMARY
+================================================================================
+
+Key Design Decisions:
+---------------------
+1. ✅ Store full cell content in Gun.js (not just strongest)
+2. ✅ Propagator implementations are local (not synced)
+3. ✅ Only propagator metadata synced (id, name, inputs, outputs)
+4. ✅ Each machine only notifies its local propagators
+5. ✅ Extension layer wraps existing code (no modifications)
+6. ✅ Selective sync based on local propagator subscriptions
+7. ✅ Machine identification for per-machine propagator tracking
+
+Data Flow:
+----------
+Cell Update → Encode → Store in Gun → Gun syncs → Remote machines receive →
+Decode → Merge → Update local cell → Check local propagators → Notify local only
+
+Extension Points:
+-----------------
+- Cell creation: wrap with sync capability
+- Cell updates: hook to sync to Gun and notify local propagators
+- Propagator creation: register in Gun and track locally
+- Remote updates: decode, merge, update local cell, notify local propagators
