@@ -1,6 +1,6 @@
 # Lain-Lang
 
-Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
+Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state, enabling live coding across multiple machines through peer-to-peer synchronization. Lain-lang can expand and hot-reload closures across peers, allowing you to modify function definitions on one machine and have those changes automatically propagate to all connected peers while preserving execution state. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
 
 ## Installation
 
@@ -103,6 +103,20 @@ bun run lain-host
 bun run lain-peer
 bun run lain-repl
 ```
+
+## Key Features
+
+### Distributed Live Coding
+
+Lain-lang enables true distributed live coding with the following capabilities:
+
+- **Closure Expansion Across Peers**: Closures can be expanded and shared across multiple peer connections, allowing distributed function definitions to be synchronized in real-time.
+
+- **Hot-Reload Without State Loss**: Modify closure definitions on any peer, and the changes automatically propagate to all connected peers. The system preserves execution state during hot-reload, ensuring that running computations continue seamlessly with the updated definitions.
+
+- **Peer-to-Peer Synchronization**: Built on Gun.js, lain-lang provides decentralized synchronization where any peer can act as a host or client, enabling flexible distributed computation topologies.
+
+- **Incremental Compilation**: Code changes trigger automatic recompilation only for affected components, making the system efficient even with large codebases.
 
 ## Project Structure
 
