@@ -1,4 +1,4 @@
-# Lain Programming Language
+# The Lain Programming Language
 
 > **⚠️ Early Prototype**: This programming language is still in very early prototyping stage. The API, syntax, and features are subject to change. Use at your own risk.
 
