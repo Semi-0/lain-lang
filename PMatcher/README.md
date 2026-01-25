@@ -1,6 +1,12 @@
 # pmatcher
 
-A powerful pattern matching library for TypeScript/JavaScript.
+A powerful pattern matching library for TypeScript/JavaScript with **backtracking support** and **lexical scoping**.
+
+## Key Features
+
+- **Backtracking Support**: The pattern matcher supports backtracking through `P.sequence` and the DSL itself, allowing complex pattern matching with automatic backtracking when a match fails.
+
+- **Lexical Scoping**: The DSL is lexically scoped, enabling recursive pattern definitions with proper variable binding and closure semantics. This is particularly powerful when combined with `match_letrec` for defining recursive patterns.
 
 ## Installation
 
@@ -211,9 +217,11 @@ output:
 
 ```
 
-## The Power Of Lexical Scoping
-The variable assignment in 'match_letrec' function is lexical scoped, Here is an example 
-demonstrate how to use tail recursion to match complex recursive pattern such as palindrome
+## The Power Of Lexical Scoping and Backtracking
+
+The pattern matcher DSL is **lexically scoped**, meaning variable assignments in `match_letrec` follow lexical scoping rules. This enables powerful recursive pattern definitions with proper closure semantics. Additionally, the matcher supports **backtracking** through `P.sequence` and the underlying matching combinators, automatically exploring alternative matches when a pattern fails.
+
+Here is an example demonstrating how to use lexical scoping and tail recursion to match complex recursive patterns such as palindrome:
 
 
 
@@ -258,7 +266,36 @@ output:
 }
 ```
 
+## Backtracking with P.sequence
 
+The pattern matcher supports backtracking through `P.sequence` and the underlying matching combinators. When a match fails, the matcher automatically backtracks to try alternative paths. This is particularly useful for ambiguous patterns where multiple matches are possible.
+
+```typescript
+// Example: Backtracking with P.choose (which uses backtracking internally)
+import { build, P, run_matcher } from 'pmatcher/MatchBuilder';
+
+// This pattern will try each alternative in sequence, backtracking if one fails
+const matcher = build([
+  P.choose,
+  ["prefix", "value1"],
+  ["prefix", "value2"],
+  ["other", "value3"]
+]);
+
+const data1 = ["prefix", "value1"];
+const result1 = run_matcher(matcher, data1, {result: (dict, nEaten) => ({dict, nEaten})});
+// Will match the first alternative
+
+const data2 = ["prefix", "value2"];
+const result2 = run_matcher(matcher, data2, {result: (dict, nEaten) => ({dict, nEaten})});
+// Will backtrack from first alternative and match the second
+
+const data3 = ["other", "value3"];
+const result3 = run_matcher(matcher, data3, {result: (dict, nEaten) => ({dict, nEaten})});
+// Will backtrack from first two alternatives and match the third
+```
+
+The backtracking mechanism works seamlessly with lexical scoping, ensuring that variable bindings are properly managed during backtracking operations.
 
 ## Detailed Explanation for MatchCallback.ts and MatchCombinator.ts in MatchBuilder.ts
 
