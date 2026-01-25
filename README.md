@@ -144,6 +144,20 @@ The project uses:
 - **TypeScript** for type safety
 - **Gun.js** for P2P synchronization
 
+## Credits
+
+Lain-lang is built upon several foundational libraries:
+
+- **[Gun.js](https://gun.eco/)** - Provides the peer-to-peer synchronization layer that enables distributed live coding and real-time data synchronization across multiple machines. Gun.js's decentralized architecture allows any peer to act as a host or client, making lain-lang's distributed computation model possible.
+
+- **[ppropagator](https://github.com/Semi-0/Propagator)** - Implements the core propagator network system, providing reactive computation through cells and propagators. The system includes vector clock-based reactive mechanisms for tracking causality in distributed scenarios, enabling automatic updates when inputs change.
+
+- **[sando-layer](https://github.com/Semi-0/Sando)** - Provides layered data structures for handling side effects and metadata. Sando's layer system enables the propagation of support information, timestamps, and error states alongside base values, which is essential for maintaining state during hot-reload operations.
+
+- **[pmatcher](https://github.com/Semi-0/PMatcher)** - A powerful pattern matching library with backtracking support and lexical scoping. PMatcher is used throughout lain-lang's compiler for pattern matching on code structures, enabling flexible code transformation and analysis.
+
+- **[generic-handler](https://github.com/Semi-0/GenericProcedure)** - Provides generic procedure handlers that enable extensible and polymorphic operations. Generic handlers allow lain-lang to support flexible function dispatch and generic operations across different data types.
+
 ## License
 
 See LICENSE file for details.
