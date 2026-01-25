@@ -4,9 +4,21 @@ TypeScript implementation of propagator system from the art of propagator & SDF.
 
 Including the implementation of basic cells, propagators, support layer, generic arithmetic, as well as simple backtracking(amb op).
 
-Also, a customized observer-based reactive system has been included for transmitting values between cells and propagators, and a more generic scheduler supports promise, which is different from the scheme implementation.
+## Vector Clock-Based Reactive System
 
-So, both the cell and propagator could be observed by external observers, this could potentially open up some possibilities for visualization.
+This implementation extends the propagator system with a **vector clock-based reactive system**. Vector clocks serve dual purposes:
+
+1. **Reactive Computation**: Vector clocks track causality and temporal ordering of values across the propagator network, enabling correct reactive updates in distributed and concurrent scenarios.
+
+2. **Truth Maintenance System (TMS)**: Vector clocks can be used as a Truth Maintenance System, tracking dependencies and support relationships between values. The system maintains temporary value sets that track multiple concurrent values with their vector clock metadata, allowing for:
+   - Dependency tracking and retraction
+   - Contradiction detection and resolution
+   - Support layer integration for premise-based reasoning
+   - Stale value detection and automatic replacement
+
+The reactive system integrates vector clocks with support layers, enabling sophisticated dependency management where values can be retracted (kicked out) or restored (brought in) based on their premise dependencies. This allows the system to handle non-monotonic reasoning and maintain consistency across complex propagator networks.
+
+Both cells and propagators can be observed by external observers, opening up possibilities for visualization and debugging of the reactive computation flow.
 
 ## Installation
 
