@@ -1,6 +1,6 @@
 # lain-lang
 
-A highly expressive and general domain-specific language for distributed computation.
+A highly expressive and general domain-specific language and live coding runtime for distributed computation.
 
 ## Installation
 
