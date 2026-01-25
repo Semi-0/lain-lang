@@ -1,6 +1,7 @@
 {
   "name": "lain-lang",
   "version": "0.1.0",
+  "license": "Apache-2.0",
   "type": "module",
   "module": "index.ts",
   "main": "index.ts",

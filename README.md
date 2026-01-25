@@ -161,3 +161,17 @@ Lain-lang is built upon several foundational libraries:
 ## License
 
 See LICENSE file for details.
+
+
+## Background and Lineage
+
+The design of Lain-lang is informed by earlier research on propagator
+networks and extensible interpreters, most notably the work of
+Chris Hanson and Gerald Jay Sussman presented in *Software Design for
+Flexibility* and its accompanying SDF (Scheme) implementation.
+
+SDF provides a foundational exploration of propagator-based computation,
+generic interpreters, and incremental evaluation. Lain-lang does not
+reuse SDF code directly, but reinterprets and extends these ideas in a
+TypeScript-based, distributed, and live-coding-oriented setting, with
+substantial architectural and semantic differences.
