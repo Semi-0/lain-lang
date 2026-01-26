@@ -186,10 +186,11 @@ describe("Compiler Entry Point Tests (run function)", () => {
         test("should define and apply a closure", async () => {
             const primEnvCell = primitive_env()
             const env = primEnvCell
+            const source = source_cell("source")
             
             // First define a network (closure)
             const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
-            const defineEnv = run(defineCode, env);
+            const defineEnv = run(defineCode, env, source);
 
         
             
@@ -197,7 +198,7 @@ describe("Compiler Entry Point Tests (run function)", () => {
             const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
             
             const applyCode = "(add1 5 out)";
-            const resultEnv = run(applyCode, env);
+            const resultEnv = run(applyCode, env, source);
             
             await execute_all_tasks_sequential(console.error);
     

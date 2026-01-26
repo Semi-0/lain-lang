@@ -7,7 +7,7 @@ import { is_string } from "generic-handler/built_in_generics/generic_predicates"
 import { is_cell } from "ppropogator/Cell/Cell";
 import { renderCellGraphToConsole } from "./graph_renderer";
 import { merge_layered } from "ppropogator/Cell/Merge";
-import { init_system } from "./compiler";
+import { init_system } from "./incremental_compiler";
 import { source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 type REPLOptions = {
@@ -42,6 +42,10 @@ export const createREPL = (
         prompt: opts.prompt,
     });
 
+    // Create execution interval for continuous task processing (needed for closures)
+    const executionInterval = setInterval(async () => {
+        await execute_all_tasks_sequential(() => {});
+    }, 100);
 
     rl.prompt();
 
@@ -53,7 +57,15 @@ export const createREPL = (
         }
 
         try {
+            // Execute any pending tasks from previous commands BEFORE running new code
+            // This is critical for closures to work correctly
+            await execute_all_tasks_sequential(console.error);
+            
+            // Run the code WITHOUT timestamp (same as lain-host/lain-peer)
+            // Passing undefined allows closures to work correctly across commands
             const result = run(code, env, source);
+            
+            // Execute tasks after running the code
             await execute_all_tasks_sequential(console.error);
 
             if (is_string(result)) {
@@ -78,11 +90,13 @@ export const createREPL = (
 
     rl.on("line", handleLine);
     rl.on("close", () => {
+        clearInterval(executionInterval);
         console.log("Bye!");
         process.exit(0);
     });
 
     return () => {
+        clearInterval(executionInterval);
         rl.close();
     };
 };
