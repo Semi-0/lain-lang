@@ -5,39 +5,40 @@
 
 import { execute_all_tasks_sequential } from "ppropogator";
 import { run } from "../../compiler/compiler_entry";
-import { is_cell } from "ppropogator/Cell/Cell";
+import { is_cell, type Cell } from "ppropogator/Cell/Cell";
 import { is_string } from "generic-handler/built_in_generics/generic_predicates";
 import type { LexicalEnvironment } from "../../compiler/env";
-import { logger } from "./logger";
+import { logger, type LogMessage } from "./logger";
+import { renderCellGraph } from "../../compiler/graph_renderer";
 
 /**
  * Executes code in the given environment and handles the result
  */
-export const executeCode = async (code: string, env: LexicalEnvironment): Promise<void> => {
+export const execute_code = async (code: string, env: LexicalEnvironment, source: Cell<any> | undefined = undefined, timestamp: number | undefined = undefined): Promise<void> => {
     await execute_all_tasks_sequential(() => {});
 
     try {
-        const result = run(code, env);
+        const result = run(code, env, source, timestamp);
         await execute_all_tasks_sequential(() => {});
 
-        const messages = [];
+        const messages: LogMessage[] = [];
         if (is_cell(result)) {
-            messages.push({ level: "success" as const, message: "✅ Compilation successful." });
-            // Graph rendering is optional (requires ascii-force from eko)
+            messages.push({ level: "success", message: "✅ Compilation successful." });
             try {
-                const { renderCellGraph } = await import("../../compiler/graph_renderer");
                 const graphOutput = await renderCellGraph(result);
-                messages.push({ level: "info" as const, message: graphOutput });
+                messages.push({ level: "info", message: graphOutput });
             } catch (e) {
-                // Graph rendering not available, skip it
+                const errorMsg = e instanceof Error ? e.message : String(e);
+                messages.push({ level: "warn", message: `Graph rendering error: ${errorMsg}` });
             }
         } else if (is_string(result)) {
-            messages.push({ level: "info" as const, message: result });
+            messages.push({ level: "info", message: result });
         } else {
-            messages.push({ level: "success" as const, message: "✅ Executed" });
+            messages.push({ level: "success", message: "✅ Executed" });
         }
         logger.log(messages);
-    } catch (e: any) {
-        logger.error(`❌ Error: ${e.message || e}`);
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : String(e);
+        logger.error(`❌ Error: ${errorMessage}`);
     }
 };

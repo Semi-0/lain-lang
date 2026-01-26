@@ -5,6 +5,11 @@
   "type": "module",
   "module": "index.ts",
   "main": "index.ts",
+  "scripts": {
+    "lain-host": "bun run ./src/cli/host.ts",
+    "lain-peer": "bun run ./src/cli/peer.ts",
+    "lain-repl": "bun run ./src/cli/repl.ts"
+  },
   "bin": {
     "lain-host": "./src/cli/host.ts",
     "lain-peer": "./src/cli/peer.ts",
@@ -25,13 +30,15 @@
     "./src/p2p/*": "./src/p2p/*.ts"
   },
   "dependencies": {
-    "ppropogator": "workspace:*",
+    "d3-force": "^3.0.0",
+    "drawille-canvas": "^1.2.1",
+    "effect": "^3.16.8",
     "generic-handler": "workspace:*",
-    "pmatcher": "workspace:*",
-    "sando-layer": "workspace:*",
     "gun": "^0.2020.1237",
     "parse-combinator": "^1.0.1",
-    "effect": "^3.16.8",
+    "pmatcher": "workspace:*",
+    "ppropogator": "workspace:*",
+    "sando-layer": "workspace:*",
     "uuid": "^13.0.0"
   },
   "peerDependencies": {

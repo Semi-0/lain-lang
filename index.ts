@@ -22,8 +22,8 @@ export * from "./src/p2p/setup";
 // - lain-repl: Start a REPL (./src/cli/repl.ts)
 // ============================================================================
 
-export { startServer } from "./src/cli/host";
-export { runClient } from "./src/cli/peer";
+export { start_server } from "./src/cli/host";
+export { run_client } from "./src/cli/peer";
 export { startREPL } from "./compiler/repl";
 
 // Re-export CLI modules for programmatic access

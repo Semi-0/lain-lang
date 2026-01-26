@@ -1,6 +1,8 @@
 /**
  * Host CLI - Main entry point for running a host server
  * Independent version for lain-lang package
+ * 
+ * Usage: `bun run lain-host`
  */
 
 import { createInterface } from "readline";
@@ -8,14 +10,16 @@ import { cell_id } from "ppropogator/Cell/Cell";
 import { setupHost, cleanup } from "../p2p/setup";
 import { verify_environment, log_environment_verification } from "../p2p/verification";
 import { ENV, NETWORK } from "../p2p/constants";
-import { logger, batchLog, createLogMessages } from "./logger";
-import { executeCode } from "./repl_handlers";
+import { logger, batch_log, create_log_messages } from "./logger";
+import { execute_code } from "./repl_handlers";
+import { source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 const ENV_ID = ENV.DEFAULT_ENV_ID;
 const MULTICAST_PORT = NETWORK.DEFAULT_MULTICAST_PORT;
 const HTTP_PORT = NETWORK.DEFAULT_HTTP_PORT_HOST;
+const source = source_cell("host");
 
-const setupRepl = (env: any) => {
+const setup_repl = (env: any) => {
     const rl = createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -30,7 +34,7 @@ const setupRepl = (env: any) => {
             rl.prompt();
             return;
         }
-        await executeCode(code, env);
+        await execute_code(code, env, source);
         rl.prompt();
     });
 
@@ -42,8 +46,8 @@ const setupRepl = (env: any) => {
     return rl;
 };
 
-const logStartupMessages = (verification: any, cellId: string) => {
-    const messages = createLogMessages(
+const log_startup_messages = (verification: any, cellId: string) => {
+    const messages = create_log_messages(
         { level: "info", message: `   - Cell ID: ${cellId}` },
         { level: "info", message: `\n🎯 Ready to accept code execution requests!` },
         { level: "info", message: `💡 Type code at the prompt to execute it in the shared environment.\n` }
@@ -56,10 +60,10 @@ const logStartupMessages = (verification: any, cellId: string) => {
         });
     }
     
-    batchLog(messages);
+    batch_log(messages);
 };
 
-export const startServer = async (httpPort: number = HTTP_PORT, multicastPort: number = MULTICAST_PORT) => {
+export const start_server = async (httpPort: number = HTTP_PORT, multicastPort: number = MULTICAST_PORT) => {
     logger.info(`🚀 Initializing Lain Host...`);
     
     const setup = await setupHost({
@@ -74,10 +78,10 @@ export const startServer = async (httpPort: number = HTTP_PORT, multicastPort: n
     // Verify environment
     const verification = verify_environment(env);
     log_environment_verification(verification);
-    logStartupMessages(verification, cell_id(env));
+    log_startup_messages(verification, cell_id(env));
 
     // Setup REPL
-    const rl = setupRepl(env);
+    const rl = setup_repl(env);
     
     // Store cleanup function for REPL close handler
     (rl as any)._cleanup = () => cleanup(setup);
@@ -86,5 +90,5 @@ export const startServer = async (httpPort: number = HTTP_PORT, multicastPort: n
 };
 
 if (import.meta.main) {
-    startServer().catch(console.error);
+    start_server().catch(console.error);
 }

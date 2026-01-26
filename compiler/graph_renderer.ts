@@ -1,19 +1,14 @@
 import { is_cell, cell_id, cell_name, type Cell, cell_strongest_base_value } from "ppropogator/Cell/Cell";
 import { is_propagator, type Propagator, propagator_children, propagator_id, propagator_name } from "ppropogator/Propagator/Propagator";
-import { trace_cell, find_propagator_by_id } from "ppropogator/Shared/GraphTraversal";
+import { find_propagator_by_id } from "ppropogator/Shared/GraphTraversal";
+import { get_downstream, get_id } from "ppropogator/Shared/Spider";
 import { is_nothing } from "ppropogator/Cell/CellValue";
 import { get_base_value } from "sando-layer/Basic/Layer";
 import { is_layered_object, type LayeredObject } from "sando-layer/Basic";
-// Optional import - ascii-force is in eko, not lain-lang
-// If not available, graph rendering will be disabled
-// We'll use dynamic imports when needed
-type ForceGraph = any;
-type AsciiForceNode = any;
-type AsciiForceLink = any;
+import { renderAsciiForceGraph } from "./ascii-force";
+import type { ForceGraph, AsciiForceNode, AsciiForceLink } from "./ascii-force/types";
 import { type LexicalEnvironment } from "./env";
 import type { TraceResult } from "ppropogator/Shared/GraphTraversal";
-import { compose } from "generic-handler/built_in_generics/generic_combinator";
-import { map, filter, reduce, flat_map } from "generic-handler/built_in_generics/generic_collection";
 import { is_boolean, is_number, is_object, is_string } from "generic-handler/built_in_generics/generic_predicates";
 
 type RenderOptions = {
@@ -24,6 +19,44 @@ type RenderOptions = {
     ticks?: number;
     chargeStrength?: number;
     includeStats?: boolean;
+};
+
+/**
+ * Custom trace_cell implementation that avoids generic collection functions (flat_map)
+ * which cause stack overflow on large graphs. Uses native iteration instead.
+ */
+const trace_cell_safe = (root: Cell<any>): TraceResult => {
+    const cells = new Map<string, Cell<any>>();
+    const propagators = new Map<string, Propagator>();
+    const visited = new Set<string>();
+    const queue: any[] = [root];
+    
+    while (queue.length > 0) {
+        const node = queue.shift()!;
+        const id = get_id(node);
+        
+        if (visited.has(id)) {
+            continue;
+        }
+        visited.add(id);
+        
+        if (is_cell(node)) {
+            cells.set(id, node);
+        } else if (is_propagator(node)) {
+            propagators.set(id, node);
+        }
+        
+        // Get downstream nodes without using generic flat_map
+        const downstream = get_downstream(node);
+        for (const child of downstream) {
+            const childId = get_id(child);
+            if (!visited.has(childId)) {
+                queue.push(child);
+            }
+        }
+    }
+    
+    return { cells, propagators };
 };
 
 const defaultOptions: Required<RenderOptions> = {
@@ -100,34 +133,72 @@ export const array_concat = (a: any[], b: any[]): any[] => {
 
 
 export const propagator_to_links = (propagator: Propagator): AsciiForceLink[] => {
-    return array_concat(
-        map(propagator.getInputs(), (input: Cell<any>) => ({
+    // Manually build arrays to avoid ANY generic collection method calls
+    const result: AsciiForceLink[] = [];
+    
+    // Use for...of to avoid calling collection methods
+    const inputs = propagator.getInputs();
+    for (const input of inputs) {
+        result.push({
             source: cell_id(input),
             target: propagator_id(propagator)
-        })),
-        map(propagator.getOutputs(), (output: Cell<any>) => ({
+        });
+    }
+    
+    const outputs = propagator.getOutputs();
+    for (const output of outputs) {
+        result.push({
             source: propagator_id(propagator),
             target: cell_id(output)
-        }))
-    )
+        });
+    }
+    
+    return result;
 }
 
 export const traced_result_to_graph = (
     cell_convertor: (cell: Cell<any>) => AsciiForceNode,
     propagator_convertor: (propagator: Propagator) => AsciiForceNode
 ) =>  (result: TraceResult) => {
-    const cells = Array.from(result.cells.values());
-    const propagators = Array.from(result.propagators.values());
-    return make_ascii_force_graph(
-        array_concat(
-           map(cells, cell_convertor),
-           map(propagators, propagator_convertor)
-        ),
-        flat_map(
-            propagators,
-            propagator_to_links
-        )
-    )
+    // Manually iterate to avoid ANY collection method calls that might trigger generic handlers
+    const nodes: AsciiForceNode[] = [];
+    const node_ids = new Set<string>();
+    const propagators_list: Propagator[] = [];
+    
+    // Convert cells to nodes
+    for (const cell of result.cells.values()) {
+        const node = cell_convertor(cell);
+        nodes.push(node);
+        node_ids.add(node.id);
+    }
+    
+    // Convert propagators to nodes and collect them for link generation
+    for (const propagator of result.propagators.values()) {
+        const node = propagator_convertor(propagator);
+        nodes.push(node);
+        node_ids.add(node.id);
+        propagators_list.push(propagator);
+    }
+    
+    // Generate and filter links
+    const valid_links: AsciiForceLink[] = [];
+    for (let i = 0; i < propagators_list.length; i++) {
+        const propagator = propagators_list[i]!;
+        const links = propagator_to_links(propagator);
+        for (const link of links) {
+            const source_id = typeof link.source === "string" ? link.source : 
+                             typeof link.source === "object" && link.source !== null ? link.source.id : 
+                             String(link.source);
+            const target_id = typeof link.target === "string" ? link.target : 
+                             typeof link.target === "object" && link.target !== null ? link.target.id : 
+                             String(link.target);
+            if (node_ids.has(source_id) && node_ids.has(target_id)) {
+                valid_links.push(link);
+            }
+        }
+    }
+    
+    return make_ascii_force_graph(nodes, valid_links);
 }
 
 export const name_tracer = traced_result_to_graph(
@@ -152,26 +223,23 @@ export const renderCellGraph = async (
     options: RenderOptions = {}
 ): Promise<string> => {
     try {
-        // Try to dynamically import ascii-force (optional, may not be available)
-        // This is a fallback - graph rendering is optional
-        throw new Error("Graph rendering requires ascii-force package");
-    const opts = { ...defaultOptions, ...options };
-    const traceResult = trace_cell(cell);
-
-        const renderResult = asciiForce.renderAsciiForceGraph(
-        name_tracer(traceResult), 
-        {
-            width: opts.width,
-            height: opts.height,
-            linkDistance: opts.linkDistance,
-            nodeRadius: opts.nodeRadius,
-            ticks: opts.ticks,
-            chargeStrength: opts.chargeStrength
-        }
-    );
-    return renderResult.frame;
+        const opts = { ...defaultOptions, ...options };
+        const traceResult = trace_cell_safe(cell);
+        const renderResult = renderAsciiForceGraph(
+            name_tracer(traceResult), 
+            {
+                width: opts.width,
+                height: opts.height,
+                linkDistance: opts.linkDistance,
+                nodeRadius: opts.nodeRadius,
+                ticks: opts.ticks,
+                chargeStrength: opts.chargeStrength,
+                padding: 6 // Default padding from ascii-force
+            }
+        );
+        return renderResult.frame;
     } catch (e) {
-        return `Graph rendering unavailable: ascii-force not found. Install eko package for graph visualization.`;
+        return `Graph rendering unavailable: ${e instanceof Error ? e.message : String(e)}`;
     }
 };
 

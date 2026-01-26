@@ -55,6 +55,7 @@ export const incremental_apply_propagator = (operator: Cell<ClosureTemplate | ((
 import { pretentious_welcoming_message } from "./terminal_utils";
 import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum"
 import { construct_vector_clock, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock"
+import { p_reactive_dispatch, source_has_neighbor, update_source_cell } from "ppropogator/DataTypes/PremisesSource"
 
 
 
@@ -188,7 +189,7 @@ define_generic_expr_handler(incremental_compile, [[s_constant("network"), [P.ele
 
 define_generic_expr_handler(incremental_compile, [[s_constant("?"), [P.element, "A"]]], 
     (expr: string[], val: (key: string) => any) => {
-    return (env: LexicalEnvironment) => {
+    return (env: LexicalEnvironment, source_cell: Cell<any>, timestamp: number) => {
        const a = incremental_compile(val("A"))(env)
        execute_all_tasks_sequential(() => {});
        return a.summarize()
@@ -199,7 +200,7 @@ define_generic_expr_handler(incremental_compile, [[s_constant("?"), [P.element, 
 
 define_generic_expr_handler(incremental_compile, [[s_constant("??"), [P.element, "A"]]], 
     (expr: string[], val: (key: string) => any) => {
-    return (env: LexicalEnvironment) => {
+    return (env: LexicalEnvironment, source_cell: Cell<any>, timestamp: number) => {
         const e_map = cell_strongest_base_value(env) as Map<string, Cell<any>>
         if (is_map(e_map)) {
             const cell = e_map.get(expr_value(val("A")))
@@ -225,17 +226,21 @@ define_generic_expr_handler(incremental_compile, [[s_constant("??"), [P.element,
 
 define_generic_expr_handler(incremental_compile, [[s_constant(">::"), [P.element, "cell"], [P.element, "value"]]], 
     (expr: string[], val: (key: string) => any) => {
-    return (env: LexicalEnvironment) => {
+    return (env: LexicalEnvironment, source_cell, timestamp) => {
 
         const e_map = cell_strongest_base_value(env) as Map<string, Cell<any>>
         if (is_map(e_map)) {
             const cell = e_map.get(expr_value(val("cell")))
-            const value = expr_value(val("value"))
             if (cell) {
-                reactive_update(cell, value)
+                if (source_has_neighbor(source_cell, cell)) {
+                    update_source_cell(source_cell, new Map([[cell, expr_value(val("value"))]]))
+                }
+                else {
+                    p_reactive_dispatch(source_cell, cell)
+                    update_source_cell(source_cell, new Map([[cell, expr_value(val("value"))]]))
+                }
             }
-            execute_all_tasks_sequential(() => {});
-
+            
             return cell
             
         }

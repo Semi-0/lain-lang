@@ -101,12 +101,7 @@ After installation, you can use the following commands:
 - **Peer Client**: `bun run lain-peer`
 - **REPL**: `bun run lain-repl`
 
-Or use the binaries directly:
-```bash
-bun run lain-host
-bun run lain-peer
-bun run lain-repl
-```
+
 
 ## Key Features
 

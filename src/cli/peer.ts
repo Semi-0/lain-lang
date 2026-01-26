@@ -1,21 +1,23 @@
 /**
  * Peer CLI - Main entry point for running a peer client
  * Independent version for lain-lang package
+ * 
+ * Usage: `bun run lain-peer`
  */
 
 import { createInterface } from "readline";
-import { logger, batchLog, createLogMessages } from "./logger";
-import { createPeer } from "./peer_commands";
+import { logger, batch_log, create_log_messages } from "./logger";
+import { create_peer } from "./peer_commands";
 import {
     type PeerManagerState,
-    showMenu,
-    updatePrompt,
-    handleNewCommand,
-    handleUseCommand,
-    handleCloseCommand,
-    handleEnvCommand,
-    handleExitCommand,
-    handleCodeExecution,
+    show_menu,
+    update_prompt,
+    handle_new_command,
+    handle_use_command,
+    handle_close_command,
+    handle_env_command,
+    handle_exit_command,
+    handle_code_execution,
 } from "./peer_command_handlers";
 import { cleanup } from "../p2p/setup";
 import { NETWORK } from "../p2p/constants";
@@ -24,7 +26,7 @@ const DEFAULT_HTTP_PORT = NETWORK.DEFAULT_HTTP_PORT_PEER;
 const DEFAULT_MULTICAST_PORT = NETWORK.DEFAULT_MULTICAST_PORT;
 const DEFAULT_HOST_PEER = `http://localhost:${NETWORK.DEFAULT_HTTP_PORT_HOST}/gun`;
 
-const setupCommandHandlers = (state: PeerManagerState): void => {
+const setup_command_handlers = (state: PeerManagerState): void => {
     state.rl.on("line", async (line: string) => {
         const input = line.trim();
         if (!input) {
@@ -36,21 +38,21 @@ const setupCommandHandlers = (state: PeerManagerState): void => {
         const command = parts[0].toLowerCase();
 
         if (command === "new" || command === "n") {
-            await handleNewCommand(state, parts);
+            await handle_new_command(state, parts);
         } else if (command === "use" && parts.length > 1) {
-            handleUseCommand(state, parts);
+            handle_use_command(state, parts);
         } else if (command === "list" || command === "l") {
-            showMenu(state);
-            updatePrompt(state);
+            show_menu(state);
+            update_prompt(state);
             state.rl.prompt();
         } else if (command === "close" && parts.length > 1) {
-            handleCloseCommand(state, parts);
+            handle_close_command(state, parts);
         } else if (command === "/env" || command === "env") {
-            handleEnvCommand(state);
+            handle_env_command(state);
         } else if (command === "exit" || command === "quit" || command === "q") {
-            handleExitCommand(state);
+            handle_exit_command(state);
         } else {
-            await handleCodeExecution(state, input);
+            await handle_code_execution(state, input);
         }
     });
 
@@ -65,9 +67,9 @@ const setupCommandHandlers = (state: PeerManagerState): void => {
     });
 };
 
-const initializeFirstPeer = async (state: PeerManagerState): Promise<void> => {
+const initialize_first_peer = async (state: PeerManagerState): Promise<void> => {
     try {
-        const firstPeer = await createPeer(
+        const firstPeer = await create_peer(
             state.rl,
             1,
             DEFAULT_HTTP_PORT,
@@ -76,18 +78,18 @@ const initializeFirstPeer = async (state: PeerManagerState): Promise<void> => {
         );
         state.peers.push(firstPeer);
         state.currentPeerId = 1;
-        batchLog(createLogMessages(
+        batch_log(create_log_messages(
             { level: "success", message: `\n✅ First peer created! Use 'new' command to create more peers.` },
             { level: "info", message: `💡 Type code at the prompt to execute it in the shared environment.\n` }
         ));
-        updatePrompt(state);
+        update_prompt(state);
     } catch (e) {
         logger.error(`❌ Failed to create first peer: ${e}`);
     }
 };
 
-export const runClient = async () => {
-    batchLog(createLogMessages(
+export const run_client = async () => {
+    batch_log(create_log_messages(
         { level: "info", message: `🚀 Lain Peer Manager` },
         { level: "info", message: `═══════════════════════════════════════\n` }
     ));
@@ -103,16 +105,16 @@ export const runClient = async () => {
         rl: mainRl,
     };
 
-    showMenu(state);
-    updatePrompt(state);
+    show_menu(state);
+    update_prompt(state);
     mainRl.prompt();
 
-    setupCommandHandlers(state);
-    await initializeFirstPeer(state);
+    setup_command_handlers(state);
+    await initialize_first_peer(state);
 
     return state.peers;
 };
 
 if (import.meta.main) {
-    runClient();
+    run_client();
 }

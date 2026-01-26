@@ -7,9 +7,10 @@ import type { Interface } from "readline";
 import { setupPeer, type PeerSetup } from "../p2p/setup";
 import { verify_environment, log_environment_verification } from "../p2p/verification";
 import { ENV, NETWORK } from "../p2p/constants";
-import { logger, batchLog, createLogMessages } from "./logger";
-import { executeCode } from "./repl_handlers";
+import { logger, batch_log, create_log_messages } from "./logger";
+import { execute_code } from "./repl_handlers";
 import { execute_all_tasks_sequential } from "ppropogator";
+import { source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 const ENV_ID = ENV.DEFAULT_ENV_ID;
 const DEFAULT_MULTICAST_PORT = NETWORK.DEFAULT_MULTICAST_PORT;
@@ -25,7 +26,7 @@ export interface PeerInstance {
     active: boolean;
 }
 
-const promptQuestion = (rl: Interface, question: string): Promise<string> => {
+const prompt_question = (rl: Interface, question: string): Promise<string> => {
     return new Promise((resolve) => {
         rl.question(question, (answer) => {
             resolve(answer.trim());
@@ -33,14 +34,14 @@ const promptQuestion = (rl: Interface, question: string): Promise<string> => {
     });
 };
 
-const promptNumber = async (rl: Interface, question: string, defaultValue: number): Promise<number> => {
-    const answer = await promptQuestion(rl, question);
+const prompt_number = async (rl: Interface, question: string, defaultValue: number): Promise<number> => {
+    const answer = await prompt_question(rl, question);
     if (!answer) return defaultValue;
     const num = parseInt(answer, 10);
     return isNaN(num) ? defaultValue : num;
 };
 
-const verifyEnvironment = (env: any) => {
+const verify_peer_environment = (env: any) => {
     const verification = verify_environment(env);
     if (verification.totalBindings > 0) {
         log_environment_verification(verification);
@@ -49,36 +50,39 @@ const verifyEnvironment = (env: any) => {
     }
 };
 
-export const executeCodeOnPeer = async (peer: PeerInstance, code: string): Promise<void> => {
+const source = source_cell("peer");
+
+// TODO: more explicit source cell usage!!!
+export const execute_code_on_peer = async (peer: PeerInstance, code: string): Promise<void> => {
     const { env } = peer.setup;
     await execute_all_tasks_sequential(console.error);
-    await executeCode(code, env);
+    await execute_code(code, env, source);
 };
 
-export const createPeer = async (
+export const create_peer = async (
     rl: Interface,
     peerId: number,
     defaultHttpPort: number = DEFAULT_HTTP_PORT + peerId - 1,
     defaultMulticastPort: number = DEFAULT_MULTICAST_PORT,
     defaultHostPeer: string = DEFAULT_HOST_PEER
 ): Promise<PeerInstance> => {
-    batchLog(createLogMessages(
+    batch_log(create_log_messages(
         { level: "info", message: `\n📡 Configuring Peer ${peerId}:` }
     ));
     
-    const httpPort = await promptNumber(
+    const httpPort = await prompt_number(
         rl,
         `   HTTP Port [${defaultHttpPort}]: `,
         defaultHttpPort
     );
     
-    const multicastPort = await promptNumber(
+    const multicastPort = await prompt_number(
         rl,
         `   Multicast Port [${defaultMulticastPort}]: `,
         defaultMulticastPort
     );
     
-    const hostPeerAnswer = await promptQuestion(
+    const hostPeerAnswer = await prompt_question(
         rl,
         `   Host Peer URL [${defaultHostPeer}]: `
     );
@@ -95,7 +99,7 @@ export const createPeer = async (
     });
 
     const { env } = setup;
-    verifyEnvironment(env);
+    verify_peer_environment(env);
 
     logger.info(`\n🎯 Peer ${peerId} connected to shared environment!`);
 

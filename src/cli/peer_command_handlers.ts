@@ -6,8 +6,8 @@
 import type { Interface } from "readline";
 import { summarize_env } from "../../compiler/env";
 import { cleanup } from "../p2p/setup";
-import { logger, batchLog, createLogMessages } from "./logger";
-import { createPeer, executeCodeOnPeer, type PeerInstance } from "./peer_commands";
+import { logger, batch_log, create_log_messages } from "./logger";
+import { create_peer, execute_code_on_peer, type PeerInstance } from "./peer_commands";
 import { NETWORK } from "../p2p/constants";
 
 const DEFAULT_HTTP_PORT = NETWORK.DEFAULT_HTTP_PORT_PEER;
@@ -20,14 +20,14 @@ export interface PeerManagerState {
     rl: Interface;
 }
 
-export const getCurrentPeer = (state: PeerManagerState): PeerInstance | null => {
+export const get_current_peer = (state: PeerManagerState): PeerInstance | null => {
     if (state.currentPeerId === null) return null;
     return state.peers.find(p => p.id === state.currentPeerId && p.active) || null;
 };
 
-export const showMenu = (state: PeerManagerState): void => {
+export const show_menu = (state: PeerManagerState): void => {
     const activePeers = state.peers.filter(p => p.active);
-    const messages = createLogMessages(
+    const messages = create_log_messages(
         { level: "info", message: `\n📋 Active Peers: ${activePeers.length}` }
     );
     
@@ -55,11 +55,11 @@ export const showMenu = (state: PeerManagerState): void => {
         { level: "info", message: `` }
     );
     
-    batchLog(messages);
+    batch_log(messages);
 };
 
-export const updatePrompt = (state: PeerManagerState): void => {
-    const peer = getCurrentPeer(state);
+export const update_prompt = (state: PeerManagerState): void => {
+    const peer = get_current_peer(state);
     if (peer) {
         state.rl.setPrompt(`peer-${peer.id}(${peer.httpPort})> `);
     } else {
@@ -67,7 +67,7 @@ export const updatePrompt = (state: PeerManagerState): void => {
     }
 };
 
-export const handleNewCommand = async (
+export const handle_new_command = async (
     state: PeerManagerState,
     parts: string[]
 ): Promise<void> => {
@@ -86,7 +86,7 @@ export const handleNewCommand = async (
     }
     
     try {
-        const peer = await createPeer(
+        const peer = await create_peer(
             state.rl,
             peerId,
             defaultHttpPort,
@@ -95,19 +95,19 @@ export const handleNewCommand = async (
         );
         state.peers.push(peer);
         state.currentPeerId = peerId;
-        batchLog(createLogMessages(
+        batch_log(create_log_messages(
             { level: "success", message: `\n✅ Peer ${peerId} created and active!` },
             { level: "info", message: `🎯 Switched to Peer ${peerId}` }
         ));
     } catch (e) {
         logger.error(`❌ Failed to create peer: ${e}`);
     }
-    showMenu(state);
-    updatePrompt(state);
+    show_menu(state);
+    update_prompt(state);
     state.rl.prompt();
 };
 
-export const handleUseCommand = (
+export const handle_use_command = (
     state: PeerManagerState,
     parts: string[]
 ): void => {
@@ -119,11 +119,11 @@ export const handleUseCommand = (
     } else {
         logger.info(`❌ Peer ${peerId} not found or inactive`);
     }
-    updatePrompt(state);
+    update_prompt(state);
     state.rl.prompt();
 };
 
-export const handleCloseCommand = (
+export const handle_close_command = (
     state: PeerManagerState,
     parts: string[]
 ): void => {
@@ -143,15 +143,15 @@ export const handleCloseCommand = (
     } else {
         logger.info(`❌ Peer ${peerId} not found or already closed`);
     }
-    showMenu(state);
-    updatePrompt(state);
+    show_menu(state);
+    update_prompt(state);
     state.rl.prompt();
 };
 
-export const handleEnvCommand = (state: PeerManagerState): void => {
-    const peer = getCurrentPeer(state);
+export const handle_env_command = (state: PeerManagerState): void => {
+    const peer = get_current_peer(state);
     if (peer) {
-        batchLog(createLogMessages(
+        batch_log(create_log_messages(
             { level: "info", message: "\n📊 Environment State:" },
             { level: "info", message: summarize_env(peer.setup.env) }
         ));
@@ -161,7 +161,7 @@ export const handleEnvCommand = (state: PeerManagerState): void => {
     state.rl.prompt();
 };
 
-export const handleExitCommand = (state: PeerManagerState): void => {
+export const handle_exit_command = (state: PeerManagerState): void => {
     logger.info(`\n👋 Shutting down all peers...`);
     state.peers.forEach(peer => {
         if (peer.active) {
@@ -171,13 +171,13 @@ export const handleExitCommand = (state: PeerManagerState): void => {
     state.rl.close();
 };
 
-export const handleCodeExecution = async (
+export const handle_code_execution = async (
     state: PeerManagerState,
     input: string
 ): Promise<void> => {
-    const peer = getCurrentPeer(state);
+    const peer = get_current_peer(state);
     if (peer) {
-        await executeCodeOnPeer(peer, input);
+        await execute_code_on_peer(peer, input);
     } else {
         logger.info(`❌ No active peer selected. Use 'new' to create a peer or 'use <id>' to select one.`);
     }

@@ -8,6 +8,7 @@ import { is_cell } from "ppropogator/Cell/Cell";
 import { renderCellGraphToConsole } from "./graph_renderer";
 import { merge_layered } from "ppropogator/Cell/Merge";
 import { init_system } from "./compiler";
+import { source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 type REPLOptions = {
     prompt?: string;
@@ -22,6 +23,9 @@ const defaultREPLOptions: Required<REPLOptions> = {
     onResult: () => {},
     onError: (error) => console.error("Error:", error),
 };
+
+
+const source = source_cell("repl");
 
 /**
  * Creates and starts an interactive REPL session.
@@ -49,7 +53,7 @@ export const createREPL = (
         }
 
         try {
-            const result = run(code, env);
+            const result = run(code, env, source);
             await execute_all_tasks_sequential(console.error);
 
             if (is_string(result)) {

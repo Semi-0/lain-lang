@@ -64,13 +64,13 @@ export const logger: Logger = new ConsoleLogger();
 /**
  * Helper to create log messages
  */
-export const createLogMessages = (...messages: Array<{ level: LogLevel; message: string }>): LogMessage[] => {
+export const create_log_messages = (...messages: Array<{ level: LogLevel; message: string }>): LogMessage[] => {
     return messages;
 };
 
 /**
  * Batch log helper - logs an array of messages at once
  */
-export const batchLog = (messages: LogMessage[]): void => {
+export const batch_log = (messages: LogMessage[]): void => {
     logger.log(messages);
 };
