@@ -6,6 +6,11 @@ Lain is a propagator-based, highly expressive programming language and live codi
 
 Lain is an experimental research system. The design is evolving rapidly. Feedback, discussion, and careful experimentation are welcome.
 
+
+## DEMO 
+
+https://www.youtube.com/watch?v=yg91Hchd1hI
+
 ## Installation
 
 ### Prerequisites
