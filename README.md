@@ -7,7 +7,7 @@
 >
 > Lain is currently intended to be used in **local or co-present network environments (e.g. LAN / studio / lab / workshop)** with **invited or semi-trusted peers**.
 >
-> It is **not scoped for deployment on open or adversarial networks** yet, and should not be exposed to the public Internet.
+> It is **not scoped for deployment on open or adversarial networks** yet, and should not be exposed to the public Internet at this stage.
 >
 > For experiments and demos:
 > - treat the runtime as running in a **shared room**, not a private or anonymous environment;
