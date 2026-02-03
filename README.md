@@ -2,6 +2,20 @@
 
 > **⚠️ Early Prototype**: This programming language is still in very early prototyping stage. The API, syntax, and features are subject to change. Use at your own risk.
 
+
+> **⚠️ Network & Safety Notice (Research Prototype)**
+>
+> Lain is currently intended to be used in **local or co-present network environments (e.g. LAN / studio / lab / workshop)** with **invited or semi-trusted peers**.
+>
+> It is **not scoped for deployment on open or adversarial networks** yet, and should not be exposed to the public Internet.
+>
+> For experiments and demos:
+> - treat the runtime as running in a **shared room**, not a private or anonymous environment;
+> - avoid running it on machines that contain real secrets (API keys, SSH keys, personal credentials);
+> - prefer using a dedicated dev account, container, or VM.
+>
+> Security hardening and sandboxing are important future directions, but they are **not the primary research focus at this stage**, which is interaction with a shared, incremental, multi-peer programming environment. 
+
 Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state,  allowing you to modify function definitions on one machine and have those changes automatically propagate to all connected peers while preserving execution state. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
 
 Lain is an experimental research system. The design is evolving rapidly. Feedback, discussion, and careful experimentation are welcome.
