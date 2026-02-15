@@ -1,0 +1,8 @@
+version: v1
+plugins:
+  - plugin: ts_proto
+    path: node_modules/.bin/protoc-gen-ts_proto
+    out: src/grpc/generated
+    opt:
+      - outputServices=grpc-js
+      - esModuleInterop=true

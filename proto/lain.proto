@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package lain.viz;
+
+// Only id and value; kind deferred to later iteration.
+message CardRef {
+  string id = 1;
+  bytes value = 2;  // JSON-serialized
+}
+
+// Code is data: unified map of slot -> value. Slots: "code", "::above", "::below", "::this"
+message CompileRequest {
+  map<string, CardRef> data = 1;
+}
+
+// Strongest value decomposed per Propogator traced-timestamp system.
+// Interface: source_id = cell name. Dataflow: source_id = cell_id.
+message StrongestValueLayer {
+  bytes value = 1;       // JSON-serialized base value
+  int64 timestamp = 2;
+  string source_id = 3;  // cell_id in dataflow; cell name at interface
+}
+
+// Network update: real-time I/O with flexible visualization (more than visualization).
+message NetworkUpdate {
+  string cell_id = 1;
+  string name = 2;       // cell name for interface display
+  StrongestValueLayer strongest_value = 3;
+}
+
+// Only success or error_message; NetworkStream provides all network updates.
+message CompileResponse {
+  bool success = 1;
+  string error_message = 2;  // empty when success
+}
+
+service LainViz {
+  rpc Compile(CompileRequest) returns (CompileResponse);
+  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate);
+}

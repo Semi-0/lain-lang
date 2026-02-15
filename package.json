@@ -8,7 +8,9 @@
   "scripts": {
     "lain-host": "bun run ./src/cli/host.ts",
     "lain-peer": "bun run ./src/cli/peer.ts",
-    "lain-repl": "bun run ./src/cli/repl.ts"
+    "lain-repl": "bun run ./src/cli/repl.ts",
+    "generate": "buf generate",
+    "grpc-server": "bun run ./src/cli/grpc_server.ts"
   },
   "bin": {
     "lain-host": "./src/cli/host.ts",
@@ -30,6 +32,8 @@
     "./src/p2p/*": "./src/p2p/*.ts"
   },
   "dependencies": {
+    "@bufbuild/protobuf": "2.10.2",
+    "@grpc/grpc-js": "^1.12.0",
     "d3-force": "^3.0.0",
     "drawille-canvas": "^1.2.1",
     "effect": "^3.16.8",
@@ -45,6 +49,8 @@
     "typescript": "^5.0.0"
   },
   "devDependencies": {
-    "@types/bun": "latest"
+    "@bufbuild/buf": "^1.28.0",
+    "@types/bun": "latest",
+    "ts-proto": "^2.10.0"
   }
 }
