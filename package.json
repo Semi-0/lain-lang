@@ -9,8 +9,11 @@
     "lain-host": "bun run ./src/cli/host.ts",
     "lain-peer": "bun run ./src/cli/peer.ts",
     "lain-repl": "bun run ./src/cli/repl.ts",
-    "generate": "buf generate",
-    "grpc-server": "bun run ./src/cli/grpc_server.ts"
+    "generate": "buf generate && bun run ./scripts/patch-protobuf-imports.ts",
+    "grpc-server": "bun run ./src/cli/grpc_server.ts",
+    "grpc-server:debug": "DEBUG_GRPC=1 DEBUG_COMPILE=1 bun run ./src/cli/grpc_server.ts",
+    "connect-server": "bun run ./src/cli/connect_server.ts",
+    "connect-server:debug": "DEBUG_GRPC=1 DEBUG_COMPILE=1 bun run ./src/cli/connect_server.ts"
   },
   "bin": {
     "lain-host": "./src/cli/host.ts",
@@ -32,7 +35,9 @@
     "./src/p2p/*": "./src/p2p/*.ts"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "2.10.2",
+    "@bufbuild/connect": "^0.13.0",
+    "@bufbuild/protobuf": "1.10.1",
+    "@connectrpc/connect-node": "^0.13.0",
     "@grpc/grpc-js": "^1.12.0",
     "d3-force": "^3.0.0",
     "drawille-canvas": "^1.2.1",
@@ -41,6 +46,7 @@
     "gun": "^0.2020.1237",
     "parse-combinator": "^1.0.1",
     "pmatcher": "workspace:*",
+    "protobuf-wire": "npm:@bufbuild/protobuf@2.10.2",
     "ppropogator": "workspace:*",
     "sando-layer": "workspace:*",
     "uuid": "^13.0.0"
@@ -50,6 +56,8 @@
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.28.0",
+    "@bufbuild/protoc-gen-connect-es": "^0.13.0",
+    "@bufbuild/protoc-gen-es": "^1.2.0",
     "@types/bun": "latest",
     "ts-proto": "^2.10.0"
   }

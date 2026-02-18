@@ -6,3 +6,12 @@ plugins:
     opt:
       - outputServices=grpc-js
       - esModuleInterop=true
+  - plugin: es
+    path: node_modules/.bin/protoc-gen-es
+    out: src/grpc/connect_generated
+    opt: target=ts
+  - plugin: connect-es
+    path: node_modules/.bin/protoc-gen-connect-es
+    out: src/grpc/connect_generated
+    opt:
+      - target=ts

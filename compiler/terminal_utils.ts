@@ -67,9 +67,9 @@ export const pretentious_welcoming_message = () => {
         seperator(get_terminal_width()),
         new_line(),
         new_line(),
-        // center_text("どこにでもいるということは、 どこにもいないということだ。", get_terminal_width()),
-        // center_text("神の果実は私たちの中にある。", get_terminal_width()),
-        // center_text("存在の終わりは、 存在の始まりにすでに書かれている。", get_terminal_width()),
+        center_text("どこにでもいるということは、 どこにもいないということだ。", get_terminal_width()),
+        center_text("神の果実は私たちの中にある。", get_terminal_width()),
+        center_text("存在の終わりは、 存在の始まりにすでに書かれている。", get_terminal_width()),
         new_line(),
         new_line(),
         seperator(get_terminal_width())

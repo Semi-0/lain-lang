@@ -1,8 +1,8 @@
 /**
  * Decode proto CompileRequest to internal data shape (bytes -> JSON for CardRef values).
+ * Protocol-agnostic: to_compile_request_data accepts any { data: Record<..., { id?, value? }> }.
+ * No import from generated/lain here so Connect server can run without loading ts-proto (protobuf 2.x).
  */
-import type { CompileRequest as PbCompileRequest, CardRef as PbCardRef } from "./generated/lain"
-
 export type CardRefData = { readonly id: string; readonly value: unknown }
 export type CompileRequestData = Readonly<Record<string, CardRefData>>
 
@@ -13,20 +13,26 @@ function decode_card_ref_value(bytes: Uint8Array): unknown {
   return JSON.parse(decoder.decode(bytes)) as unknown
 }
 
-function decode_card_ref(pb: PbCardRef): CardRefData {
-  return {
-    id: pb.id ?? "",
-    value: decode_card_ref_value(pb.value ?? new Uint8Array(0)),
-  }
-}
-
-export function decode_compile_request(pb: PbCompileRequest): CompileRequestData {
-  const data = pb.data ?? {}
+/** Protocol-agnostic: turns any request shape with data map (id, value bytes) into CompileRequestData. */
+export function to_compile_request_data(
+  request: { data?: Record<string, { id?: string; value?: Uint8Array }> }
+): CompileRequestData {
+  const data = request.data ?? {}
   const out: Record<string, CardRefData> = {}
   for (const [k, v] of Object.entries(data)) {
     if (v != null) {
-      out[k] = decode_card_ref(v)
+      out[k] = {
+        id: v.id ?? "",
+        value: decode_card_ref_value(v.value ?? new Uint8Array(0)),
+      }
     }
   }
   return out
+}
+
+/** Same as to_compile_request_data; kept for gRPC handler compatibility. */
+export function decode_compile_request(
+  pb: { data?: Record<string, { id?: string; value?: Uint8Array }> }
+): CompileRequestData {
+  return to_compile_request_data(pb)
 }
