@@ -42,7 +42,7 @@ export function create_connect_routes(env: LexicalEnvironment): (router: Connect
       },
       async *networkStream(req, context) {
         const data = to_compile_request_data(req)
-        trace_network_stream_io(req)
+        trace_network_stream_io(req, undefined, data)
         const queue: NetworkUpdate[] = []
         let wake = () => {}
         let closed = false
