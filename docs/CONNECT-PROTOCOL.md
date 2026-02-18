@@ -1,0 +1,98 @@
+# Connect protocol: concepts and usage
+
+This document explains the **core concepts** of the Connect RPC protocol and **how we use it** in the server (lain-lang) and client (lain-viz).
+
+## What is Connect?
+
+**Connect** is an RPC protocol that runs over HTTP/1.1 or HTTP/2. It is an alternative to gRPC that is designed to work well in browsers and with standard HTTP tooling.
+
+- **Same schema as gRPC:** Services and messages are defined in **Protocol Buffers** (`.proto`). We use the same `lain.proto` for both gRPC (Node/port 50052) and Connect (HTTP/port 50051).
+- **Different wire format:** Connect supports multiple **serializations**:
+  - **Connect protocol (binary):** Default; uses protobuf binary. Content-Type: `application/connect+proto`.
+  - **gRPC-Web:** Optional; compatible with gRPC-Web proxies. Content-Type: `application/grpc-web+proto`.
+  - **JSON:** Optional; human-readable. Content-Type: `application/json`.
+- **HTTP-first:** Each RPC is a normal HTTP request. Unary calls are one request/response; server streaming is one request with a response body that carries a stream of messages. No HTTP/2 requirement, so it works in browsers and with simple HTTP servers.
+
+So: **one .proto, one service (LainViz), two ways to call it** — gRPC (for tests/other gRPC clients) and Connect (for the browser).
+
+## Core concepts
+
+### 1. Service and methods
+
+The **service** is defined in the `.proto` file. We have:
+
+```protobuf
+service LainViz {
+  rpc Compile(CompileRequest) returns (CompileResponse);           // Unary
+  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate); // Server streaming
+}
+```
+
+- **Unary:** One request message → one response message. Connect maps it to a single HTTP POST; body = request, response body = response.
+- **Server streaming:** One request message → many response messages. Connect maps it to one HTTP POST; response body is a stream of length-delimited protobuf messages (or JSON lines if using JSON).
+
+### 2. Codegen
+
+From the same `.proto`, we generate:
+
+- **Messages** (e.g. `CompileRequest`, `CompileResponse`, `NetworkUpdate`) — in `connect_generated/lain_pb.ts` (protobuf-es).
+- **Service descriptor** — in `connect_generated/lain_connect.ts`. It describes the service name, method names, and request/response types. The Connect runtime uses this to know the URL path and serialization for each RPC.
+
+Connect uses **@bufbuild/protobuf** (and protobuf-es) for messages; our gRPC path uses ts-proto. The patch script aligns imports so both can coexist.
+
+### 3. URL and transport
+
+- **Server:** Registers the service on a **ConnectRouter**. The Node adapter turns that into an HTTP handler. Each RPC has a path like `/lain.viz.LainViz/Compile` (package + service + method).
+- **Client:** Uses a **transport** (e.g. Connect-Web’s `createConnectTransport({ baseUrl })`) that sends HTTP requests to that base URL + path. A **promise client** (`createPromiseClient(LainViz, transport)`) exposes methods like `compile(req)` and `networkStream(req)` that perform the HTTP call and (de)serialize messages.
+
+So the “core” idea: **proto defines the contract; Connect runs that contract over HTTP with a well-defined path and serialization.**
+
+---
+
+## How the server uses Connect (lain-lang)
+
+1. **Routes:** `create_connect_routes(env)` registers the **LainViz** service on a `ConnectRouter`. For each method it provides an implementation:
+   - **Compile:** Receives a Connect `CompileRequest` (with `data` map of slot name → `CardRef`; `value` is raw bytes). Decodes via `to_compile_request_data(req)` into our internal `CompileRequestData` (bytes → JSON). Then `bind_context_slots_io`, `compile_for_viz`, and returns a `CompileResponse`.
+   - **NetworkStream:** Same decode from `CompileRequest`. Subscribes to cell updates; the handler is an **async generator** that yields Connect `NetworkUpdate` messages until the client aborts.
+
+2. **HTTP:** `create_connect_handler_io(env)` wraps the router with **connectNodeAdapter**, which produces a Node.js `(req, res)` handler. The CLI runs this with `http.createServer()` and CORS so the browser can POST to `/lain.viz.LainViz/Compile` and `/lain.viz.LainViz/NetworkStream`.
+
+3. **Protocol-agnostic decode:** The server does not depend on Connect-specific types for business logic. `to_compile_request_data(request)` accepts any object with a `data` map of `{ id?, value? }` (value = `Uint8Array`). So the same decode is used by both the Connect handler and the gRPC handler; only the transport and codegen differ.
+
+4. **Encode out:** Responses are built from our internal types and converted to Connect/protobuf messages (e.g. `CompileResponse`, `NetworkUpdate` with `StrongestValueLayer`). The adapter serializes them according to the request’s Accept/Content-Type (e.g. Connect binary).
+
+So on the server: **Connect = HTTP endpoint + codegen types + same compile/stream logic as gRPC.**
+
+---
+
+## How the client uses Connect (lain-viz)
+
+1. **Transport:** `create_grpc_transport(baseUrl)` uses **Connect-Web**: `createConnectTransport({ baseUrl })` and `createPromiseClient(LainViz, transport)`. All calls go to `baseUrl` (e.g. `http://127.0.0.1:50051`).
+
+2. **Unary (Compile):** `client.compile(req)` sends one HTTP POST with a serialized `CompileRequest`. The transport waits for the response and deserializes to `CompileResponse`. The viz transport layer encodes our app’s `Record<string, CardRef>` into `CompileRequest` and decodes the response into the app’s `CompileResponse` type.
+
+3. **Server streaming (NetworkStream):** `client.networkStream(req, { signal })` sends one HTTP POST; the response body is a stream. The client iterates with `for await (const pb of stream)` and decodes each message to our `NetworkUpdate` shape. The viz wraps this in `stream(data, onUpdate)` and uses an `AbortController` so that unsubscribe aborts the stream.
+
+4. **Encode/decode:** The client encodes request data (slot map with JSON values) into protobuf `CompileRequest` (e.g. JSON → bytes for `CardRef.value`). It decodes `CompileResponse` and each `NetworkUpdate` from protobuf into the types the UI expects. So the **protocol boundary** is at the transport; the rest of the app sees domain types, not raw Connect messages.
+
+So on the client: **Connect = fetch-based transport + promise client + encode/decode at the boundary.**
+
+---
+
+## Summary
+
+| Layer        | Server (lain-lang)                          | Client (lain-viz)                              |
+|-------------|----------------------------------------------|------------------------------------------------|
+| Protocol    | Connect over HTTP (router + Node adapter)    | Connect-Web (fetch + promise client)            |
+| Codegen     | `connect_generated/` (messages + service)    | Same service descriptor + messages (from viz)  |
+| Request     | Connect `CompileRequest` → `to_compile_request_data` | App data → encode → `CompileRequest`           |
+| Response    | Internal result → Connect `CompileResponse` / `NetworkUpdate` | Connect response → decode → app types         |
+| Business    | Shared with gRPC (compile_handler, network_stream_handler) | Transport interface (compile, stream)          |
+
+The **core concept** is: one proto service, exposed over HTTP by Connect on the server and called over HTTP by Connect-Web on the client, with encode/decode at the boundary so the rest of the stack stays protocol-agnostic.
+
+## See also
+
+- **Server components and CLI:** [CONNECT-SERVER.md](./CONNECT-SERVER.md)
+- **Client transport and config:** lain-viz repo — `docs/CONNECT-TRANSPORT.md`
+- **Connect spec:** [connectrpc.com](https://connectrpc.com) — protocol specification and references.

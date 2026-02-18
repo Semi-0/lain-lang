@@ -36,6 +36,7 @@ Precept: Code should be "plain" and "obvious," moving away from "clever" feature
 * Data Dominance: It is better to have 100 functions operate on one data structure than 10 functions on 10 data structures. Structure data late.
 * Side Effect Annotation: Functions with side effects must be explicitly named (e.g., saveData_io).
 * Isolate Mutation: Use readonly structures by default. If mutation is necessary, isolate it into minimal getters/setters.
+* Prefer `pipe` (from Effect TS) and `compose` (from `generic-handler/built_in_generics/generic_combinator.ts`) to build higher-order functions and express sequential execution: use `pipe(value, f, g, h)` for a value flowing through steps; use `compose(f, g, h)` to define a single function that runs f then g then h.
 6. Domain Modeling & Anti-Overengineering
 * Primitives & Combinators: Define the smallest possible primitives, then build combinators to compose them.
 * Defer Sub-Problems: When a sub-problem (e.g., binding strategy) is TBD, define a stable interface boundary, implement a stub, and isolate the deferred design so the rest can proceed.

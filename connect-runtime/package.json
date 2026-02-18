@@ -1,0 +1,10 @@
+{
+  "name": "lain-lang-connect-runtime",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@bufbuild/connect": "^0.13.0",
+    "@bufbuild/protobuf": "1.10.1",
+    "@connectrpc/connect-node": "^0.13.0"
+  }
+}

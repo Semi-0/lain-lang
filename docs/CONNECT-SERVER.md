@@ -61,5 +61,6 @@ Without CORS, the browser at `http://localhost:5173` would block requests to `ht
 
 ## See also
 
+- **Protocol concepts and server/client usage:** [CONNECT-PROTOCOL.md](./CONNECT-PROTOCOL.md)
 - **E2E:** lain-viz `docs/E2E-SMOKE.md` — run Connect server, then viz; no proxy.
 - **Implementation plan:** lain-viz `docs/IMPLEMENTATION-PLAN.md` §4.1 — transport and Connect backend.
