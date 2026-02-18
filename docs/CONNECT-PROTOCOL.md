@@ -24,12 +24,14 @@ The **service** is defined in the `.proto` file. We have:
 ```protobuf
 service LainViz {
   rpc Compile(CompileRequest) returns (CompileResponse);           // Unary
-  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate); // Server streaming
+  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate); // Server streaming (legacy)
+  rpc Session(stream CardsDelta) returns (stream ServerMessage);   // Bidirectional: deltas in, heartbeat + card updates out
 }
 ```
 
 - **Unary:** One request message → one response message. Connect maps it to a single HTTP POST; body = request, response body = response.
 - **Server streaming:** One request message → many response messages. Connect maps it to one HTTP POST; response body is a stream of length-delimited protobuf messages (or JSON lines if using JSON).
+- **Session (bidi):** Client sends a stream of **CardsDelta** (slots to set/remove). Server maintains slot state, runs all **cell logic** internally (when to compile is backend-only), and sends **ServerMessage** = **Heartbeat** (connection) or **CardUpdate** (card id, slot, value). The frontend handles only card updates and heartbeat; it does not process cell updates.
 
 ### 2. Codegen
 
@@ -53,7 +55,8 @@ So the “core” idea: **proto defines the contract; Connect runs that contract
 
 1. **Routes:** `create_connect_routes(env)` registers the **LainViz** service on a `ConnectRouter`. For each method it provides an implementation:
    - **Compile:** Receives a Connect `CompileRequest` (with `data` map of slot name → `CardRef`; `value` is raw bytes). Decodes via `to_compile_request_data(req)` into our internal `CompileRequestData` (bytes → JSON). Then `bind_context_slots_io`, `compile_for_viz`, and returns a `CompileResponse`.
-   - **NetworkStream:** Same decode from `CompileRequest`. Subscribes to cell updates; the handler is an **async generator** that yields Connect `NetworkUpdate` messages until the client aborts.
+   - **NetworkStream:** Same decode from `CompileRequest`. Subscribes to cell updates; the handler is an **async generator** that yields Connect `NetworkUpdate` messages until the client aborts. (Legacy; viz can use Session instead.)
+   - **Session:** Bidirectional stream. Server maintains `slotMap` (CompileRequestData). On each **CardsDelta**: decode via `to_cards_delta_data`, apply via `apply_cards_delta_to_slot_map`, `bind_context_slots_io(env, slotMap)`. Then yields **Heartbeat** and **CardUpdate(s)** (one per changed slot). All cell logic is in the backend; no cell-update messages are sent to the frontend.
 
 2. **HTTP:** `create_connect_handler_io(env)` wraps the router with **connectNodeAdapter**, which produces a Node.js `(req, res)` handler. The CLI runs this with `http.createServer()` and CORS so the browser can POST to `/lain.viz.LainViz/Compile` and `/lain.viz.LainViz/NetworkStream`.
 
@@ -71,9 +74,11 @@ So on the server: **Connect = HTTP endpoint + codegen types + same compile/strea
 
 2. **Unary (Compile):** `client.compile(req)` sends one HTTP POST with a serialized `CompileRequest`. The transport waits for the response and deserializes to `CompileResponse`. The viz transport layer encodes our app’s `Record<string, CardRef>` into `CompileRequest` and decodes the response into the app’s `CompileResponse` type.
 
-3. **Server streaming (NetworkStream):** `client.networkStream(req, { signal })` sends one HTTP POST; the response body is a stream. The client iterates with `for await (const pb of stream)` and decodes each message to our `NetworkUpdate` shape. The viz wraps this in `stream(data, onUpdate)` and uses an `AbortController` so that unsubscribe aborts the stream.
+3. **Server streaming (NetworkStream):** `client.networkStream(req, { signal })` sends one HTTP POST; the response body is a stream. The client iterates with `for await (const pb of stream)` and decodes each message to our `NetworkUpdate` shape. The viz wraps this in `stream(data, onUpdate)` and uses an `AbortController` so that unsubscribe aborts the stream. (Legacy; when a Connect URL is set, the viz uses Session instead.)
 
-4. **Encode/decode:** The client encodes request data (slot map with JSON values) into protobuf `CompileRequest` (e.g. JSON → bytes for `CardRef.value`). It decodes `CompileResponse` and each `NetworkUpdate` from protobuf into the types the UI expects. So the **protocol boundary** is at the transport; the rest of the app sees domain types, not raw Connect messages.
+4. **Session (when Connect URL is set):** The viz calls `transport.open_session(onServerMessage)`, which returns `{ sendDelta, unsubscribe }`. The pipeline feeds **CardsDelta** (from `contextualized_cards_to_cards_delta$`) into `sendDelta`. Each **ServerMessage** (Heartbeat or CardUpdate) is decoded and dispatched: Heartbeat → connection state, CardUpdate → reducer (card = immutable; set = overwrite, clear = remove). The frontend does not handle cell updates; all cell logic is in the backend.
+
+5. **Encode/decode:** The client encodes request data (slot map with JSON values) into protobuf `CompileRequest` or **CardsDelta** (slots + remove). It decodes `CompileResponse`, `NetworkUpdate`, and **ServerMessage** (Heartbeat, CardUpdate) from protobuf into the types the UI expects. So the **protocol boundary** is at the transport; the rest of the app sees domain types, not raw Connect messages.
 
 So on the client: **Connect = fetch-based transport + promise client + encode/decode at the boundary.**
 
@@ -85,9 +90,9 @@ So on the client: **Connect = fetch-based transport + promise client + encode/de
 |-------------|----------------------------------------------|------------------------------------------------|
 | Protocol    | Connect over HTTP (router + Node adapter)    | Connect-Web (fetch + promise client)            |
 | Codegen     | `connect_generated/` (messages + service)    | Same service descriptor + messages (from viz)  |
-| Request     | Connect `CompileRequest` → `to_compile_request_data` | App data → encode → `CompileRequest`           |
-| Response    | Internal result → Connect `CompileResponse` / `NetworkUpdate` | Connect response → decode → app types         |
-| Business    | Shared with gRPC (compile_handler, network_stream_handler) | Transport interface (compile, stream)          |
+| Request     | CompileRequest or **CardsDelta** → decode    | App data → encode → CompileRequest / **CardsDelta** |
+| Response    | CompileResponse, NetworkUpdate, **ServerMessage** (Heartbeat, CardUpdate) | Decode → app types; frontend only card updates + heartbeat |
+| Business    | apply_cards_delta_to_slot_map; all cell logic in backend | Transport: compile, stream, **open_session**   |
 
 The **core concept** is: one proto service, exposed over HTTP by Connect on the server and called over HTTP by Connect-Web on the client, with encode/decode at the boundary so the rest of the stack stays protocol-agnostic.
 

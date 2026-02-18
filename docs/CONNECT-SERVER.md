@@ -8,7 +8,7 @@ The backend exposes a **Connect** HTTP server on port **50051** so the browser (
 |-----------|----------|---------|
 | Connect codegen | `src/grpc/connect_generated/` | Service and message types for Connect (protobuf-es). |
 | Protocol-agnostic decode | `src/grpc/decode.ts` | `to_compile_request_data()` turns any request shape into `CompileRequestData`. |
-| Connect server | `src/grpc/connect_server.ts` | `create_connect_routes()`, `create_connect_handler_io()`; registers LainViz Compile + NetworkStream. |
+| Connect server | `src/grpc/connect_server.ts` | `create_connect_routes()`, `create_connect_handler_io()`; registers LainViz Compile, NetworkStream, **Session**. |
 | CLI | `src/cli/connect_server.ts` | HTTP server with CORS; default port 50051. |
 | Tracer | `src/grpc/tracer.ts` | Request logging (always-on one-liner; verbose when `DEBUG_GRPC` / `DEBUG_COMPILE`). |
 | Patch script | `scripts/patch-protobuf-imports.ts` | Post-codegen: ts-proto uses `protobuf-wire`, Connect uses `@bufbuild/protobuf` 1.x. |
@@ -30,13 +30,16 @@ The viz app is configured to use **50051** only.
 ## Decode (protocol-agnostic)
 
 - **`to_compile_request_data(request)`** in `decode.ts` accepts any `{ data?: Record<string, { id?: string; value?: Uint8Array }> }` and returns `CompileRequestData`.
-- Used by both the gRPC handler (via `decode_compile_request`) and the Connect handler, so request parsing is shared and protocol-agnostic.
+- **`to_cards_delta_data(pb)`** in `decode.ts` decodes proto CardsDelta (`slots`, `remove`) into `{ slots: CompileRequestData; remove: string[] }`.
+- Used by both the gRPC handler (via `decode_compile_request`) and the Connect handler; Session uses `to_cards_delta_data` and `apply_cards_delta_to_slot_map`.
 
 ## Connect server implementation
 
 - **`create_connect_routes(env)`** returns a function that registers LainViz on a `ConnectRouter`:
   - **Compile:** `to_compile_request_data(req)` → `bind_context_slots_io(env, data)` → `compile_for_viz(data)` → `CompileResponse`.
   - **NetworkStream:** async generator; `subscribe_cell_updates(data, callback)` pushes into a queue; yields Connect `NetworkUpdate` (same shape as encode layer).
+  - **Session:** async generator (bidi). Maintains `slotMap`; for each **CardsDelta** from the client: `to_cards_delta_data(delta)` → `apply_cards_delta_to_slot_map(decoded, slotMap)` → `bind_context_slots_io(env, slotMap)`. Then yields **Heartbeat** and **CardUpdate(s)** (via `session_encode.ts`). All cell logic stays in the backend; frontend receives only Heartbeat and CardUpdate.
+- **`apply_cards_delta_to_slot_map`** in `src/grpc/cards_delta_apply.ts`: pure applicator; returns new slot map. Used only by the Session handler.
 - **`create_connect_handler_io(env)`** returns the result of `connectNodeAdapter({ routes: create_connect_routes(env) })` for use with `http.createServer()`.
 
 ## CLI and CORS

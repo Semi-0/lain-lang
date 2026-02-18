@@ -1,21 +1,29 @@
 /**
- * Connect RPC server for LainViz (Compile + NetworkStream).
- * Protocol-agnostic decode via to_compile_request_data; same compile/stream logic as gRPC.
- * Uses Effect for sequential pipelines and pipe/compose for composition.
+ * Connect RPC server for LainViz (Compile + NetworkStream + Session, OpenSession + PushDeltas).
+ * Session: bidi stream (non-browser). OpenSession + PushDeltas: browser-compatible.
  */
 import { ConnectRouter } from "@bufbuild/connect"
 import { connectNodeAdapter } from "@connectrpc/connect-node"
 import { Effect, pipe } from "effect"
 import { compose } from "generic-handler/built_in_generics/generic_combinator"
 import type { LexicalEnvironment } from "../../compiler/env/env"
-import { CompileResponse, NetworkUpdate, StrongestValueLayer } from "./connect_generated/lain_pb.js"
+import { CompileResponse, Empty, NetworkUpdate, ServerMessage, StrongestValueLayer } from "./connect_generated/lain_pb.js"
 import { LainViz } from "./connect_generated/lain_connect.js"
-import { to_compile_request_data } from "./decode"
+import { to_compile_request_data, to_cards_delta_data, to_open_session_data, to_push_deltas_data } from "./decode.js"
+import { apply_cards_delta_to_slot_map } from "./cards_delta_apply.js"
 import { encode_network_update } from "./encode"
+import { to_heartbeat_message, to_card_update_message } from "./session_encode.js"
+import {
+  get_or_create_session,
+  get_session,
+  remove_session,
+  session_push,
+  wait_for_message_or_timeout,
+} from "./session_store.js"
 import type { NetworkUpdateData } from "./network_stream_handler"
 import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./compile_handler"
 import { cell_updates_iterable } from "./network_stream_handler"
-import { trace_compile_request_io, trace_network_stream_io } from "./tracer"
+import { trace_compile_request_io, trace_network_stream_io, trace_open_session_io, trace_push_deltas_io } from "./tracer"
 
 type EncodedNetworkUpdate = ReturnType<typeof encode_network_update>
 
@@ -100,6 +108,84 @@ export function create_connect_routes(env: LexicalEnvironment): (router: Connect
       async *networkStream(req, context): AsyncGenerator<NetworkUpdate> {
         const data = Effect.runSync(prepare_stream_data_effect(req))
         yield* stream_connect_updates(data, context)
+      },
+      async *session(requestStream, _context): AsyncGenerator<ServerMessage> {
+        let slotMap: ReturnType<typeof to_compile_request_data> = {}
+        for await (const delta of requestStream) {
+          const slotCount = Object.keys(delta.slots ?? {}).length
+          const removeCount = (delta.remove ?? []).length
+          console.log("[connect] session rcvd delta:", slotCount, "slots, remove:", removeCount)
+          const decoded = to_cards_delta_data({
+            slots: delta.slots ?? {},
+            remove: delta.remove ?? [],
+          })
+          slotMap = apply_cards_delta_to_slot_map(decoded, slotMap)
+          Effect.runSync(Effect.sync(() => bind_context_slots_io(env, slotMap)))
+          yield to_heartbeat_message()
+          for (const [key, ref] of Object.entries(decoded.slots)) {
+            yield to_card_update_message(key, ref)
+          }
+          for (const key of decoded.remove) {
+            yield to_card_update_message(key, null)
+          }
+        }
+      },
+      async *openSession(req, context): AsyncGenerator<ServerMessage> {
+        const { sessionId, initialData } = to_open_session_data(req)
+        Effect.runSync(Effect.sync(() => trace_open_session_io(req, { sessionId, slotCount: Object.keys(initialData).length })))
+        const initialSlotMap =
+          Object.keys(initialData).length > 0
+            ? apply_cards_delta_to_slot_map({ slots: initialData, remove: [] }, {})
+            : {}
+        const state = get_or_create_session(sessionId, initialSlotMap)
+        if (Object.keys(initialData).length > 0) {
+          Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
+        }
+        try {
+          yield to_heartbeat_message()
+          while (context.signal?.aborted !== true) {
+            const hasMessage = await wait_for_message_or_timeout(state)
+            if (context.signal?.aborted === true) break
+            if (hasMessage && state.queue.length > 0) {
+              while (state.queue.length > 0) {
+                const msg = state.queue.shift()!
+                yield msg
+              }
+            } else {
+              yield to_heartbeat_message()
+            }
+          }
+        } finally {
+          remove_session(sessionId)
+        }
+      },
+      async pushDeltas(req): Promise<Empty> {
+        const { sessionId, delta: decoded } = to_push_deltas_data(req)
+        Effect.runSync(
+          Effect.sync(() =>
+            trace_push_deltas_io(req, {
+              sessionId,
+              slotCount: Object.keys(decoded.slots).length,
+              removeCount: decoded.remove.length,
+              slotKeys: Object.keys(decoded.slots),
+              removeKeys: [...decoded.remove],
+            })
+          )
+        )
+        const state = get_session(sessionId)
+        if (state == null) {
+          return new Empty()
+        }
+        state.slotMap = apply_cards_delta_to_slot_map(decoded, state.slotMap)
+        Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
+        session_push(state, to_heartbeat_message())
+        for (const [key, ref] of Object.entries(decoded.slots)) {
+          session_push(state, to_card_update_message(key, ref))
+        }
+        for (const key of decoded.remove) {
+          session_push(state, to_card_update_message(key, null))
+        }
+        return new Empty()
       },
     })
   }

@@ -36,3 +36,45 @@ export function decode_compile_request(
 ): CompileRequestData {
   return to_compile_request_data(pb)
 }
+
+/** Decode proto CardsDelta to slots (CompileRequestData) + remove keys. Protocol-agnostic shape. */
+export function to_cards_delta_data(pb: {
+  slots?: Record<string, { id?: string; value?: Uint8Array }>
+  remove?: readonly string[]
+}): { slots: CompileRequestData; remove: readonly string[] } {
+  const slots = pb.slots ?? {}
+  const out: Record<string, CardRefData> = {}
+  for (const [k, v] of Object.entries(slots)) {
+    if (v != null) {
+      out[k] = {
+        id: v.id ?? "",
+        value: decode_card_ref_value(v.value ?? new Uint8Array(0)),
+      }
+    }
+  }
+  return { slots: out, remove: pb.remove ?? [] }
+}
+
+/** Decode OpenSessionRequest to sessionId + initialData. Uses to_compile_request_data for initialData. */
+export function to_open_session_data(req: {
+  sessionId?: string
+  initialData?: { data?: Record<string, { id?: string; value?: Uint8Array }> }
+}): { sessionId: string; initialData: CompileRequestData } {
+  const initialData = req.initialData != null ? to_compile_request_data(req.initialData) : ({} as CompileRequestData)
+  return {
+    sessionId: req.sessionId ?? "",
+    initialData,
+  }
+}
+
+/** Decode PushDeltasRequest to sessionId + delta. Uses to_cards_delta_data for delta. */
+export function to_push_deltas_data(req: {
+  sessionId?: string
+  delta?: { slots?: Record<string, { id?: string; value?: Uint8Array }>; remove?: readonly string[] }
+}): { sessionId: string; delta: ReturnType<typeof to_cards_delta_data> } {
+  const delta = req.delta != null ? to_cards_delta_data(req.delta) : { slots: {}, remove: [] as readonly string[] }
+  return {
+    sessionId: req.sessionId ?? "",
+    delta,
+  }
+}

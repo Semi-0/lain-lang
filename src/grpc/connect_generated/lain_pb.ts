@@ -248,3 +248,313 @@ export class CompileResponse extends Message<CompileResponse> {
   }
 }
 
+/**
+ * Delta from frontend: slots to set (key -> CardRef) and keys to remove.
+ *
+ * @generated from message lain.viz.CardsDelta
+ */
+export class CardsDelta extends Message<CardsDelta> {
+  /**
+   * set/update; key present = set
+   *
+   * @generated from field: map<string, lain.viz.CardRef> slots = 1;
+   */
+  slots: { [key: string]: CardRef } = {};
+
+  /**
+   * keys to remove (e.g. neighbor detached)
+   *
+   * @generated from field: repeated string remove = 2;
+   */
+  remove: string[] = [];
+
+  constructor(data?: PartialMessage<CardsDelta>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.CardsDelta";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "slots", kind: "map", K: 9 /* ScalarType.STRING */, V: {kind: "message", T: CardRef} },
+    { no: 2, name: "remove", kind: "scalar", T: 9 /* ScalarType.STRING */, repeated: true },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CardsDelta {
+    return new CardsDelta().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CardsDelta {
+    return new CardsDelta().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CardsDelta {
+    return new CardsDelta().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CardsDelta | PlainMessage<CardsDelta> | undefined, b: CardsDelta | PlainMessage<CardsDelta> | undefined): boolean {
+    return proto3.util.equals(CardsDelta, a, b);
+  }
+}
+
+/**
+ * Backend -> frontend: heartbeat (connection) or card update (id, slot, value).
+ *
+ * @generated from message lain.viz.Heartbeat
+ */
+export class Heartbeat extends Message<Heartbeat> {
+  constructor(data?: PartialMessage<Heartbeat>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.Heartbeat";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Heartbeat {
+    return new Heartbeat().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Heartbeat {
+    return new Heartbeat().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Heartbeat {
+    return new Heartbeat().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: Heartbeat | PlainMessage<Heartbeat> | undefined, b: Heartbeat | PlainMessage<Heartbeat> | undefined): boolean {
+    return proto3.util.equals(Heartbeat, a, b);
+  }
+}
+
+/**
+ * @generated from message lain.viz.CardUpdate
+ */
+export class CardUpdate extends Message<CardUpdate> {
+  /**
+   * @generated from field: string card_id = 1;
+   */
+  cardId = "";
+
+  /**
+   * e.g. "::above", "code", "::this"
+   *
+   * @generated from field: string slot = 2;
+   */
+  slot = "";
+
+  /**
+   * empty/missing = remove card for this slot
+   *
+   * @generated from field: lain.viz.CardRef ref = 3;
+   */
+  ref?: CardRef;
+
+  constructor(data?: PartialMessage<CardUpdate>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.CardUpdate";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "card_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "slot", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 3, name: "ref", kind: "message", T: CardRef },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CardUpdate {
+    return new CardUpdate().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CardUpdate {
+    return new CardUpdate().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CardUpdate {
+    return new CardUpdate().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CardUpdate | PlainMessage<CardUpdate> | undefined, b: CardUpdate | PlainMessage<CardUpdate> | undefined): boolean {
+    return proto3.util.equals(CardUpdate, a, b);
+  }
+}
+
+/**
+ * @generated from message lain.viz.ServerMessage
+ */
+export class ServerMessage extends Message<ServerMessage> {
+  /**
+   * @generated from oneof lain.viz.ServerMessage.kind
+   */
+  kind: {
+    /**
+     * @generated from field: lain.viz.Heartbeat heartbeat = 1;
+     */
+    value: Heartbeat;
+    case: "heartbeat";
+  } | {
+    /**
+     * @generated from field: lain.viz.CardUpdate card_update = 2;
+     */
+    value: CardUpdate;
+    case: "cardUpdate";
+  } | { case: undefined; value?: undefined } = { case: undefined };
+
+  constructor(data?: PartialMessage<ServerMessage>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.ServerMessage";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "heartbeat", kind: "message", T: Heartbeat, oneof: "kind" },
+    { no: 2, name: "card_update", kind: "message", T: CardUpdate, oneof: "kind" },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ServerMessage {
+    return new ServerMessage().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ServerMessage {
+    return new ServerMessage().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ServerMessage {
+    return new ServerMessage().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ServerMessage | PlainMessage<ServerMessage> | undefined, b: ServerMessage | PlainMessage<ServerMessage> | undefined): boolean {
+    return proto3.util.equals(ServerMessage, a, b);
+  }
+}
+
+/**
+ * Browser-compatible: one request (no client streaming). Client sends session_id + initial state.
+ *
+ * @generated from message lain.viz.OpenSessionRequest
+ */
+export class OpenSessionRequest extends Message<OpenSessionRequest> {
+  /**
+   * client-generated; used for PushDeltas
+   *
+   * @generated from field: string session_id = 1;
+   */
+  sessionId = "";
+
+  /**
+   * full slot map for first load
+   *
+   * @generated from field: lain.viz.CompileRequest initial_data = 2;
+   */
+  initialData?: CompileRequest;
+
+  constructor(data?: PartialMessage<OpenSessionRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.OpenSessionRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "initial_data", kind: "message", T: CompileRequest },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): OpenSessionRequest {
+    return new OpenSessionRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): OpenSessionRequest {
+    return new OpenSessionRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): OpenSessionRequest {
+    return new OpenSessionRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: OpenSessionRequest | PlainMessage<OpenSessionRequest> | undefined, b: OpenSessionRequest | PlainMessage<OpenSessionRequest> | undefined): boolean {
+    return proto3.util.equals(OpenSessionRequest, a, b);
+  }
+}
+
+/**
+ * Unary: apply delta to session. Browser can call this; no client stream needed.
+ *
+ * @generated from message lain.viz.PushDeltasRequest
+ */
+export class PushDeltasRequest extends Message<PushDeltasRequest> {
+  /**
+   * @generated from field: string session_id = 1;
+   */
+  sessionId = "";
+
+  /**
+   * @generated from field: lain.viz.CardsDelta delta = 2;
+   */
+  delta?: CardsDelta;
+
+  constructor(data?: PartialMessage<PushDeltasRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.PushDeltasRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "delta", kind: "message", T: CardsDelta },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): PushDeltasRequest {
+    return new PushDeltasRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): PushDeltasRequest {
+    return new PushDeltasRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): PushDeltasRequest {
+    return new PushDeltasRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: PushDeltasRequest | PlainMessage<PushDeltasRequest> | undefined, b: PushDeltasRequest | PlainMessage<PushDeltasRequest> | undefined): boolean {
+    return proto3.util.equals(PushDeltasRequest, a, b);
+  }
+}
+
+/**
+ * @generated from message lain.viz.Empty
+ */
+export class Empty extends Message<Empty> {
+  constructor(data?: PartialMessage<Empty>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.Empty";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): Empty {
+    return new Empty().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): Empty {
+    return new Empty().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): Empty {
+    return new Empty().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: Empty | PlainMessage<Empty> | undefined, b: Empty | PlainMessage<Empty> | undefined): boolean {
+    return proto3.util.equals(Empty, a, b);
+  }
+}
+

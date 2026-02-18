@@ -1,12 +1,18 @@
 /**
  * Connect server tests: real Connect client calls in-process Connect HTTP server.
- * Verifies backend speaks Connect (Compile + NetworkStream).
+ * Verifies backend speaks Connect (Compile + NetworkStream, OpenSession + PushDeltas).
  */
 import { expect, test, describe, beforeAll, afterAll } from "bun:test"
 import * as http from "node:http"
 import { createConnectTransport } from "@connectrpc/connect-node"
 import { createPromiseClient } from "@bufbuild/connect"
-import { CompileRequest } from "../src/grpc/connect_generated/lain_pb.js"
+import {
+  CardRef,
+  CardsDelta,
+  CompileRequest,
+  OpenSessionRequest,
+  PushDeltasRequest,
+} from "../src/grpc/connect_generated/lain_pb.js"
 import { LainViz } from "../src/grpc/connect_generated/lain_connect.js"
 import { empty_lexical_environment } from "../compiler/env/env"
 import { create_connect_handler_io } from "../src/grpc/connect_server"
@@ -83,5 +89,45 @@ describe("Connect server", () => {
       expect(first).toHaveProperty("name")
       expect(first).toHaveProperty("strongestValue")
     }
+  })
+
+  test("OpenSession + PushDeltas: client sends delta, backend receives and stream yields CardUpdate", async () => {
+    await wait(100)
+    const transport = createConnectTransport({ baseUrl })
+    const client = createPromiseClient(LainViz, transport)
+    const sessionId = "test-session-" + Date.now()
+    const openReq = new OpenSessionRequest({ sessionId })
+    const received: { kind: string }[] = []
+    const controller = new AbortController()
+    const streamPromise = (async () => {
+      try {
+        for await (const msg of client.openSession(openReq, { signal: controller.signal })) {
+          const case_ = msg.kind?.case ?? "unknown"
+          received.push({ kind: case_ })
+        }
+      } catch {
+        // Abort or stream end
+      }
+    })()
+    await wait(150)
+    const delta = new CardsDelta({
+      slots: {
+        "card-1code": new CardRef({
+          id: "card-1",
+          value: new TextEncoder().encode(JSON.stringify("hello")),
+        }),
+      },
+      remove: [],
+    })
+    const pushReq = new PushDeltasRequest({ sessionId, delta })
+    const empty = await client.pushDeltas(pushReq)
+    expect(empty).toBeDefined()
+    await wait(200)
+    controller.abort()
+    await streamPromise
+    const heartbeats = received.filter((r) => r.kind === "heartbeat")
+    const cardUpdates = received.filter((r) => r.kind === "cardUpdate")
+    expect(heartbeats.length).toBeGreaterThanOrEqual(1)
+    expect(cardUpdates.length).toBeGreaterThanOrEqual(1)
   })
 })

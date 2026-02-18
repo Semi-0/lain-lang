@@ -34,7 +34,28 @@ message CompileResponse {
   string error_message = 2;  // empty when success
 }
 
+// Delta from frontend: slots to set (key -> CardRef) and keys to remove.
+message CardsDelta {
+  map<string, CardRef> slots = 1;  // set/update; key present = set
+  repeated string remove = 2;      // keys to remove (e.g. neighbor detached)
+}
+
+// Backend -> frontend: heartbeat (connection) or card update (id, slot, value).
+message Heartbeat {}
+message CardUpdate {
+  string card_id = 1;
+  string slot = 2;     // e.g. "::above", "code", "::this"
+  CardRef ref = 3;     // empty/missing = remove card for this slot
+}
+message ServerMessage {
+  oneof kind {
+    Heartbeat heartbeat = 1;
+    CardUpdate card_update = 2;
+  }
+}
+
 service LainViz {
   rpc Compile(CompileRequest) returns (CompileResponse);
   rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate);
+  rpc Session(stream CardsDelta) returns (stream ServerMessage);
 }

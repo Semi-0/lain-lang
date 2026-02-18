@@ -36,3 +36,23 @@ export function trace_network_stream_io(
     console.log("[grpc] NetworkStream", { req: to_string(_req), update: to_string(_update) })
   }
 }
+
+export function trace_open_session_io(_req: unknown, _data?: unknown): void {
+  console.log("[grpc] OpenSession received")
+  if (!enabled("DEBUG_GRPC")) return
+  if (_data != null) {
+    console.log("[grpc] OpenSession (decoded)", { data: to_string(_data) })
+  } else {
+    console.log("[grpc] OpenSession", { req: to_string(_req) })
+  }
+}
+
+export function trace_push_deltas_io(_req: unknown, _data?: unknown): void {
+  console.log("[grpc] PushDeltas received")
+  if (!enabled("DEBUG_GRPC")) return
+  if (_data != null) {
+    console.log("[grpc] PushDeltas (decoded)", { data: to_string(_data) })
+  } else {
+    console.log("[grpc] PushDeltas", { req: to_string(_req) })
+  }
+}

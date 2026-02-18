@@ -10,9 +10,11 @@ import {
   type CallOptions,
   type ChannelCredentials,
   Client,
+  type ClientDuplexStream,
   type ClientOptions,
   type ClientReadableStream,
   type ClientUnaryCall,
+  type handleBidiStreamingCall,
   type handleServerStreamingCall,
   type handleUnaryCall,
   makeGenericClientConstructor,
@@ -65,6 +67,53 @@ export interface CompileResponse {
   success: boolean;
   /** empty when success */
   errorMessage: string;
+}
+
+/** Delta from frontend: slots to set (key -> CardRef) and keys to remove. */
+export interface CardsDelta {
+  /** set/update; key present = set */
+  slots: { [key: string]: CardRef };
+  /** keys to remove (e.g. neighbor detached) */
+  remove: string[];
+}
+
+export interface CardsDelta_SlotsEntry {
+  key: string;
+  value: CardRef | undefined;
+}
+
+/** Backend -> frontend: heartbeat (connection) or card update (id, slot, value). */
+export interface Heartbeat {
+}
+
+export interface CardUpdate {
+  cardId: string;
+  /** e.g. "::above", "code", "::this" */
+  slot: string;
+  /** empty/missing = remove card for this slot */
+  ref: CardRef | undefined;
+}
+
+export interface ServerMessage {
+  heartbeat?: Heartbeat | undefined;
+  cardUpdate?: CardUpdate | undefined;
+}
+
+/** Browser-compatible: one request (no client streaming). Client sends session_id + initial state. */
+export interface OpenSessionRequest {
+  /** client-generated; used for PushDeltas */
+  sessionId: string;
+  /** full slot map for first load */
+  initialData: CompileRequest | undefined;
+}
+
+/** Unary: apply delta to session. Browser can call this; no client stream needed. */
+export interface PushDeltasRequest {
+  sessionId: string;
+  delta: CardsDelta | undefined;
+}
+
+export interface Empty {
 }
 
 function createBaseCardRef(): CardRef {
@@ -584,6 +633,619 @@ export const CompileResponse: MessageFns<CompileResponse> = {
   },
 };
 
+function createBaseCardsDelta(): CardsDelta {
+  return { slots: {}, remove: [] };
+}
+
+export const CardsDelta: MessageFns<CardsDelta> = {
+  encode(message: CardsDelta, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    globalThis.Object.entries(message.slots).forEach(([key, value]: [string, CardRef]) => {
+      CardsDelta_SlotsEntry.encode({ key: key as any, value }, writer.uint32(10).fork()).join();
+    });
+    for (const v of message.remove) {
+      writer.uint32(18).string(v!);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CardsDelta {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCardsDelta();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          const entry1 = CardsDelta_SlotsEntry.decode(reader, reader.uint32());
+          if (entry1.value !== undefined) {
+            message.slots[entry1.key] = entry1.value;
+          }
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.remove.push(reader.string());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CardsDelta {
+    return {
+      slots: isObject(object.slots)
+        ? (globalThis.Object.entries(object.slots) as [string, any][]).reduce(
+          (acc: { [key: string]: CardRef }, [key, value]: [string, any]) => {
+            acc[key] = CardRef.fromJSON(value);
+            return acc;
+          },
+          {},
+        )
+        : {},
+      remove: globalThis.Array.isArray(object?.remove) ? object.remove.map((e: any) => globalThis.String(e)) : [],
+    };
+  },
+
+  toJSON(message: CardsDelta): unknown {
+    const obj: any = {};
+    if (message.slots) {
+      const entries = globalThis.Object.entries(message.slots) as [string, CardRef][];
+      if (entries.length > 0) {
+        obj.slots = {};
+        entries.forEach(([k, v]) => {
+          obj.slots[k] = CardRef.toJSON(v);
+        });
+      }
+    }
+    if (message.remove?.length) {
+      obj.remove = message.remove;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CardsDelta>, I>>(base?: I): CardsDelta {
+    return CardsDelta.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CardsDelta>, I>>(object: I): CardsDelta {
+    const message = createBaseCardsDelta();
+    message.slots = (globalThis.Object.entries(object.slots ?? {}) as [string, CardRef][]).reduce(
+      (acc: { [key: string]: CardRef }, [key, value]: [string, CardRef]) => {
+        if (value !== undefined) {
+          acc[key] = CardRef.fromPartial(value);
+        }
+        return acc;
+      },
+      {},
+    );
+    message.remove = object.remove?.map((e) => e) || [];
+    return message;
+  },
+};
+
+function createBaseCardsDelta_SlotsEntry(): CardsDelta_SlotsEntry {
+  return { key: "", value: undefined };
+}
+
+export const CardsDelta_SlotsEntry: MessageFns<CardsDelta_SlotsEntry> = {
+  encode(message: CardsDelta_SlotsEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.key !== "") {
+      writer.uint32(10).string(message.key);
+    }
+    if (message.value !== undefined) {
+      CardRef.encode(message.value, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CardsDelta_SlotsEntry {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCardsDelta_SlotsEntry();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.key = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.value = CardRef.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CardsDelta_SlotsEntry {
+    return {
+      key: isSet(object.key) ? globalThis.String(object.key) : "",
+      value: isSet(object.value) ? CardRef.fromJSON(object.value) : undefined,
+    };
+  },
+
+  toJSON(message: CardsDelta_SlotsEntry): unknown {
+    const obj: any = {};
+    if (message.key !== "") {
+      obj.key = message.key;
+    }
+    if (message.value !== undefined) {
+      obj.value = CardRef.toJSON(message.value);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CardsDelta_SlotsEntry>, I>>(base?: I): CardsDelta_SlotsEntry {
+    return CardsDelta_SlotsEntry.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CardsDelta_SlotsEntry>, I>>(object: I): CardsDelta_SlotsEntry {
+    const message = createBaseCardsDelta_SlotsEntry();
+    message.key = object.key ?? "";
+    message.value = (object.value !== undefined && object.value !== null)
+      ? CardRef.fromPartial(object.value)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseHeartbeat(): Heartbeat {
+  return {};
+}
+
+export const Heartbeat: MessageFns<Heartbeat> = {
+  encode(_: Heartbeat, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Heartbeat {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseHeartbeat();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): Heartbeat {
+    return {};
+  },
+
+  toJSON(_: Heartbeat): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<Heartbeat>, I>>(base?: I): Heartbeat {
+    return Heartbeat.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Heartbeat>, I>>(_: I): Heartbeat {
+    const message = createBaseHeartbeat();
+    return message;
+  },
+};
+
+function createBaseCardUpdate(): CardUpdate {
+  return { cardId: "", slot: "", ref: undefined };
+}
+
+export const CardUpdate: MessageFns<CardUpdate> = {
+  encode(message: CardUpdate, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.cardId !== "") {
+      writer.uint32(10).string(message.cardId);
+    }
+    if (message.slot !== "") {
+      writer.uint32(18).string(message.slot);
+    }
+    if (message.ref !== undefined) {
+      CardRef.encode(message.ref, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CardUpdate {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCardUpdate();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.cardId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.slot = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.ref = CardRef.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CardUpdate {
+    return {
+      cardId: isSet(object.cardId)
+        ? globalThis.String(object.cardId)
+        : isSet(object.card_id)
+        ? globalThis.String(object.card_id)
+        : "",
+      slot: isSet(object.slot) ? globalThis.String(object.slot) : "",
+      ref: isSet(object.ref) ? CardRef.fromJSON(object.ref) : undefined,
+    };
+  },
+
+  toJSON(message: CardUpdate): unknown {
+    const obj: any = {};
+    if (message.cardId !== "") {
+      obj.cardId = message.cardId;
+    }
+    if (message.slot !== "") {
+      obj.slot = message.slot;
+    }
+    if (message.ref !== undefined) {
+      obj.ref = CardRef.toJSON(message.ref);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CardUpdate>, I>>(base?: I): CardUpdate {
+    return CardUpdate.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CardUpdate>, I>>(object: I): CardUpdate {
+    const message = createBaseCardUpdate();
+    message.cardId = object.cardId ?? "";
+    message.slot = object.slot ?? "";
+    message.ref = (object.ref !== undefined && object.ref !== null) ? CardRef.fromPartial(object.ref) : undefined;
+    return message;
+  },
+};
+
+function createBaseServerMessage(): ServerMessage {
+  return { heartbeat: undefined, cardUpdate: undefined };
+}
+
+export const ServerMessage: MessageFns<ServerMessage> = {
+  encode(message: ServerMessage, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.heartbeat !== undefined) {
+      Heartbeat.encode(message.heartbeat, writer.uint32(10).fork()).join();
+    }
+    if (message.cardUpdate !== undefined) {
+      CardUpdate.encode(message.cardUpdate, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): ServerMessage {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseServerMessage();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.heartbeat = Heartbeat.decode(reader, reader.uint32());
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.cardUpdate = CardUpdate.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): ServerMessage {
+    return {
+      heartbeat: isSet(object.heartbeat) ? Heartbeat.fromJSON(object.heartbeat) : undefined,
+      cardUpdate: isSet(object.cardUpdate)
+        ? CardUpdate.fromJSON(object.cardUpdate)
+        : isSet(object.card_update)
+        ? CardUpdate.fromJSON(object.card_update)
+        : undefined,
+    };
+  },
+
+  toJSON(message: ServerMessage): unknown {
+    const obj: any = {};
+    if (message.heartbeat !== undefined) {
+      obj.heartbeat = Heartbeat.toJSON(message.heartbeat);
+    }
+    if (message.cardUpdate !== undefined) {
+      obj.cardUpdate = CardUpdate.toJSON(message.cardUpdate);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<ServerMessage>, I>>(base?: I): ServerMessage {
+    return ServerMessage.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<ServerMessage>, I>>(object: I): ServerMessage {
+    const message = createBaseServerMessage();
+    message.heartbeat = (object.heartbeat !== undefined && object.heartbeat !== null)
+      ? Heartbeat.fromPartial(object.heartbeat)
+      : undefined;
+    message.cardUpdate = (object.cardUpdate !== undefined && object.cardUpdate !== null)
+      ? CardUpdate.fromPartial(object.cardUpdate)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseOpenSessionRequest(): OpenSessionRequest {
+  return { sessionId: "", initialData: undefined };
+}
+
+export const OpenSessionRequest: MessageFns<OpenSessionRequest> = {
+  encode(message: OpenSessionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.initialData !== undefined) {
+      CompileRequest.encode(message.initialData, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): OpenSessionRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseOpenSessionRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.initialData = CompileRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): OpenSessionRequest {
+    return {
+      sessionId: isSet(object.sessionId)
+        ? globalThis.String(object.sessionId)
+        : isSet(object.session_id)
+        ? globalThis.String(object.session_id)
+        : "",
+      initialData: isSet(object.initialData)
+        ? CompileRequest.fromJSON(object.initialData)
+        : isSet(object.initial_data)
+        ? CompileRequest.fromJSON(object.initial_data)
+        : undefined,
+    };
+  },
+
+  toJSON(message: OpenSessionRequest): unknown {
+    const obj: any = {};
+    if (message.sessionId !== "") {
+      obj.sessionId = message.sessionId;
+    }
+    if (message.initialData !== undefined) {
+      obj.initialData = CompileRequest.toJSON(message.initialData);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<OpenSessionRequest>, I>>(base?: I): OpenSessionRequest {
+    return OpenSessionRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<OpenSessionRequest>, I>>(object: I): OpenSessionRequest {
+    const message = createBaseOpenSessionRequest();
+    message.sessionId = object.sessionId ?? "";
+    message.initialData = (object.initialData !== undefined && object.initialData !== null)
+      ? CompileRequest.fromPartial(object.initialData)
+      : undefined;
+    return message;
+  },
+};
+
+function createBasePushDeltasRequest(): PushDeltasRequest {
+  return { sessionId: "", delta: undefined };
+}
+
+export const PushDeltasRequest: MessageFns<PushDeltasRequest> = {
+  encode(message: PushDeltasRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.delta !== undefined) {
+      CardsDelta.encode(message.delta, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PushDeltasRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePushDeltasRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.delta = CardsDelta.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PushDeltasRequest {
+    return {
+      sessionId: isSet(object.sessionId)
+        ? globalThis.String(object.sessionId)
+        : isSet(object.session_id)
+        ? globalThis.String(object.session_id)
+        : "",
+      delta: isSet(object.delta) ? CardsDelta.fromJSON(object.delta) : undefined,
+    };
+  },
+
+  toJSON(message: PushDeltasRequest): unknown {
+    const obj: any = {};
+    if (message.sessionId !== "") {
+      obj.sessionId = message.sessionId;
+    }
+    if (message.delta !== undefined) {
+      obj.delta = CardsDelta.toJSON(message.delta);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PushDeltasRequest>, I>>(base?: I): PushDeltasRequest {
+    return PushDeltasRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PushDeltasRequest>, I>>(object: I): PushDeltasRequest {
+    const message = createBasePushDeltasRequest();
+    message.sessionId = object.sessionId ?? "";
+    message.delta = (object.delta !== undefined && object.delta !== null)
+      ? CardsDelta.fromPartial(object.delta)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseEmpty(): Empty {
+  return {};
+}
+
+export const Empty: MessageFns<Empty> = {
+  encode(_: Empty, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): Empty {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseEmpty();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): Empty {
+    return {};
+  },
+
+  toJSON(_: Empty): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<Empty>, I>>(base?: I): Empty {
+    return Empty.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<Empty>, I>>(_: I): Empty {
+    const message = createBaseEmpty();
+    return message;
+  },
+};
+
 export type LainVizService = typeof LainVizService;
 export const LainVizService = {
   compile: {
@@ -604,11 +1266,45 @@ export const LainVizService = {
     responseSerialize: (value: NetworkUpdate): Buffer => Buffer.from(NetworkUpdate.encode(value).finish()),
     responseDeserialize: (value: Buffer): NetworkUpdate => NetworkUpdate.decode(value),
   },
+  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
+  session: {
+    path: "/lain.viz.LainViz/Session",
+    requestStream: true,
+    responseStream: true,
+    requestSerialize: (value: CardsDelta): Buffer => Buffer.from(CardsDelta.encode(value).finish()),
+    requestDeserialize: (value: Buffer): CardsDelta => CardsDelta.decode(value),
+    responseSerialize: (value: ServerMessage): Buffer => Buffer.from(ServerMessage.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ServerMessage => ServerMessage.decode(value),
+  },
+  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
+  openSession: {
+    path: "/lain.viz.LainViz/OpenSession",
+    requestStream: false,
+    responseStream: true,
+    requestSerialize: (value: OpenSessionRequest): Buffer => Buffer.from(OpenSessionRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): OpenSessionRequest => OpenSessionRequest.decode(value),
+    responseSerialize: (value: ServerMessage): Buffer => Buffer.from(ServerMessage.encode(value).finish()),
+    responseDeserialize: (value: Buffer): ServerMessage => ServerMessage.decode(value),
+  },
+  pushDeltas: {
+    path: "/lain.viz.LainViz/PushDeltas",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: PushDeltasRequest): Buffer => Buffer.from(PushDeltasRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): PushDeltasRequest => PushDeltasRequest.decode(value),
+    responseSerialize: (value: Empty): Buffer => Buffer.from(Empty.encode(value).finish()),
+    responseDeserialize: (value: Buffer): Empty => Empty.decode(value),
+  },
 } as const;
 
 export interface LainVizServer extends UntypedServiceImplementation {
   compile: handleUnaryCall<CompileRequest, CompileResponse>;
   networkStream: handleServerStreamingCall<CompileRequest, NetworkUpdate>;
+  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
+  session: handleBidiStreamingCall<CardsDelta, ServerMessage>;
+  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
+  openSession: handleServerStreamingCall<OpenSessionRequest, ServerMessage>;
+  pushDeltas: handleUnaryCall<PushDeltasRequest, Empty>;
 }
 
 export interface LainVizClient extends Client {
@@ -633,6 +1329,32 @@ export interface LainVizClient extends Client {
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<NetworkUpdate>;
+  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
+  session(): ClientDuplexStream<CardsDelta, ServerMessage>;
+  session(options: Partial<CallOptions>): ClientDuplexStream<CardsDelta, ServerMessage>;
+  session(metadata: Metadata, options?: Partial<CallOptions>): ClientDuplexStream<CardsDelta, ServerMessage>;
+  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
+  openSession(request: OpenSessionRequest, options?: Partial<CallOptions>): ClientReadableStream<ServerMessage>;
+  openSession(
+    request: OpenSessionRequest,
+    metadata?: Metadata,
+    options?: Partial<CallOptions>,
+  ): ClientReadableStream<ServerMessage>;
+  pushDeltas(
+    request: PushDeltasRequest,
+    callback: (error: ServiceError | null, response: Empty) => void,
+  ): ClientUnaryCall;
+  pushDeltas(
+    request: PushDeltasRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: Empty) => void,
+  ): ClientUnaryCall;
+  pushDeltas(
+    request: PushDeltasRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: Empty) => void,
+  ): ClientUnaryCall;
 }
 
 export const LainVizClient = makeGenericClientConstructor(LainVizService, "lain.viz.LainViz") as unknown as {

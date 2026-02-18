@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CompileRequest, CompileResponse, NetworkUpdate } from "./lain_pb.js";
+import { CardsDelta, CompileRequest, CompileResponse, Empty, NetworkUpdate, OpenSessionRequest, PushDeltasRequest, ServerMessage } from "./lain_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -29,6 +29,37 @@ export const LainViz = {
       I: CompileRequest,
       O: NetworkUpdate,
       kind: MethodKind.ServerStreaming,
+    },
+    /**
+     * Bidi (not supported from browser fetch). Kept for non-browser clients if needed.
+     *
+     * @generated from rpc lain.viz.LainViz.Session
+     */
+    session: {
+      name: "Session",
+      I: CardsDelta,
+      O: ServerMessage,
+      kind: MethodKind.BiDiStreaming,
+    },
+    /**
+     * Browser-compatible: one request then server stream; deltas via PushDeltas unary.
+     *
+     * @generated from rpc lain.viz.LainViz.OpenSession
+     */
+    openSession: {
+      name: "OpenSession",
+      I: OpenSessionRequest,
+      O: ServerMessage,
+      kind: MethodKind.ServerStreaming,
+    },
+    /**
+     * @generated from rpc lain.viz.LainViz.PushDeltas
+     */
+    pushDeltas: {
+      name: "PushDeltas",
+      I: PushDeltasRequest,
+      O: Empty,
+      kind: MethodKind.Unary,
     },
   }
 } as const;
