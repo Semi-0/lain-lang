@@ -116,6 +116,8 @@ Structural truth is stored as cards + symmetric directed edges:
 
 Server receives CardsDelta as slot updates (including directional slots carrying card-id refs).
 
+**Type law:** Directional ports only trigger topology operations when the value is structurally typed (`CardIdRef`, `CardDesc`). Otherwise every ordinary string flowing through a port could be misread as spawn.
+
 We maintain previous slot state, apply delta, and **diff to infer connect/detach events**, but only for directional structural reference slots.
 
 **Rules:**
@@ -196,6 +198,8 @@ This guarantees: **no silent replacement**, even if the attempted spawn has a ne
 
 ## 10. Equality and Idempotency
 
+**Spawn triggers on value transition or new fingerprint; identical CardDesc does not re-materialize.**
+
 CardDesc equality is handled by the propagator system policy. Practically it must be **stable** so the same CardDesc does not retrigger spawns repeatedly.
 
 Store a session-level **"last materialized fingerprint"** per `(origin card, direction)` as an additional guard if needed.
@@ -213,6 +217,14 @@ Detaching removes the linking propagators (bi_sync connections) and updates edge
 ## 12. Visualization / Projection Annotations
 
 Values may carry annotations naming a visualization schema. The cell does **not** know how to render; it only names what renderer applies. The view layer maps schema tags to renderers and maintains interaction state separately (unless later you choose to compute interaction).
+
+### Views in scope
+
+We include only these three views:
+
+1. **Plain value view** — Numbers, strings, basic IO (spreadsheet-like cells)
+2. **Plotting view** — Minimal chart rendering (line or scatter is enough)
+3. **Topology view** — Adjacency graph (ASCII or simple force-directed if time)
 
 ---
 
