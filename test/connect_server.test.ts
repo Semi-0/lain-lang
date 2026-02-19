@@ -91,6 +91,39 @@ describe("Connect server", () => {
     }
   })
 
+  test.skip("Session (bidi): client sends delta stream, server yields Heartbeat + CardUpdate (HTTP/1.1 does not support BiDi)", async () => {
+    await wait(100)
+    const transport = createConnectTransport({ baseUrl })
+    const client = createPromiseClient(LainViz, transport)
+    async function* deltaStream() {
+      yield new CardsDelta({
+        slots: {
+          "card-1code": new CardRef({
+            id: "card-1",
+            value: new TextEncoder().encode(JSON.stringify("test")),
+          }),
+        },
+        remove: [],
+      })
+    }
+    const received: { kind: string }[] = []
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 800)
+    try {
+      for await (const msg of client.session(deltaStream(), { signal: controller.signal })) {
+        received.push({ kind: msg.kind?.case ?? "unknown" })
+      }
+    } catch {
+      // Abort when we timeout
+    } finally {
+      clearTimeout(timeout)
+    }
+    const heartbeats = received.filter((r) => r.kind === "heartbeat")
+    const cardUpdates = received.filter((r) => r.kind === "cardUpdate")
+    expect(heartbeats.length).toBeGreaterThanOrEqual(1)
+    expect(cardUpdates.length).toBeGreaterThanOrEqual(1)
+  })
+
   test("OpenSession + PushDeltas: client sends delta, backend receives and stream yields CardUpdate", async () => {
     await wait(100)
     const transport = createConnectTransport({ baseUrl })

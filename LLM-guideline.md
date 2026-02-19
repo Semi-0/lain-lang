@@ -34,6 +34,8 @@ Precept: Code should be "plain" and "obvious," moving away from "clever" feature
 * Logical vs. Textual Modules: A module is a logical circuit (a function) with defined inputs/outputs, not just a separate file.
 * The 40-Line Limit: Functions should be small enough to fit in the visual field without scrolling, allowing the brain to map the logic onto the visual cortex.
 * Data Dominance: It is better to have 100 functions operate on one data structure than 10 functions on 10 data structures. Structure data late.
+* Shallow Objects & Function Combinators: Prefer shallow objects (flat, few fields) or no objects at all; use function combinators instead. Prefer `pipe(value, f, g, h)` and explicit input/output over method chains (e.g. `obj.method1().method2()`). Combinators make data flow visible; method chains hide it.
+* Minimal Object Interface: If you use objects, expose the minimal set of getters and setters. Avoid rich APIs; push logic into standalone functions that take the object as input and return explicit output.
 * Side Effect Annotation: Functions with side effects must be explicitly named (e.g., saveData_io).
 * Isolate Mutation: Use readonly structures by default. If mutation is necessary, isolate it into minimal getters/setters.
 * Prefer `pipe` (from Effect TS) and `compose` (from `generic-handler/built_in_generics/generic_combinator.ts`) to build higher-order functions and express sequential execution: use `pipe(value, f, g, h)` for a value flowing through steps; use `compose(f, g, h)` to define a single function that runs f then g then h.
