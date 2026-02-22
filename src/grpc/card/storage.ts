@@ -1,0 +1,80 @@
+/**
+ * Card storage: add_card, remove_card, connect_cards (attach), detach_cards.
+ * Internal module – prefer importing from card_api or card/index.
+ */
+import { Either } from "effect";
+import { Cell, cell_id, construct_cell } from "ppropogator";
+import type { Propagator } from "ppropogator/Propagator/Propagator";
+import { card_connector_constructor } from "./schema.js";
+
+const connector_storage = new Map<string, Propagator>();
+const card_storage = new Map<string, Cell<unknown>>();
+
+const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
+    `${cardA_id}-${cardB_id}`;
+
+const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
+    cell_id(cardA) + "-" + cell_id(cardB);
+
+const parse_connector_key = (key: string) => {
+    const parts = key.split("-");
+    return {
+        cardA_key: parts[0] ?? "",
+        cardB_key: parts.slice(1).join("-") || "",
+    };
+};
+
+const remove_connector_key = (key: string) => {
+    connector_storage.delete(key);
+};
+
+export const add_card = (id: string): Cell<unknown> => {
+    const card = construct_cell("card", id) as Cell<unknown>;
+    card_storage.set(id, card);
+    return card;
+};
+
+export const remove_card = (id: string): void => {
+    const card = card_storage.get(id);
+    if (card != null) {
+        connector_storage.forEach((_, key) => {
+            const { cardA_key, cardB_key } = parse_connector_key(key);
+            if (cardA_key === id || cardB_key === id) {
+                detach_cards_by_key(cardA_key, cardB_key);
+            }
+        });
+        card.dispose();
+        card_storage.delete(id);
+    }
+};
+
+export const connect_cards = (
+    cardA: Cell<unknown>,
+    cardB: Cell<unknown>,
+    connector_keyA: string,
+    connector_keyB: string
+): Either.Either<void, never> => {
+    const connector = card_connector_constructor(connector_keyB, connector_keyA)(cardA, cardB);
+    connector_storage.set(make_connector_key(cardA, cardB), connector);
+    return Either.right(undefined as void);
+};
+
+export const detach_cards_by_key = (
+    cardA_key: string,
+    cardB_key: string
+): Either.Either<void, string> => {
+    const connector_key = make_connector_key_from_ids(cardA_key, cardB_key);
+    const connector = connector_storage.get(connector_key);
+    if (connector != null) {
+        connector.dispose();
+        remove_connector_key(connector_key);
+        return Either.right(undefined as void);
+    }
+    return Either.left(`Connector not found for cards ${cardA_key} and ${cardB_key}`);
+};
+
+export const detach_cards = (
+    cardA: Cell<unknown>,
+    cardB: Cell<unknown>
+): Either.Either<void, string> =>
+    detach_cards_by_key(cell_id(cardA), cell_id(cardB));
