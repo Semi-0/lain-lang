@@ -34,6 +34,7 @@ import {
 import { primitive_env } from "../compiler/closure";
 import { init_system } from "../compiler/incremental_compiler";
 import { update_cell } from "ppropogator/Cell/Cell";
+import { vector_clock_prove_staled_by } from "ppropogator/DataTypes/TemporaryValueSet";
 
 beforeEach(() => {
     init_system();
@@ -283,6 +284,34 @@ describe("Card API Tests", () => {
             const bThis = internal_cell_this(fullB);
             const links = count_links_between_cells(aRight, bThis);
             expect(links).toBeGreaterThanOrEqual(1);
+        });
+    });
+
+    describe("Cross-card propagation", () => {
+        test.only("(+ ::above 1 ::right) with above and right neighbors: update above ::this, right ::this receives", async () => {
+            const env = primitive_env();
+            const cardAbove = build_card(env)("prop-above");
+            const cardAboveThis = internal_cell_this(cardAbove);
+            const centerCard = build_card(env)("prop-center");
+            const centerThis = internal_cell_this(centerCard);
+            const cardRight = build_card(env)("prop-right");
+            const cardRightThis = internal_cell_this(cardRight);
+
+            update_cell(centerThis, "(+ ::above 1 ::right)");
+            connect_cards(cardAbove, centerCard, "::below", "::above");
+            connect_cards(centerCard, cardRight, "::right", "::left");
+            await execute_all_tasks_sequential(console.error);
+            
+
+            update_cell(cardAboveThis, 5);
+            
+         
+            await execute_all_tasks_sequential(console.error);
+            console.log("cardRightThis", cardRightThis.summarize());
+
+            const centerRight = cell_strongest_base_value(cardRightThis);
+            expect(centerRight).toBe(6);
+            expect(cell_strongest_base_value(cardRightThis)).toBe(6);
         });
     });
 

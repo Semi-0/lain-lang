@@ -283,3 +283,8 @@ Yield CardUpdate(s) to frontend
 - `lain-lang/src/grpc/compile_handler.ts` — `bind_context_slots_io` stub
 - `lain-lang/src/grpc/session_encode.ts` — `key_to_card_and_slot` for slot naming
 - `lain-lang/test/compiler.test.ts` — network expression examples: `(network add1 (>:: x) (::> y) (+ x 1 y))`, `(add1 5 out)`
+
+
+
+// NEXT PHASE:
+RECURSIVE CARD DESCRIPTION

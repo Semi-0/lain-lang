@@ -25,6 +25,15 @@ export const run = (code: string, env: LexicalEnvironment, source: Cell<any> | u
     throw new Error(`Parse failed: ${JSON.stringify(parsed)}`)
 }
 
+/** Run using non-incremental compile (compiler.ts). No source/timestamp. */
+export const raw_compile = (code: string, env: LexicalEnvironment) => {
+    const parsed = parse(parseExpr, new State(code))
+    if (parsed.success) {
+        return trace_generic_procedure(console.log, compile, [parsed.value])(env)
+    }
+    throw new Error(`Parse failed: ${JSON.stringify(parsed)}`)
+}
+
 
 
 // if compile becomes a propagator

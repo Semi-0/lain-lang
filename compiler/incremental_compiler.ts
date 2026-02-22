@@ -61,7 +61,7 @@ import { p_reactive_dispatch, source_has_neighbor, update_source_cell } from "pp
 
 export const init_system = () => {
     set_global_state(PublicStateCommand.CLEAN_UP);
-    install_merge_closure_incremental(merge_temporary_value_set)
+    // install_merge_closure_incremental(merge_temporary_value_set)
     set_merge(merge_temporary_value_set);
     set_scheduler(simple_scheduler());
     pretentious_welcoming_message()

@@ -42,7 +42,7 @@ import { get_base_value } from "sando-layer/Basic/Layer";
 import { the_nothing, is_nothing } from "ppropogator/Cell/CellValue";
 
 // Import compiler entry point
-import { run } from "../compiler/compiler_entry";
+import { run, raw_compile } from "../compiler/compiler_entry";
 import { 
     construct_env_with_inital_value,
     empty_lexical_environment,
@@ -51,7 +51,7 @@ import {
     summarize_env,
 } from "../compiler/env";
 
-import { calculate_closure_hash, Closure, construct_closure_raw, incremental_apply_closure, primitive_env } from "../compiler/closure";
+import { calculate_closure_hash, construct_closure_raw, incremental_apply_closure, primitive_env } from "../compiler/closure";
 
 
 import { LainType, make_element } from "../compiler/lain_element";
@@ -67,6 +67,7 @@ import { parse, State } from "parse-combinator";
 import { parseExpr } from "../compiler/parser";
 import { define } from "../compiler/env";
 import { init_system } from "../compiler/incremental_compiler";
+import { init_system as init_system_compile } from "../compiler/compiler";
 
 beforeEach(() => {
     init_system()
@@ -328,6 +329,69 @@ describe("Compiler Entry Point Tests (run function)", () => {
         }); 
 
     });
-    
+});
 
+describe("Compiler (compile function) Tests", () => {
+    beforeEach(() => {
+        init_system_compile()
+    });
+
+    describe("1. Constants", () => {
+        test("should compile string constant", async () => {
+            const env = empty_lexical_environment("test");
+            const code = '"hello"';
+            const result = raw_compile(code, env);
+            await execute_all_tasks_sequential(() => {});
+            expect(is_cell(result)).toBe(true);
+            expect(cell_strongest_base_value(result)).toBe("hello");
+        });
+
+        test("should compile number constant", async () => {
+            const env = empty_lexical_environment("test");
+            const code = "42";
+            const result = raw_compile(code, env);
+            await execute_all_tasks_sequential(() => {});
+            expect(is_cell(result)).toBe(true);
+            expect(cell_strongest_base_value(result)).toBe(42);
+        });
+    });
+
+    describe("2. Symbol Lookup", () => {
+        test("should lookup symbol from environment with initial value", async () => {
+            const env = construct_env_with_inital_value(
+                [["x", ce_constant(1)]],
+                "test"
+            );
+            const code = "x";
+            const result = raw_compile(code, env);
+            await execute_all_tasks_sequential(() => {});
+            expect(is_cell(result)).toBe(true);
+            expect(cell_strongest_base_value(result)).toBe(1);
+        });
+    });
+
+    describe("3. Primitive Propagator Application", () => {
+        test("should apply addition primitive propagator", async () => {
+            const env = primitive_env();
+            raw_compile("(+ 1 2 out)", env);
+            await execute_all_tasks_sequential(console.error);
+            const e = raw_compile("out", env);
+            await execute_all_tasks_sequential(console.error);
+            expect(cell_strongest_base_value(e)).toBe(3);
+        });
+    });
+
+    describe("4. Closure Application", () => {
+        test("should define and apply a closure", async () => {
+            const env = primitive_env();
+            raw_compile(`(network add1 (>:: x) (::> y) (+ x 1 y))`, env);
+            await execute_all_tasks_sequential(console.error);
+            raw_compile("(add1 5 out)", env);
+            await execute_all_tasks_sequential(console.error);
+            const e = cell_strongest_base_value(env);
+            const out = e.get("out");
+            expect(out).toBeDefined();
+            expect(cell_strongest_base_value(out)).toBe(6);
+        });
+    });
 });

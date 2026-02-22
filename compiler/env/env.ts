@@ -37,6 +37,8 @@ export const is_lexical_environment = register_predicate("is_lexical_environment
 export const parent_key =  "parent"
 
 
+export const is_parent_key = (key: string) => key === parent_key;
+
 // @ts-ignore
 export const p_construct_env = (parent: Cell<LexicalEnvironment>, id: string = "root", output: Cell<LexicalEnvironment>) => p_struct({ parent: parent})(output)
 
@@ -53,7 +55,12 @@ export const empty_lexical_environment = (id: string) => construct_env(construct
 
 export const  construct_env_with_inital_value = (initial: [string, Cell<any>][], id: string) => ce_dict(new Map<string, Cell<any>>([[parent_key, construct_cell("root")], ...initial]), id)
 
-// this needs abstraction 
+// // this needs abstraction 
+// export const p_extend_env = (
+//     parent: LexicalEnvironment,
+//      pairs: [string, Cell<any>][], 
+//      output: Cell<LexicalEnvironment>
+//     ) => p_dict
 
 export const extend_env = (parent: LexicalEnvironment, pairs: [string, Cell<any>][]) => ce_dict(new Map<string, Cell<any>>([[parent_key, parent], ...pairs]))
 
