@@ -2,15 +2,15 @@
  * Unit tests for OpenSession + PushDeltas: decode (to_open_session_data, to_push_deltas_data) and session store.
  */
 import { expect, test, describe } from "bun:test"
-import { to_open_session_data, to_push_deltas_data } from "../src/grpc/decode"
+import { to_card_build_data, to_open_session_data, to_push_deltas_data } from "../src/grpc/codec/decode"
 import {
   get_or_create_session,
   get_session,
   remove_session,
   session_push,
   wait_for_message_or_timeout,
-} from "../src/grpc/session_store"
-import { to_heartbeat_message } from "../src/grpc/session_encode"
+} from "../src/grpc/session/session_store"
+import { to_heartbeat_message } from "../src/grpc/codec/session_encode"
 
 function bytes(s: string): Uint8Array {
   return new TextEncoder().encode(s)
@@ -56,6 +56,20 @@ describe("to_push_deltas_data", () => {
     expect(out.sessionId).toBe("s2")
     expect(Object.keys(out.delta.slots)).toHaveLength(0)
     expect(out.delta.remove).toHaveLength(0)
+  })
+})
+
+describe("to_card_build_data", () => {
+  test("decodes sessionId and cardId", () => {
+    const out = to_card_build_data({ sessionId: "s1", cardId: "card-1" })
+    expect(out.sessionId).toBe("s1")
+    expect(out.cardId).toBe("card-1")
+  })
+
+  test("defaults missing fields to empty", () => {
+    const out = to_card_build_data({})
+    expect(out.sessionId).toBe("")
+    expect(out.cardId).toBe("")
   })
 })
 

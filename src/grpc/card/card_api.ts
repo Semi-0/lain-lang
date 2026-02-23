@@ -47,7 +47,14 @@ export {
     runtime_detach_cards,
     runtime_detach_cards_by_key,
     runtime_detach_incident_connectors,
+    runtime_get_card,
 } from "./runtime.js";
+
+export {
+    emit_runtime_card_output_io,
+    subscribe_runtime_card_output,
+    type RuntimeCardOutputEvent,
+} from "../bridge/card_runtime_events.js";
 
 import { connect_cards } from "./storage.js";
 

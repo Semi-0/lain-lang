@@ -1,5 +1,5 @@
 import { expect, test, describe } from "bun:test"
-import { subscribe_cell_updates } from "../src/grpc/network_stream_handler"
+import { subscribe_cell_updates } from "../src/grpc/handlers/network_stream_handler"
 
 function wait(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))

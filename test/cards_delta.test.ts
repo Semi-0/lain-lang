@@ -2,9 +2,9 @@
  * Unit tests for Session protocol: CardsDelta decode, apply, key parsing.
  */
 import { expect, test, describe } from "bun:test"
-import { to_cards_delta_data } from "../src/grpc/decode"
-import { apply_cards_delta_to_slot_map } from "../src/grpc/cards_delta_apply"
-import { key_to_card_and_slot } from "../src/grpc/session_encode"
+import { to_cards_delta_data } from "../src/grpc/codec/decode"
+import { apply_cards_delta_to_slot_map } from "../src/grpc/delta/cards_delta_apply"
+import { key_to_card_and_slot } from "../src/grpc/codec/session_encode"
 
 function bytes(s: string): Uint8Array {
   return new TextEncoder().encode(s)

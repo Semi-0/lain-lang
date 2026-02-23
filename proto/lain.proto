@@ -54,8 +54,36 @@ message ServerMessage {
   }
 }
 
+// Browser-compatible: one request (no client streaming). Client sends session_id + initial state.
+message OpenSessionRequest {
+  string session_id = 1;          // client-generated; used for PushDeltas/CardBuild
+  CompileRequest initial_data = 2; // optional initial slot map
+}
+
+// Unary: apply delta to session. Browser can call this; no client stream needed.
+message PushDeltasRequest {
+  string session_id = 1;
+  CardsDelta delta = 2;
+}
+
+// Manual build trigger for one card in a session.
+message CardBuildRequest {
+  string session_id = 1;
+  string card_id = 2;
+}
+
+message CardBuildResponse {
+  bool success = 1;
+  string error_message = 2;
+}
+
+message Empty {}
+
 service LainViz {
   rpc Compile(CompileRequest) returns (CompileResponse);
   rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate);
   rpc Session(stream CardsDelta) returns (stream ServerMessage);
+  rpc OpenSession(OpenSessionRequest) returns (stream ServerMessage);
+  rpc PushDeltas(PushDeltasRequest) returns (Empty);
+  rpc CardBuild(CardBuildRequest) returns (CardBuildResponse);
 }

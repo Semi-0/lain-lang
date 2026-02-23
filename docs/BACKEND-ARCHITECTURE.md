@@ -1,6 +1,6 @@
 # Backend Architecture: Two-Part Separation
 
-**Status:** DRAFT  
+**Status:** IN PROGRESS (Part A->Part B wiring + CardBuild implemented; spawn still pending)  
 **Aligned with:** [CARDS-IMPLEMENTATION-PLAN.md](./CARDS-IMPLEMENTATION-PLAN.md)
 
 ---
@@ -24,6 +24,7 @@ The backend is split into two parts:
 │  • Parse reserved slot updates (directional: CardIdRef, CardDesc; code, etc.)│
 │  • Reducer: diff prev/next → infer events                                    │
 │  • Emit: CardDetach | CardConnect | CardAdd | CardRemove | SpawnRequest     │
+│  • Observe Part B runtime output events (::this)                             │
 │  • Cards-updates I/O: send slot updates (CardUpdate, Heartbeat) to frontend  │
 └─────────────────────────────────────────────────────────────────────────────┘
                                        │
@@ -63,7 +64,7 @@ The backend is split into two parts:
 - Stream of **card events** (CardDetach, CardConnect, CardAdd, CardRemove, SpawnRequest) to Part B.
 - Stream of **ServerMessage** (Heartbeat, CardUpdate) to frontend.
 
-**Location:** Lives in/alongside `connect_server.ts` — the reducer logic that processes CardsDelta and yields both events and ServerMessage.
+**Location:** Lives in/alongside `connect_server.ts` and `card_slot_sync.ts` — applies delta, computes structural changes, syncs Part B, and yields ServerMessage.
 
 ---
 
@@ -89,12 +90,15 @@ The backend is split into two parts:
    - Build CarriedCell per card (::this, ::left, ::right, ::above, ::below) — `p_construct_card_cell`, `unfold_card_internal_network`.
    - Wire `bi_sync` per adjacency via `card_connector_constructor_cell` (slot cells ↔ neighbor ::this).
    - Compile per card via `compile_card_internal_code` (incremental compiler).
+4. **Emit runtime output events (observer hook):**
+   - Part B emits card runtime updates (`card_id`, `::this`, `value`) via `emit_runtime_card_output_io`.
+   - Part A bridges runtime outputs to frontend `CardUpdate` via a MiniReactor pipeline.
 
 **Output:**
 - Updated propagation network (cells, propagators).
-- No direct I/O to frontend; Part A handles that.
+- Runtime output events (`::this`) to Part A callback channel.
 
-**Implementation (Part B):** `src/grpc/card/` — `card_api.ts` (unified API), `storage.ts` (add/remove/connect/detach), `schema.ts` (card structure, slots, connectors). `bind_context_slots_io` in `compile_handler.ts` is still a stub; it does not yet wire slot-map updates to the Card API.
+**Implementation (Part B):** `src/grpc/card/` — `card_api.ts` (unified API), `storage.ts` (add/remove/connect/detach), `schema.ts` (card structure, slots, connectors), and split internals `graph.ts` (structural model) + `runtime.ts` (cells/propagators lifecycle). Slot-map synchronization is now wired via `src/grpc/card_slot_sync.ts`.
 
 ---
 
@@ -138,15 +142,46 @@ CardsDelta (slots + remove)
 
 | Component             | Current                                                         | Target / Remaining                                      |
 |-----------------------|------------------------------------------------------------------|---------------------------------------------------------|
-| Part A (reducer)      | `apply_cards_delta_to_slot_map` only                             | Diff directional refs, emit card events                 |
+| Part A (reducer)      | `apply_cards_delta_to_slot_map` + `card_slot_sync`               | Formalize explicit event objects for tracing/metrics    |
 | Part A (I/O)          | `delta_to_server_messages` + push                                | Same; ensure CardUpdate reflects slot state             |
-| Part B (structure)    | **Card API:** `add_card`, `remove_card`, `connect_cards`, `detach_cards` | Wire `bind_context_slots_io` to Card API from slot-map  |
-| Part B (propagation)  | **Card API:** `build_card`, CarriedCells, bi_sync wiring         | Same; BuildCard works via `build_card(env)(id)`         |
+| Part B (structure)    | **Card API:** `add_card`, `remove_card`, `connect_cards`, `detach_cards` | ID-first API for Part A integration ergonomics          |
+| Part B (propagation)  | **Card API:** `build_card`, CarriedCells, bi_sync wiring         | Same; build via `CardBuild` and connect-driven ensure    |
 | Part B (spawn)        | *Not implemented*                                                | **TODO:** Card spawn API — accept SpawnRequest, materialize card from CardDesc |
 
 ---
 
 ## Implementation Notes
+
+### Implemented in this iteration
+
+- Added protocol command `CardBuild` (`CardBuildRequest`, `CardBuildResponse`) in `proto/lain.proto`.
+- `connect_server.ts` now applies slot-map card events (diff + apply) on:
+  - Session stream deltas
+  - OpenSession initial slot map
+  - PushDeltas unary updates
+- Added `card_slot_sync.ts` to apply structural diffs:
+  - card remove from observed slot keys
+  - edge connect/detach from directional slot references
+  - reciprocal directional refs are canonicalized to one logical connect
+  - code slot updates into `internal_cell_this` (missing card is skipped + traced)
+- Added `cardBuild` route in Connect server and gRPC server.
+- Added/updated tests:
+  - `test/session_open_push.test.ts` for `to_card_build_data`
+  - `test/connect_server.test.ts` for `CardBuild`
+
+### Lifecycle contract (current)
+
+- Backend builds cards in two scenarios:
+  - explicit `CardBuild(card_id)` command from frontend,
+  - `CardConnect` apply path (connect implies existence; endpoints are ensured).
+- Backend does not auto-build from code-only deltas:
+  - `card_set_code` requires existing runtime card,
+  - missing card case is skipped and exposed via debug tracing (`missing_card_for_set_code`).
+- `PushDeltas` diff no longer emits unconditional `card_build` events.
+- Runtime observer channel:
+  - Part B emits `::this` updates via `emit_runtime_card_output_io`.
+  - Part A processes outputs through MiniReactor stages and forwards as `CardUpdate(card_id, ::this, value)`.
+  - Loop guard in Part A uses value dedupe against session state and outbox cache.
 
 ### Detach and disposal timing
 

@@ -7,8 +7,9 @@ The backend exposes a **Connect** HTTP server on port **50051** so the browser (
 | Component | Location | Purpose |
 |-----------|----------|---------|
 | Connect codegen | `src/grpc/connect_generated/` | Service and message types for Connect (protobuf-es). |
-| Protocol-agnostic decode | `src/grpc/decode.ts` | `to_compile_request_data()` turns any request shape into `CompileRequestData`. |
-| Connect server | `src/grpc/connect_server.ts` | `create_connect_routes()`, `create_connect_handler_io()`; registers LainViz Compile, NetworkStream, **Session**. |
+| Protocol-agnostic decode | `src/grpc/decode.ts` | `to_compile_request_data()`, `to_cards_delta_data()`, `to_open_session_data()`, `to_push_deltas_data()`, `to_card_build_data()`. |
+| Slot-map sync | `src/grpc/card_slot_sync.ts` | Diff slot maps and apply Part B operations through Card API (add/remove/connect/detach/code update). |
+| Connect server | `src/grpc/connect_server.ts` | `create_connect_routes()`, `create_connect_handler_io()`; registers Compile, NetworkStream, Session, OpenSession, PushDeltas, CardBuild. |
 | CLI | `src/cli/connect_server.ts` | HTTP server with CORS; default port 50051. |
 | Tracer | `src/grpc/tracer.ts` | Request logging (always-on one-liner; verbose when `DEBUG_GRPC` / `DEBUG_COMPILE`). |
 | Patch script | `scripts/patch-protobuf-imports.ts` | Post-codegen: ts-proto uses `protobuf-wire`, Connect uses `@bufbuild/protobuf` 1.x. |
@@ -38,7 +39,9 @@ The viz app is configured to use **50051** only.
 - **`create_connect_routes(env)`** returns a function that registers LainViz on a `ConnectRouter`:
   - **Compile:** `to_compile_request_data(req)` → `bind_context_slots_io(env, data)` → `compile_for_viz(data)` → `CompileResponse`.
   - **NetworkStream:** async generator; `subscribe_cell_updates(data, callback)` pushes into a queue; yields Connect `NetworkUpdate` (same shape as encode layer).
-  - **Session:** async generator (bidi). Maintains `slotMap`; for each **CardsDelta** from the client: `to_cards_delta_data(delta)` → `apply_cards_delta_to_slot_map(decoded, slotMap)` → `bind_context_slots_io(env, slotMap)`. Then yields **Heartbeat** and **CardUpdate(s)** (via `session_encode.ts`). All cell logic stays in the backend; frontend receives only Heartbeat and CardUpdate.
+  - **Session:** async generator (bidi). Maintains `slotMap`; for each **CardsDelta**: decode → apply delta → `sync_slot_map_to_card_api_io(env, prev, next)` → `bind_context_slots_io(env, next)`. Then yields **Heartbeat** and **CardUpdate(s)**.
+  - **OpenSession / PushDeltas:** browser-compatible split stream/unary API; both flows also run `sync_slot_map_to_card_api_io(...)`.
+  - **CardBuild (unary):** manual build trigger per card. Ensures card exists (`build_card(env)(card_id)`), and if session has `cardId + "code"` slot it pushes that code into the card `::this` cell.
 - **`apply_cards_delta_to_slot_map`** in `src/grpc/cards_delta_apply.ts`: pure applicator; returns new slot map. Used only by the Session handler.
 - **`create_connect_handler_io(env)`** returns the result of `connectNodeAdapter({ routes: create_connect_routes(env) })` for use with `http.createServer()`.
 
@@ -61,6 +64,11 @@ Without CORS, the browser at `http://localhost:5173` would block requests to `ht
 - `connect-server` — `bun run ./src/cli/connect_server.ts` (port 50051).
 - `connect-server:debug` — same with `DEBUG_GRPC=1` and `DEBUG_COMPILE=1`.
 - `generate` — `buf generate` then `bun run ./scripts/patch-protobuf-imports.ts`.
+
+## Testing note
+
+- `test/connect_server.test.ts` uses `createRouterTransport(...)` (in-process Connect transport) instead of binding an HTTP port.
+- This avoids flaky/blocked `listen(0)` behavior in sandboxed CI while still exercising real Connect routes.
 
 ## See also
 

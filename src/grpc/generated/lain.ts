@@ -101,9 +101,9 @@ export interface ServerMessage {
 
 /** Browser-compatible: one request (no client streaming). Client sends session_id + initial state. */
 export interface OpenSessionRequest {
-  /** client-generated; used for PushDeltas */
+  /** client-generated; used for PushDeltas/CardBuild */
   sessionId: string;
-  /** full slot map for first load */
+  /** optional initial slot map */
   initialData: CompileRequest | undefined;
 }
 
@@ -111,6 +111,17 @@ export interface OpenSessionRequest {
 export interface PushDeltasRequest {
   sessionId: string;
   delta: CardsDelta | undefined;
+}
+
+/** Manual build trigger for one card in a session. */
+export interface CardBuildRequest {
+  sessionId: string;
+  cardId: string;
+}
+
+export interface CardBuildResponse {
+  success: boolean;
+  errorMessage: string;
 }
 
 export interface Empty {
@@ -1203,6 +1214,170 @@ export const PushDeltasRequest: MessageFns<PushDeltasRequest> = {
   },
 };
 
+function createBaseCardBuildRequest(): CardBuildRequest {
+  return { sessionId: "", cardId: "" };
+}
+
+export const CardBuildRequest: MessageFns<CardBuildRequest> = {
+  encode(message: CardBuildRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sessionId !== "") {
+      writer.uint32(10).string(message.sessionId);
+    }
+    if (message.cardId !== "") {
+      writer.uint32(18).string(message.cardId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CardBuildRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCardBuildRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sessionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.cardId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CardBuildRequest {
+    return {
+      sessionId: isSet(object.sessionId)
+        ? globalThis.String(object.sessionId)
+        : isSet(object.session_id)
+        ? globalThis.String(object.session_id)
+        : "",
+      cardId: isSet(object.cardId)
+        ? globalThis.String(object.cardId)
+        : isSet(object.card_id)
+        ? globalThis.String(object.card_id)
+        : "",
+    };
+  },
+
+  toJSON(message: CardBuildRequest): unknown {
+    const obj: any = {};
+    if (message.sessionId !== "") {
+      obj.sessionId = message.sessionId;
+    }
+    if (message.cardId !== "") {
+      obj.cardId = message.cardId;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CardBuildRequest>, I>>(base?: I): CardBuildRequest {
+    return CardBuildRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CardBuildRequest>, I>>(object: I): CardBuildRequest {
+    const message = createBaseCardBuildRequest();
+    message.sessionId = object.sessionId ?? "";
+    message.cardId = object.cardId ?? "";
+    return message;
+  },
+};
+
+function createBaseCardBuildResponse(): CardBuildResponse {
+  return { success: false, errorMessage: "" };
+}
+
+export const CardBuildResponse: MessageFns<CardBuildResponse> = {
+  encode(message: CardBuildResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.success !== false) {
+      writer.uint32(8).bool(message.success);
+    }
+    if (message.errorMessage !== "") {
+      writer.uint32(18).string(message.errorMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CardBuildResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCardBuildResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 8) {
+            break;
+          }
+
+          message.success = reader.bool();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.errorMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CardBuildResponse {
+    return {
+      success: isSet(object.success) ? globalThis.Boolean(object.success) : false,
+      errorMessage: isSet(object.errorMessage)
+        ? globalThis.String(object.errorMessage)
+        : isSet(object.error_message)
+        ? globalThis.String(object.error_message)
+        : "",
+    };
+  },
+
+  toJSON(message: CardBuildResponse): unknown {
+    const obj: any = {};
+    if (message.success !== false) {
+      obj.success = message.success;
+    }
+    if (message.errorMessage !== "") {
+      obj.errorMessage = message.errorMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CardBuildResponse>, I>>(base?: I): CardBuildResponse {
+    return CardBuildResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CardBuildResponse>, I>>(object: I): CardBuildResponse {
+    const message = createBaseCardBuildResponse();
+    message.success = object.success ?? false;
+    message.errorMessage = object.errorMessage ?? "";
+    return message;
+  },
+};
+
 function createBaseEmpty(): Empty {
   return {};
 }
@@ -1266,7 +1441,6 @@ export const LainVizService = {
     responseSerialize: (value: NetworkUpdate): Buffer => Buffer.from(NetworkUpdate.encode(value).finish()),
     responseDeserialize: (value: Buffer): NetworkUpdate => NetworkUpdate.decode(value),
   },
-  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
   session: {
     path: "/lain.viz.LainViz/Session",
     requestStream: true,
@@ -1276,7 +1450,6 @@ export const LainVizService = {
     responseSerialize: (value: ServerMessage): Buffer => Buffer.from(ServerMessage.encode(value).finish()),
     responseDeserialize: (value: Buffer): ServerMessage => ServerMessage.decode(value),
   },
-  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
   openSession: {
     path: "/lain.viz.LainViz/OpenSession",
     requestStream: false,
@@ -1295,16 +1468,24 @@ export const LainVizService = {
     responseSerialize: (value: Empty): Buffer => Buffer.from(Empty.encode(value).finish()),
     responseDeserialize: (value: Buffer): Empty => Empty.decode(value),
   },
+  cardBuild: {
+    path: "/lain.viz.LainViz/CardBuild",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: CardBuildRequest): Buffer => Buffer.from(CardBuildRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): CardBuildRequest => CardBuildRequest.decode(value),
+    responseSerialize: (value: CardBuildResponse): Buffer => Buffer.from(CardBuildResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): CardBuildResponse => CardBuildResponse.decode(value),
+  },
 } as const;
 
 export interface LainVizServer extends UntypedServiceImplementation {
   compile: handleUnaryCall<CompileRequest, CompileResponse>;
   networkStream: handleServerStreamingCall<CompileRequest, NetworkUpdate>;
-  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
   session: handleBidiStreamingCall<CardsDelta, ServerMessage>;
-  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
   openSession: handleServerStreamingCall<OpenSessionRequest, ServerMessage>;
   pushDeltas: handleUnaryCall<PushDeltasRequest, Empty>;
+  cardBuild: handleUnaryCall<CardBuildRequest, CardBuildResponse>;
 }
 
 export interface LainVizClient extends Client {
@@ -1329,11 +1510,9 @@ export interface LainVizClient extends Client {
     metadata?: Metadata,
     options?: Partial<CallOptions>,
   ): ClientReadableStream<NetworkUpdate>;
-  /** Bidi (not supported from browser fetch). Kept for non-browser clients if needed. */
   session(): ClientDuplexStream<CardsDelta, ServerMessage>;
   session(options: Partial<CallOptions>): ClientDuplexStream<CardsDelta, ServerMessage>;
   session(metadata: Metadata, options?: Partial<CallOptions>): ClientDuplexStream<CardsDelta, ServerMessage>;
-  /** Browser-compatible: one request then server stream; deltas via PushDeltas unary. */
   openSession(request: OpenSessionRequest, options?: Partial<CallOptions>): ClientReadableStream<ServerMessage>;
   openSession(
     request: OpenSessionRequest,
@@ -1354,6 +1533,21 @@ export interface LainVizClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: Empty) => void,
+  ): ClientUnaryCall;
+  cardBuild(
+    request: CardBuildRequest,
+    callback: (error: ServiceError | null, response: CardBuildResponse) => void,
+  ): ClientUnaryCall;
+  cardBuild(
+    request: CardBuildRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: CardBuildResponse) => void,
+  ): ClientUnaryCall;
+  cardBuild(
+    request: CardBuildRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: CardBuildResponse) => void,
   ): ClientUnaryCall;
 }
 

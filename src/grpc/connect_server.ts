@@ -7,13 +7,13 @@ import { connectNodeAdapter } from "@connectrpc/connect-node"
 import { Effect, pipe } from "effect"
 import { compose } from "generic-handler/built_in_generics/generic_combinator"
 import type { LexicalEnvironment } from "../../compiler/env/env"
-import { CompileResponse, Empty, NetworkUpdate, ServerMessage, StrongestValueLayer } from "./connect_generated/lain_pb.js"
+import { CardBuildResponse, CompileResponse, Empty, NetworkUpdate, ServerMessage, StrongestValueLayer } from "./connect_generated/lain_pb.js"
 import { LainViz } from "./connect_generated/lain_connect.js"
-import { to_compile_request_data, to_cards_delta_data, to_open_session_data, to_push_deltas_data } from "./decode.js"
-import { apply_cards_delta_to_slot_map } from "./cards_delta_apply.js"
-import { encode_network_update } from "./encode"
-import { to_heartbeat_message, to_card_update_message } from "./session_encode.js"
-import { delta_to_server_messages, open_session_initial_slot_map } from "./connect_session_helpers.js"
+import { to_card_build_data, to_compile_request_data, to_cards_delta_data, to_open_session_data, to_push_deltas_data } from "./codec/decode.js"
+import { apply_cards_delta_to_slot_map } from "./delta/cards_delta_apply.js"
+import { encode_network_update, type NetworkUpdateData } from "./codec/encode.js"
+import { to_heartbeat_message, to_card_update_message } from "./codec/session_encode.js"
+import { delta_to_server_messages, open_session_initial_slot_map } from "./session/connect_session_helpers.js"
 import {
   get_or_create_session,
   get_session,
@@ -21,11 +21,26 @@ import {
   session_push,
   wait_for_message_or_timeout,
   type SessionState,
-} from "./session_store.js"
-import type { NetworkUpdateData } from "./network_stream_handler"
-import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./compile_handler"
-import { cell_updates_iterable } from "./network_stream_handler"
-import { trace_compile_request_io, trace_network_stream_io, trace_open_session_io, trace_push_deltas_io } from "./tracer"
+} from "./session/session_store.js"
+import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./handlers/compile_handler.js"
+import { cell_updates_iterable } from "./handlers/network_stream_handler.js"
+import {
+  trace_card_events_io,
+  trace_compile_request_io,
+  trace_network_stream_io,
+  trace_open_session_io,
+  trace_push_deltas_io,
+  trace_runtime_output_io,
+} from "./util/tracer.js"
+import {
+  apply_card_api_events_io,
+  diff_slot_maps_to_card_api_events,
+  type CardApiApplyReport,
+} from "./delta/card_slot_sync.js"
+import { build_card, internal_cell_this, runtime_get_card } from "./card/card_api.js"
+import { cell_strongest_base_value, update_cell } from "ppropogator/Cell/Cell"
+import { subscribe_runtime_card_output, type RuntimeCardOutputEvent } from "./bridge/card_runtime_events.js"
+import { create_runtime_output_bridge_io } from "./bridge/connect_bridge_minireactor.js"
 
 type EncodedNetworkUpdate = ReturnType<typeof encode_network_update>
 
@@ -113,6 +128,16 @@ function session_apply_and_bind_io(
   const removeCount = decoded.remove.length
   console.log("[connect] session rcvd delta:", slotCount, "slots, remove:", removeCount)
   const nextSlotMap = apply_cards_delta_to_slot_map(decoded, slotMap)
+  const events = diff_slot_maps_to_card_api_events(slotMap, nextSlotMap)
+  const report = Effect.runSync(
+    Effect.sync(() => {
+      trace_card_events_io("session", events)
+      return apply_card_api_events_io(env, events)
+    })
+  )
+  if (report.issues.length > 0) {
+    Effect.runSync(Effect.sync(() => trace_card_events_io("session_apply", report.issues)))
+  }
   Effect.runSync(Effect.sync(() => bind_context_slots_io(env, nextSlotMap)))
   return nextSlotMap
 }
@@ -142,6 +167,16 @@ function open_session_setup_io(
   Effect.runSync(Effect.sync(() => trace_open_session_io(req, { sessionId, slotCount: Object.keys(initialSlotMap).length })))
   const state = get_or_create_session(sessionId, initialSlotMap)
   if (Object.keys(initialSlotMap).length > 0) {
+    const events = diff_slot_maps_to_card_api_events({}, state.slotMap)
+    const report = Effect.runSync(
+      Effect.sync(() => {
+        trace_card_events_io("open_session_initial", events)
+        return apply_card_api_events_io(env, events)
+      })
+    )
+    if (report.issues.length > 0) {
+      Effect.runSync(Effect.sync(() => trace_card_events_io("open_session_apply", report.issues)))
+    }
     Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
   }
   return state
@@ -167,6 +202,19 @@ async function* open_session_yield_loop(
   }
 }
 
+function attach_runtime_output_bridge_io(
+  state: SessionState
+): () => void {
+  const bridge = create_runtime_output_bridge_io(state, trace_runtime_output_io)
+  const unsubscribe_runtime_events = subscribe_runtime_card_output((event: RuntimeCardOutputEvent) => {
+    bridge.receive_io(event)
+  })
+  return () => {
+    unsubscribe_runtime_events()
+    bridge.dispose_io()
+  }
+}
+
 async function* handle_open_session_route(
   req: Parameters<typeof to_open_session_data>[0],
   context: { signal?: AbortSignal },
@@ -175,10 +223,12 @@ async function* handle_open_session_route(
   const { sessionId, initialData } = to_open_session_data(req)
   const initialSlotMap = open_session_initial_slot_map(initialData)
   const state = open_session_setup_io(req, env, sessionId, initialSlotMap)
+  const unsubscribe_runtime_bridge = attach_runtime_output_bridge_io(state)
   try {
     yield to_heartbeat_message()
     yield* open_session_yield_loop(state, context, sessionId)
   } finally {
+    unsubscribe_runtime_bridge()
     remove_session(sessionId)
   }
 }
@@ -187,24 +237,142 @@ function push_deltas_apply_io(
   req: Parameters<typeof to_push_deltas_data>[0],
   env: LexicalEnvironment
 ): Empty {
-  const { sessionId, delta: decoded } = to_push_deltas_data(req)
-  Effect.runSync(
-    Effect.sync(() =>
-      trace_push_deltas_io(req, {
-        sessionId,
-        slotCount: Object.keys(decoded.slots).length,
-        removeCount: decoded.remove.length,
-        slotKeys: Object.keys(decoded.slots),
-        removeKeys: [...decoded.remove],
-      })
+  return Effect.runSync(
+    pipe(
+      Effect.sync(() => decode_push_deltas_io(req)),
+      Effect.map((decoded) => ({
+        decoded,
+        resolved: resolve_push_session_io(decoded.sessionId),
+      })),
+      Effect.map((ctx) => ({
+        ...ctx,
+        transition: derive_push_transition(ctx.resolved.state.slotMap, ctx.decoded.delta),
+      })),
+      Effect.tap((ctx) =>
+        Effect.sync(() =>
+          apply_push_events_and_bind_io(env, ctx.resolved.state, ctx.transition)
+        )
+      ),
+      Effect.tap((ctx) =>
+        Effect.sync(() =>
+          trace_push_outcome_io(
+            ctx.decoded.traceData,
+            ctx.resolved.existed,
+            ctx.transition.events,
+            ctx.transition.report
+          )
+        )
+      ),
+      Effect.tap((ctx) =>
+        Effect.sync(() =>
+          enqueue_push_messages_io(ctx.resolved.state, ctx.decoded.delta, ctx.resolved.existed)
+        )
+      ),
+      Effect.map(() => new Empty())
     )
   )
-  const state = get_session(sessionId)
-  if (state == null) {
-    return new Empty()
+}
+
+type PushDeltaDecoded = {
+  sessionId: string
+  delta: ReturnType<typeof to_push_deltas_data>["delta"]
+  traceData: {
+    sessionId: string
+    slotCount: number
+    removeCount: number
+    slotKeys: string[]
+    removeKeys: string[]
   }
-  state.slotMap = apply_cards_delta_to_slot_map(decoded, state.slotMap)
+}
+
+function decode_push_deltas_io(
+  req: Parameters<typeof to_push_deltas_data>[0]
+): PushDeltaDecoded {
+  const { sessionId, delta } = to_push_deltas_data(req)
+  const traceData = {
+    sessionId,
+    slotCount: Object.keys(delta.slots).length,
+    removeCount: delta.remove.length,
+    slotKeys: Object.keys(delta.slots),
+    removeKeys: [...delta.remove],
+  }
+  Effect.runSync(Effect.sync(() => trace_push_deltas_io(req, traceData)))
+  return {
+    sessionId,
+    delta,
+    traceData,
+  }
+}
+
+function resolve_push_session_io(sessionId: string): { state: SessionState; existed: boolean } {
+  const existingState = get_session(sessionId)
+  if (existingState != null) {
+    return {
+      state: existingState,
+      existed: true,
+    }
+  }
+  const state = get_or_create_session(sessionId, {})
+  return {
+    state,
+    existed: false,
+  }
+}
+
+function derive_push_transition(
+  prevSlotMap: CompileRequestData,
+  decoded: ReturnType<typeof to_push_deltas_data>["delta"]
+): { nextSlotMap: CompileRequestData; events: ReturnType<typeof diff_slot_maps_to_card_api_events>; report?: CardApiApplyReport } {
+  const nextSlotMap = apply_cards_delta_to_slot_map(decoded, prevSlotMap)
+  const events = diff_slot_maps_to_card_api_events(prevSlotMap, nextSlotMap)
+  return {
+    nextSlotMap,
+    events,
+  }
+}
+
+function apply_push_events_and_bind_io(
+  env: LexicalEnvironment,
+  state: SessionState,
+  transition: { nextSlotMap: CompileRequestData; events: ReturnType<typeof diff_slot_maps_to_card_api_events>; report?: CardApiApplyReport }
+): void {
+  const report = Effect.runSync(
+    Effect.sync(() => apply_card_api_events_io(env, transition.events))
+  )
+  state.slotMap = transition.nextSlotMap
+  transition.report = report
   Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
+}
+
+function trace_push_outcome_io(
+  traceData: PushDeltaDecoded["traceData"],
+  existed: boolean,
+  events: ReturnType<typeof diff_slot_maps_to_card_api_events>,
+  report?: CardApiApplyReport
+): void {
+  Effect.runSync(
+    Effect.sync(() => {
+      if (!existed) {
+        trace_card_events_io("push_deltas_no_session", [
+          { type: "session_created_for_push_deltas", session_id: traceData.sessionId },
+        ])
+      }
+      trace_card_events_io("push_deltas", events)
+      if (report != null && report.issues.length > 0) {
+        trace_card_events_io("push_deltas_apply", report.issues)
+      }
+    })
+  )
+}
+
+function enqueue_push_messages_io(
+  state: SessionState,
+  decoded: ReturnType<typeof to_push_deltas_data>["delta"],
+  existed: boolean
+): void {
+  if (!existed) {
+    return
+  }
   session_push(state, to_heartbeat_message())
   for (const [key, ref] of Object.entries(decoded.slots)) {
     session_push(state, to_card_update_message(key, ref))
@@ -212,7 +380,33 @@ function push_deltas_apply_io(
   for (const key of decoded.remove) {
     session_push(state, to_card_update_message(key, null))
   }
-  return new Empty()
+}
+
+function card_build_apply_io(
+  req: Parameters<typeof to_card_build_data>[0],
+  env: LexicalEnvironment
+): CardBuildResponse {
+  const { sessionId, cardId } = to_card_build_data(req)
+  if (cardId.length === 0) {
+    return new CardBuildResponse({ success: false, errorMessage: "card_id is required" })
+  }
+
+  const state = sessionId.length > 0 ? get_session(sessionId) : undefined
+  if (sessionId.length > 0 && state == null) {
+    return new CardBuildResponse({ success: false, errorMessage: `session not found: ${sessionId}` })
+  }
+
+  const card = runtime_get_card(cardId) ?? build_card(env)(cardId)
+  const codeKey = `${cardId}code`
+  const codeValue = state?.slotMap?.[codeKey]?.value
+  if (typeof codeValue === "string") {
+    const thisCell = internal_cell_this(card)
+    if (cell_strongest_base_value(thisCell) !== codeValue) {
+      update_cell(thisCell, codeValue)
+    }
+  }
+
+  return new CardBuildResponse({ success: true, errorMessage: "" })
 }
 
 async function* handle_network_stream_route(
@@ -231,6 +425,7 @@ export function create_connect_routes(env: LexicalEnvironment): (router: Connect
       session: (stream, ctx) => handle_session_route(stream, ctx, env),
       openSession: (req, ctx) => handle_open_session_route(req, ctx, env),
       pushDeltas: (req) => Promise.resolve(push_deltas_apply_io(req, env)),
+      cardBuild: (req) => Promise.resolve(card_build_apply_io(req, env)),
     })
   }
 }

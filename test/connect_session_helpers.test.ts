@@ -5,8 +5,8 @@ import { expect, test, describe } from "bun:test"
 import {
   delta_to_server_messages,
   open_session_initial_slot_map,
-} from "../src/grpc/connect_session_helpers"
-import { to_cards_delta_data } from "../src/grpc/decode"
+} from "../src/grpc/session/connect_session_helpers"
+import { to_cards_delta_data } from "../src/grpc/codec/decode"
 
 describe("delta_to_server_messages", () => {
   test("returns heartbeat + CardUpdate per slot", () => {

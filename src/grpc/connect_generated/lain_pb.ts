@@ -440,14 +440,14 @@ export class ServerMessage extends Message<ServerMessage> {
  */
 export class OpenSessionRequest extends Message<OpenSessionRequest> {
   /**
-   * client-generated; used for PushDeltas
+   * client-generated; used for PushDeltas/CardBuild
    *
    * @generated from field: string session_id = 1;
    */
   sessionId = "";
 
   /**
-   * full slot map for first load
+   * optional initial slot map
    *
    * @generated from field: lain.viz.CompileRequest initial_data = 2;
    */
@@ -524,6 +524,94 @@ export class PushDeltasRequest extends Message<PushDeltasRequest> {
 
   static equals(a: PushDeltasRequest | PlainMessage<PushDeltasRequest> | undefined, b: PushDeltasRequest | PlainMessage<PushDeltasRequest> | undefined): boolean {
     return proto3.util.equals(PushDeltasRequest, a, b);
+  }
+}
+
+/**
+ * Manual build trigger for one card in a session.
+ *
+ * @generated from message lain.viz.CardBuildRequest
+ */
+export class CardBuildRequest extends Message<CardBuildRequest> {
+  /**
+   * @generated from field: string session_id = 1;
+   */
+  sessionId = "";
+
+  /**
+   * @generated from field: string card_id = 2;
+   */
+  cardId = "";
+
+  constructor(data?: PartialMessage<CardBuildRequest>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.CardBuildRequest";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "session_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 2, name: "card_id", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CardBuildRequest {
+    return new CardBuildRequest().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CardBuildRequest {
+    return new CardBuildRequest().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CardBuildRequest {
+    return new CardBuildRequest().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CardBuildRequest | PlainMessage<CardBuildRequest> | undefined, b: CardBuildRequest | PlainMessage<CardBuildRequest> | undefined): boolean {
+    return proto3.util.equals(CardBuildRequest, a, b);
+  }
+}
+
+/**
+ * @generated from message lain.viz.CardBuildResponse
+ */
+export class CardBuildResponse extends Message<CardBuildResponse> {
+  /**
+   * @generated from field: bool success = 1;
+   */
+  success = false;
+
+  /**
+   * @generated from field: string error_message = 2;
+   */
+  errorMessage = "";
+
+  constructor(data?: PartialMessage<CardBuildResponse>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "lain.viz.CardBuildResponse";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "success", kind: "scalar", T: 8 /* ScalarType.BOOL */ },
+    { no: 2, name: "error_message", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): CardBuildResponse {
+    return new CardBuildResponse().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): CardBuildResponse {
+    return new CardBuildResponse().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): CardBuildResponse {
+    return new CardBuildResponse().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: CardBuildResponse | PlainMessage<CardBuildResponse> | undefined, b: CardBuildResponse | PlainMessage<CardBuildResponse> | undefined): boolean {
+    return proto3.util.equals(CardBuildResponse, a, b);
   }
 }
 

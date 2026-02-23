@@ -1,12 +1,11 @@
 /**
- * Connect server tests: real Connect client calls in-process Connect HTTP server.
+ * Connect server tests: in-process Connect router transport (no TCP socket binding).
  * Verifies backend speaks Connect (Compile + NetworkStream, OpenSession + PushDeltas).
  */
 import { expect, test, describe, beforeAll, afterAll } from "bun:test"
-import * as http from "node:http"
-import { createConnectTransport } from "@connectrpc/connect-node"
-import { createPromiseClient } from "@bufbuild/connect"
+import { createPromiseClient, createRouterTransport } from "@bufbuild/connect"
 import {
+  CardBuildRequest,
   CardRef,
   CardsDelta,
   CompileRequest,
@@ -15,34 +14,20 @@ import {
 } from "../src/grpc/connect_generated/lain_pb.js"
 import { LainViz } from "../src/grpc/connect_generated/lain_connect.js"
 import { empty_lexical_environment } from "../compiler/env/env"
-import { create_connect_handler_io } from "../src/grpc/connect_server"
+import { create_connect_routes } from "../src/grpc/connect_server"
+import { runtime_get_card } from "../src/grpc/card/card_api"
+import { emit_runtime_card_output_io } from "../src/grpc/bridge/card_runtime_events"
 
-let server: http.Server
-let baseUrl: string
+let client: ReturnType<typeof createPromiseClient<typeof LainViz>>
 
 beforeAll(() => {
   const env = empty_lexical_environment("connect-test")
-  const handler = create_connect_handler_io(env)
-  server = http.createServer(handler)
-  return new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", () => {
-      const a = server.address()
-      const port = typeof a === "object" && a?.port ? a.port : 0
-      baseUrl = `http://127.0.0.1:${port}`
-      resolve()
-    })
-  })
+  const transport = createRouterTransport(create_connect_routes(env))
+  client = createPromiseClient(LainViz, transport)
 })
 
 afterAll(() => {
-  return new Promise<void>((resolve) => {
-    if (!server) return resolve()
-    const t = setTimeout(resolve, 500)
-    server.close(() => {
-      clearTimeout(t)
-      resolve()
-    })
-  })
+  // no-op
 })
 
 function wait(ms: number): Promise<void> {
@@ -51,9 +36,6 @@ function wait(ms: number): Promise<void> {
 
 describe("Connect server", () => {
   test("Compile: client sends CompileRequest, server returns CompileResponse", async () => {
-    await wait(100)
-    const transport = createConnectTransport({ baseUrl })
-    const client = createPromiseClient(LainViz, transport)
     const request = new CompileRequest({
       data: {
         code: { id: "c1", value: new Uint8Array(0) },
@@ -66,9 +48,6 @@ describe("Connect server", () => {
   })
 
   test("NetworkStream: client can open stream and receive zero or more updates", async () => {
-    await wait(100)
-    const transport = createConnectTransport({ baseUrl })
-    const client = createPromiseClient(LainViz, transport)
     const request = new CompileRequest({ data: {} })
     const updates: unknown[] = []
     const controller = new AbortController()
@@ -92,9 +71,6 @@ describe("Connect server", () => {
   })
 
   test.skip("Session (bidi): client sends delta stream, server yields Heartbeat + CardUpdate (HTTP/1.1 does not support BiDi)", async () => {
-    await wait(100)
-    const transport = createConnectTransport({ baseUrl })
-    const client = createPromiseClient(LainViz, transport)
     async function* deltaStream() {
       yield new CardsDelta({
         slots: {
@@ -125,9 +101,6 @@ describe("Connect server", () => {
   })
 
   test("OpenSession + PushDeltas: client sends delta, backend receives and stream yields CardUpdate", async () => {
-    await wait(100)
-    const transport = createConnectTransport({ baseUrl })
-    const client = createPromiseClient(LainViz, transport)
     const sessionId = "test-session-" + Date.now()
     const openReq = new OpenSessionRequest({ sessionId })
     const received: { kind: string }[] = []
@@ -162,5 +135,203 @@ describe("Connect server", () => {
     const cardUpdates = received.filter((r) => r.kind === "cardUpdate")
     expect(heartbeats.length).toBeGreaterThanOrEqual(1)
     expect(cardUpdates.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("CardBuild: builds a card in session context", async () => {
+    const sessionId = "test-session-build-" + Date.now()
+
+    const openReq = new OpenSessionRequest({ sessionId })
+    const controller = new AbortController()
+    const streamPromise = (async () => {
+      try {
+        for await (const _ of client.openSession(openReq, { signal: controller.signal })) {
+          // keep stream alive
+        }
+      } catch {
+        // Abort or stream end
+      }
+    })()
+
+    await wait(120)
+
+    const delta = new CardsDelta({
+      slots: {
+        "card-build-1code": new CardRef({
+          id: "card-build-1",
+          value: new TextEncoder().encode(JSON.stringify("(+ 1 2 out)")),
+        }),
+      },
+      remove: [],
+    })
+    await client.pushDeltas(new PushDeltasRequest({ sessionId, delta }))
+
+    const res = await client.cardBuild(
+      new CardBuildRequest({
+        sessionId,
+        cardId: "card-build-1",
+      })
+    )
+    expect(res.success).toBe(true)
+    expect(res.errorMessage).toBe("")
+
+    controller.abort()
+    await streamPromise
+  })
+
+  test("PushDeltas: connect auto-builds missing cards", async () => {
+    const sessionId = "test-session-connect-build-" + Date.now()
+    const cardA = "auto-build-a-" + Date.now()
+    const cardB = "auto-build-b-" + Date.now()
+    const openReq = new OpenSessionRequest({ sessionId })
+    const controller = new AbortController()
+    const streamPromise = (async () => {
+      try {
+        for await (const _ of client.openSession(openReq, { signal: controller.signal })) {
+          // keep stream alive
+        }
+      } catch {
+        // ignore abort
+      }
+    })()
+    await wait(120)
+
+    const delta = new CardsDelta({
+      slots: {
+        [`${cardA}::right`]: new CardRef({ id: cardB, value: new Uint8Array(0) }),
+        [`${cardB}::left`]: new CardRef({ id: cardA, value: new Uint8Array(0) }),
+      },
+      remove: [],
+    })
+    await client.pushDeltas(new PushDeltasRequest({ sessionId, delta }))
+
+    expect(runtime_get_card(cardA)).toBeDefined()
+    expect(runtime_get_card(cardB)).toBeDefined()
+
+    controller.abort()
+    await streamPromise
+  })
+
+  test("PushDeltas: code-only delta does not build missing card", async () => {
+    const sessionId = "test-session-code-skip-" + Date.now()
+    const cardId = "code-only-" + Date.now()
+    const openReq = new OpenSessionRequest({ sessionId })
+    const controller = new AbortController()
+    const streamPromise = (async () => {
+      try {
+        for await (const _ of client.openSession(openReq, { signal: controller.signal })) {
+          // keep stream alive
+        }
+      } catch {
+        // ignore abort
+      }
+    })()
+    await wait(120)
+
+    const delta = new CardsDelta({
+      slots: {
+        [`${cardId}code`]: new CardRef({
+          id: cardId,
+          value: new TextEncoder().encode(JSON.stringify("(+ 1 2 out)")),
+        }),
+      },
+      remove: [],
+    })
+    await client.pushDeltas(new PushDeltasRequest({ sessionId, delta }))
+
+    expect(runtime_get_card(cardId)).toBeUndefined()
+
+    controller.abort()
+    await streamPromise
+  })
+
+  test("OpenSession: runtime output event is forwarded as CardUpdate(::this)", async () => {
+    const sessionId = "test-session-runtime-forward-" + Date.now()
+    const openReq = new OpenSessionRequest({ sessionId })
+    const controller = new AbortController()
+    const received: { kind: string; cardId?: string; slot?: string }[] = []
+    const streamPromise = (async () => {
+      try {
+        for await (const msg of client.openSession(openReq, { signal: controller.signal })) {
+          const case_ = msg.kind?.case ?? "unknown"
+          if (case_ === "cardUpdate") {
+            const update = msg.kind.value
+            received.push({
+              kind: case_,
+              cardId: update.cardId,
+              slot: update.slot,
+            })
+          } else {
+            received.push({ kind: case_ })
+          }
+        }
+      } catch {
+        // ignore abort
+      }
+    })()
+
+    await wait(120)
+    emit_runtime_card_output_io({
+      cardId: "runtime-card-1",
+      slot: "::this",
+      value: 42,
+    })
+    await wait(120)
+    controller.abort()
+    await streamPromise
+
+    const updates = received.filter(
+      (message) =>
+        message.kind === "cardUpdate" &&
+        message.cardId === "runtime-card-1" &&
+        message.slot === "::this"
+    )
+    expect(updates.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test("OpenSession: runtime output dedupes identical outbox values", async () => {
+    const sessionId = "test-session-runtime-dedupe-" + Date.now()
+    const openReq = new OpenSessionRequest({ sessionId })
+    const controller = new AbortController()
+    const received: { kind: string; cardId?: string; slot?: string }[] = []
+    const streamPromise = (async () => {
+      try {
+        for await (const msg of client.openSession(openReq, { signal: controller.signal })) {
+          const case_ = msg.kind?.case ?? "unknown"
+          if (case_ === "cardUpdate") {
+            const update = msg.kind.value
+            received.push({
+              kind: case_,
+              cardId: update.cardId,
+              slot: update.slot,
+            })
+          }
+        }
+      } catch {
+        // ignore abort
+      }
+    })()
+
+    await wait(120)
+    emit_runtime_card_output_io({
+      cardId: "runtime-card-dup",
+      slot: "::this",
+      value: "same",
+    })
+    emit_runtime_card_output_io({
+      cardId: "runtime-card-dup",
+      slot: "::this",
+      value: "same",
+    })
+    await wait(160)
+    controller.abort()
+    await streamPromise
+
+    const updates = received.filter(
+      (message) =>
+        message.kind === "cardUpdate" &&
+        message.cardId === "runtime-card-dup" &&
+        message.slot === "::this"
+    )
+    expect(updates.length).toBe(1)
   })
 })

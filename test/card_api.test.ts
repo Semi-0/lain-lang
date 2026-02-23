@@ -184,6 +184,28 @@ describe("Card API Tests", () => {
             assert_cards_connected_via_topology(cardA, cardB, "::right", "::left");
         });
 
+        test("connect same pair twice is idempotent (no duplicate connector)", async () => {
+            const env = primitive_env();
+            const cardA = build_card(env)("dup-a");
+            const cardB = build_card(env)("dup-b");
+
+            connect_cards(cardA, cardB, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+            const firstLinkCount = count_links_between_cells(
+                internal_cell_right(cardA),
+                internal_cell_this(cardB)
+            );
+
+            connect_cards(cardA, cardB, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+            const secondLinkCount = count_links_between_cells(
+                internal_cell_right(cardA),
+                internal_cell_this(cardB)
+            );
+
+            expect(secondLinkCount).toBe(firstLinkCount);
+        });
+
         test("multiple card pairs each create independent topology", async () => {
             const env = primitive_env();
             const a = build_card(env)("c1");

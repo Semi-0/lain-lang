@@ -112,6 +112,15 @@ The **core concept** is: one proto service, exposed over HTTP by Connect on the 
   - if card is missing, update is skipped and traced as `missing_card_for_set_code` in debug logs.
 - Reciprocal neighbor declarations are canonicalized to one logical connection event to avoid mirrored duplicate connects.
 
+## Runtime output observer behavior (current)
+
+- Backend runtime outputs (`::this`) are routed through an internal MiniReactor bridge pipeline.
+- Part A (`openSession`) forwards runtime `::this` events to frontend as `CardUpdate`.
+- Forwarding has loop guards:
+  - skip when runtime value equals current session slot value (`skip_equal_state`),
+  - skip when runtime value equals last forwarded outbox value (`skip_equal_outbox`).
+- This avoids frontend→backend→frontend echo loops without changing protobuf schema.
+
 ---
 
 ## CardsDelta slot schema (frontend → backend)

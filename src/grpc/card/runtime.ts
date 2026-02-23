@@ -32,6 +32,9 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     return card;
 };
 
+export const runtime_get_card = (id: string): Cell<unknown> | undefined =>
+    card_storage.get(id);
+
 export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
     const card = internal_build_card(env)(id);
     card_storage.set(id, card);
@@ -54,12 +57,16 @@ export const runtime_connect_cards = (
     connector_keyA: string,
     connector_keyB: string
 ): Either.Either<void, never> => {
+    const key = make_connector_key(cardA, cardB);
+    if (connector_storage.has(key)) {
+        return Either.right(undefined as void);
+    }
     const connector_keyA_cell = internal_cell_getter(connector_keyA)(cardA);
     const connector_keyB_cell = internal_cell_getter(connector_keyB)(cardB);
     const cardAthis = internal_cell_this(cardA);
     const cardBthis = internal_cell_this(cardB);
     const connector = card_connector_constructor_cell(connector_keyB_cell, connector_keyA_cell)(cardAthis, cardBthis);
-    connector_storage.set(make_connector_key(cardA, cardB), connector);
+    connector_storage.set(key, connector);
     return Either.right(undefined as void);
 };
 

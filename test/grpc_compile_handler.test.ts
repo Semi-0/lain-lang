@@ -3,7 +3,7 @@ import {
   compile_for_viz,
   handle_compile_io,
   type CompileResult,
-} from "../src/grpc/compile_handler"
+} from "../src/grpc/handlers/compile_handler"
 import type { sendUnaryData, ServerUnaryCall } from "@grpc/grpc-js"
 import type { CompileRequest, CompileResponse } from "../src/grpc/generated/lain"
 import { empty_lexical_environment } from "../compiler/env/env"

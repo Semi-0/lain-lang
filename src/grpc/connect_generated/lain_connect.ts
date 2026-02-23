@@ -3,7 +3,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import { CardsDelta, CompileRequest, CompileResponse, Empty, NetworkUpdate, OpenSessionRequest, PushDeltasRequest, ServerMessage } from "./lain_pb.js";
+import { CardBuildRequest, CardBuildResponse, CardsDelta, CompileRequest, CompileResponse, Empty, NetworkUpdate, OpenSessionRequest, PushDeltasRequest, ServerMessage } from "./lain_pb.js";
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
@@ -31,8 +31,6 @@ export const LainViz = {
       kind: MethodKind.ServerStreaming,
     },
     /**
-     * Bidi (not supported from browser fetch). Kept for non-browser clients if needed.
-     *
      * @generated from rpc lain.viz.LainViz.Session
      */
     session: {
@@ -42,8 +40,6 @@ export const LainViz = {
       kind: MethodKind.BiDiStreaming,
     },
     /**
-     * Browser-compatible: one request then server stream; deltas via PushDeltas unary.
-     *
      * @generated from rpc lain.viz.LainViz.OpenSession
      */
     openSession: {
@@ -59,6 +55,15 @@ export const LainViz = {
       name: "PushDeltas",
       I: PushDeltasRequest,
       O: Empty,
+      kind: MethodKind.Unary,
+    },
+    /**
+     * @generated from rpc lain.viz.LainViz.CardBuild
+     */
+    cardBuild: {
+      name: "CardBuild",
+      I: CardBuildRequest,
+      O: CardBuildResponse,
       kind: MethodKind.Unary,
     },
   }
