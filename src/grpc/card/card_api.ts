@@ -3,7 +3,7 @@
  * Single entry point for card lifecycle operations.
  */
 export {
-    build_card,
+    internal_build_card,
     slot_this,
     slot_left,
     slot_right,
@@ -18,6 +18,7 @@ export {
 } from "./schema.js";
 
 export {
+    build_card,
     add_card,
     remove_card,
     connect_cards,

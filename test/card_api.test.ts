@@ -476,11 +476,11 @@ describe("Card API Tests", () => {
 
         test("4. remove_card detaches and stops propagation", async () => {
             const env = primitive_env();
-            const above = build_card(env)("rm-above");
-            const center = build_card(env)("rm-center");
-            const right = build_card(env)("rm-right");
-            add_card("rm-center");
-            const aboveSrc = source_cell("rm-aboveSrc");
+            const above = build_card(env)("rm_above");
+            const center = build_card(env)("rm_center");
+            const right = build_card(env)("rm_right");
+  
+            const aboveSrc = source_cell("rm_aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -492,15 +492,15 @@ describe("Card API Tests", () => {
             await execute_all_tasks_sequential(() => {});
             expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
 
-            remove_card("rm-center");
+            remove_card("rm_center");
             await execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 5);
             await execute_all_tasks_sequential(() => {});
             expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
 
-            expect(Either.isLeft(detach_cards_by_key("rm-above", "rm-center"))).toBe(true);
-            expect(Either.isLeft(detach_cards_by_key("rm-center", "rm-right"))).toBe(true);
+            expect(Either.isLeft(detach_cards_by_key("rm_above", "rm_center"))).toBe(true);
+            expect(Either.isLeft(detach_cards_by_key("rm_center", "rm_right"))).toBe(true);
         });
 
         test("5. two directions: above and right propagation", async () => {

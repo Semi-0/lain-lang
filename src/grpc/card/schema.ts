@@ -159,7 +159,7 @@ export const card_connector_right_left = card_connector_constructor("::right", "
 export const card_connector_above_below = card_connector_constructor("::above", "::below");
 export const card_connector_below_above = card_connector_constructor("::below", "::above");
 
-export const build_card = (env: LexicalEnvironment) => (id: string) => {
+export const internal_build_card = (env: LexicalEnvironment) => (id: string) => {
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(card);
     unfold_card_internal_network(card, env);

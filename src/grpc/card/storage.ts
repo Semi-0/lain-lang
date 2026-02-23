@@ -5,22 +5,26 @@
 import { Either } from "effect";
 import { Cell, cell_id, construct_cell } from "ppropogator";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
-import { card_connector_constructor, card_connector_constructor_cell, internal_cell_above, internal_cell_getter, internal_cell_this } from "./schema.js";
+import { card_connector_constructor, card_connector_constructor_cell, internal_build_card, internal_cell_above, internal_cell_getter, internal_cell_this } from "./schema.js";
+import { LexicalEnvironment } from "../../../compiler/env/env.js";
+import { dispose_cell } from "ppropogator/Cell/Cell";
 
 const connector_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
 
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
-    `${cardA_id}-${cardB_id}`;
+    `${cardA_id}${connector_key_separator}${cardB_id}`;
+
+const connector_key_separator = "!!*!!";
 
 const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
-    cell_id(cardA) + "-" + cell_id(cardB);
+    cell_id(cardA) + connector_key_separator + cell_id(cardB);
 
 const parse_connector_key = (key: string) => {
-    const parts = key.split("-");
+    const parts = key.split(connector_key_separator);
     return {
         cardA_key: parts[0] ?? "",
-        cardB_key: parts.slice(1).join("-") || "",
+        cardB_key: parts.slice(1).join(connector_key_separator) || "",
     };
 };
 
@@ -34,17 +38,31 @@ export const add_card = (id: string): Cell<unknown> => {
     return card;
 };
 
+export const build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
+    const card = internal_build_card(env)(id);
+    card_storage.set(id, card);
+    return card;
+};
+
 export const remove_card = (id: string): void => {
     const card = card_storage.get(id);
     if (card != null) {
         connector_storage.forEach((_, key) => {
             const { cardA_key, cardB_key } = parse_connector_key(key);
             if (cardA_key === id || cardB_key === id) {
+                console.log("detaching connector", cardA_key, cardB_key);
                 detach_cards_by_key(cardA_key, cardB_key);
             }
+            else {
+                console.log("connector not found", cardA_key, cardB_key);
+            }
         });
-        card.dispose();
+        dispose_cell(card)
+        // card.dispose();
         card_storage.delete(id);
+    }
+    else {
+        console.error("Card not found", id);
     }
 };
 
