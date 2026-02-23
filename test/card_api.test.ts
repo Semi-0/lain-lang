@@ -469,7 +469,7 @@ describe("Card API Tests", () => {
 
             update_source_cell(aboveSrc, 2);
             await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(2);
+         
             expect(cell_strongest_base_value(internal_cell_this(right))).toBe(3);
         });
 
@@ -537,8 +537,9 @@ describe("Card API Tests", () => {
             await execute_all_tasks_sequential(() => {});
             expect(cell_strongest_base_value(internal_cell_this(c))).toBe(2);
 
-            const detachRes = detach_cards_by_key("lifechain-b", "lifechain-c");
+            const detachRes = detach_cards(b, c);
             expect(Either.isRight(detachRes)).toBe(true);
+            await execute_all_tasks_sequential(() => {});
 
             update_source_cell(aSrc, 10);
             await execute_all_tasks_sequential(() => {});

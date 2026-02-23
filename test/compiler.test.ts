@@ -393,5 +393,32 @@ describe("Compiler (compile function) Tests", () => {
             expect(out).toBeDefined();
             expect(cell_strongest_base_value(out)).toBe(6);
         });
+
+
+        test("okay with nested calling", async () => {
+
+            const primEnvCell = primitive_env()
+            const env = primEnvCell
+            
+            // First define a network (closure)
+            const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
+            const defineEnv = raw_compile(defineCode, env);
+
+        
+            execute_all_tasks_sequential(console.error)
+
+            const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
+            
+            raw_compile("(add1_again 8 out2)", env)
+
+            execute_all_tasks_sequential(console.error);
+
+            const add1_again = '(network add1_again (>:: x) (::> y) (add1 x y))'
+            raw_compile(add1_again, env) 
+
+            await execute_all_tasks_sequential(console.error)
+            const e2 = cell_strongest_base_value(env) 
+            expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
+        });
     });
 });
