@@ -164,6 +164,7 @@ CardsDelta (slots + remove)
   - edge connect/detach from directional slot references
   - reciprocal directional refs are canonicalized to one logical connect
   - code slot updates into `internal_cell_this` (missing card is skipped + traced)
+  - `::this` value changes emit internal `card_update` events (stable-signature compared)
 - Added `cardBuild` route in Connect server and gRPC server.
 - Added/updated tests:
   - `test/session_open_push.test.ts` for `to_card_build_data`
@@ -174,14 +175,35 @@ CardsDelta (slots + remove)
 - Backend builds cards in two scenarios:
   - explicit `CardBuild(card_id)` command from frontend,
   - `CardConnect` apply path (connect implies existence; endpoints are ensured).
-- Backend does not auto-build from code-only deltas:
-  - `card_set_code` requires existing runtime card,
-  - missing card case is skipped and exposed via debug tracing (`missing_card_for_set_code`).
+- Backend does not auto-build from code-only deltas.
+- Frontend-driven card value writes are applied via `card_update` -> `update_card` only.
+- Backend applies `card_update` (`::this` value changes) only for existing runtime cards:
+  - missing card case is skipped and exposed via debug tracing (`missing_card_for_update_card`).
 - `PushDeltas` diff no longer emits unconditional `card_build` events.
 - Runtime observer channel:
   - Part B emits `::this` updates via `emit_runtime_card_output_io`.
   - Part A processes outputs through MiniReactor stages and forwards as `CardUpdate(card_id, ::this, value)`.
   - Loop guard in Part A uses value dedupe against session state and outbox cache.
+
+### Runtime output pipeline: propagation → frontend (no echo loop)
+
+**Purpose:** When the propagation layer computes a new `::this` value for a card, it must be sent to the frontend as `CardUpdate`. We must avoid echoing values that originated from the frontend back to it (infinite loop).
+
+**Where to call `emit_runtime_card_output_io`:** In the **propagation layer** — wherever a card's `::this` cell value changes. For example, when the `bi_sync` or compiled propagator writes to the `::this` cell, that write should trigger `emit_runtime_card_output_io({ cardId, slot: "::this", value })`. *(Hook point is currently in Part B; exact placement TBD in schema/runtime.)*
+
+**Pipeline flow:**
+1. Propagation updates cell → `emit_runtime_card_output_io` in `src/grpc/bridge/card_runtime_events.ts` (global source)
+2. Bridge subscribes via `subscribe_runtime_card_output` in `src/grpc/connect_server.ts` (`attach_runtime_output_bridge_io`, lines 205–215)
+3. Bridge pipeline in `src/grpc/bridge/connect_bridge_minireactor.ts` (`create_runtime_output_bridge_io`, lines 96–123):
+   - `filter(not_equal_to_session_state)` — **loop guard:** if `state.slotMap[key]?.value` already equals the emitted value, skip (frontend sent it)
+   - `filter(not_equal_to_outbox)` — temporal dedup: avoid sending same value twice in quick succession
+   - `tap(forward_to_session_io)` — push `CardUpdate` to `session_push(state, ...)`
+4. `open_session_yield_loop` in `src/grpc/connect_server.ts` (lines 185–203) yields from `state.queue` → streamed to frontend
+
+**How the echo loop is avoided:**
+- `state.slotMap` is updated when CardsDelta is applied (frontend input).
+- If propagation produces the same value the frontend already sent, `state.slotMap[key]?.value` matches → `not_equal_to_session_state` returns false → event is dropped.
+- Only values that differ from slotMap (i.e. computed by propagation, not echoed from frontend) are forwarded.
 
 ### Detach and disposal timing
 
@@ -196,3 +218,5 @@ CardsDelta (slots + remove)
 - [CARDS-IMPLEMENTATION-PLAN.md](./CARDS-IMPLEMENTATION-PLAN.md) — Ontology, CardDesc, reducer rules, spawn, contradiction
 - [card_api.ts](../src/grpc/card/card_api.ts) — Part B: build, add, remove, connect, detach
 - [connect_server.ts](../src/grpc/connect_server.ts) — Session / OpenSession + PushDeltas handlers
+- [card_runtime_events.ts](../src/grpc/bridge/card_runtime_events.ts) — Global source for `emit_runtime_card_output_io` / `subscribe_runtime_card_output`
+- [connect_bridge_minireactor.ts](../src/grpc/bridge/connect_bridge_minireactor.ts) — MiniReactor pipeline: dedupe filters + `session_push(CardUpdate)`

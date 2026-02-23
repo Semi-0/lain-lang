@@ -37,8 +37,7 @@ import {
   diff_slot_maps_to_card_api_events,
   type CardApiApplyReport,
 } from "./delta/card_slot_sync.js"
-import { build_card, internal_cell_this, runtime_get_card } from "./card/card_api.js"
-import { cell_strongest_base_value, update_cell } from "ppropogator/Cell/Cell"
+import { build_card, runtime_get_card, update_card } from "./card/card_api.js"
 import { subscribe_runtime_card_output, type RuntimeCardOutputEvent } from "./bridge/card_runtime_events.js"
 import { create_runtime_output_bridge_io } from "./bridge/connect_bridge_minireactor.js"
 
@@ -400,10 +399,7 @@ function card_build_apply_io(
   const codeKey = `${cardId}code`
   const codeValue = state?.slotMap?.[codeKey]?.value
   if (typeof codeValue === "string") {
-    const thisCell = internal_cell_this(card)
-    if (cell_strongest_base_value(thisCell) !== codeValue) {
-      update_cell(thisCell, codeValue)
-    }
+    update_card(cardId, codeValue)
   }
 
   return new CardBuildResponse({ success: true, errorMessage: "" })

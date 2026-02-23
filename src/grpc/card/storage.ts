@@ -6,7 +6,7 @@ import { Either } from "effect";
 import { Cell, cell_id } from "ppropogator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
 import { SlotName, add_graph_card, get_graph_edge, remove_graph_card, remove_graph_edge, upsert_graph_edge } from "./graph.js";
-import { runtime_add_card, runtime_build_card, runtime_connect_cards, runtime_detach_cards_by_key, runtime_detach_incident_connectors, runtime_remove_card } from "./runtime.js";
+import { runtime_add_card, runtime_build_card, runtime_connect_cards, runtime_detach_cards_by_key, runtime_detach_incident_connectors, runtime_remove_card, runtime_update_card } from "./runtime.js";
 
 const to_slot_name = (slot: string): SlotName => slot as SlotName;
 
@@ -19,6 +19,9 @@ export const build_card = (env: LexicalEnvironment) => (id: string): Cell<unknow
     add_graph_card(id);
     return runtime_build_card(env)(id);
 };
+
+export const update_card = (id: string, value: unknown): { updated: boolean } =>
+    runtime_update_card(id, value);
 
 export const remove_card = (id: string): void => {
     remove_graph_card(id);

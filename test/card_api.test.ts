@@ -27,6 +27,8 @@ import {
     detach_cards,
     detach_cards_by_key,
     build_card,
+    update_card,
+    runtime_get_card,
     internal_cell_this,
     internal_cell_left,
     internal_cell_right,
@@ -170,6 +172,31 @@ describe("Card API Tests", () => {
 
             const detachResult = detach_cards_by_key("ra", "rb");
             expect(Either.isLeft(detachResult)).toBe(true);
+        });
+    });
+
+    describe("update_card", () => {
+        test("update_card writes new value to ::this for existing card", async () => {
+            const env = primitive_env();
+            const card = build_card(env)("update-a");
+            const result = update_card("update-a", 42);
+            await execute_all_tasks_sequential(() => {});
+
+            expect(result.updated).toBe(true);
+            expect(cell_strongest_base_value(internal_cell_this(card))).toBe(42);
+        });
+
+        test("update_card is idempotent for same value", async () => {
+            const env = primitive_env();
+            build_card(env)("update-b");
+
+            const first = update_card("update-b", "same");
+            await execute_all_tasks_sequential(() => {});
+            const second = update_card("update-b", "same");
+            await execute_all_tasks_sequential(() => {});
+
+            expect(first.updated).toBe(true);
+            expect(second.updated).toBe(false);
         });
     });
 
@@ -609,6 +636,54 @@ describe("Card API Tests", () => {
             await execute_all_tasks_sequential(() => {});
             expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
             expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(11);
+        });
+
+        test("8a. runtime_update_card with add_card: reactive update via update_source_cell (advanceReactive pattern)", async () => {
+            add_card("rt-update-a");
+            const card = runtime_get_card("rt-update-a");
+            expect(card).toBeDefined();
+            const thisCell = internal_cell_this(card!);
+
+            const result = update_card("rt-update-a", 42);
+            expect(result.updated).toBe(true);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(thisCell)).toBe(42);
+
+            update_card("rt-update-a", 100);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(thisCell)).toBe(100);
+        });
+
+        test("8b. runtime_update_card with build_card uses shared user_inputs source", async () => {
+            const env = primitive_env();
+            build_card(env)("rt-update-build");
+            const card = runtime_get_card("rt-update-build");
+            expect(card).toBeDefined();
+            const thisCell = internal_cell_this(card!);
+
+            const result = update_card("rt-update-build", 7);
+            expect(result.updated).toBe(true);
+            await execute_all_tasks_sequential(() => {});
+            const actual = cell_strongest_base_value(thisCell);
+            expect(actual).toBe(7);
+        });
+
+        test("8c. update_card on add_card with ::this link mirrors center::this", async () => {
+            const env = primitive_env();
+            add_card("rt-chain-a");
+            const center = build_card(env)("rt-chain-center");
+            const a = runtime_get_card("rt-chain-a")!;
+            connect_cards(a, center, "::this", "::above");
+            update_cell(internal_cell_this(center), "(+ ::above 1)");
+            await execute_all_tasks_sequential(() => {});
+
+            update_card("rt-chain-a", 5);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(5);
+
+            update_card("rt-chain-a", 10);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(10);
         });
 
         test("8. reactive updates: multiple sequential input changes propagate", async () => {

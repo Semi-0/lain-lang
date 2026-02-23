@@ -107,9 +107,10 @@ The **core concept** is: one proto service, exposed over HTTP by Connect on the 
   - **Explicit:** frontend calls `CardBuild`.
   - **Implicit on topology:** when `PushDeltas` introduces a new `card_connect`, backend ensures both endpoint cards exist before connecting.
 - `PushDeltas` does **not** emit a separate `card_build` event from slot diff.
-- Code-only updates (`card_set_code`) do not auto-build:
-  - if card exists, code is applied;
-  - if card is missing, update is skipped and traced as `missing_card_for_set_code` in debug logs.
+- Code-only updates (without `::this` change) do not update runtime card values.
+- `::this` value deltas are mapped to internal `card_update` events:
+  - emitted only when value signature changes from previous slot map,
+  - applied only if runtime card exists; otherwise skipped and traced as `missing_card_for_update_card`.
 - Reciprocal neighbor declarations are canonicalized to one logical connection event to avoid mirrored duplicate connects.
 
 ## Runtime output observer behavior (current)

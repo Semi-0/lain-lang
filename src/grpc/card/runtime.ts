@@ -4,10 +4,11 @@
  */
 import { Either } from "effect";
 import { Cell, cell_id, construct_cell } from "ppropogator";
-import { dispose_cell } from "ppropogator/Cell/Cell";
+import { cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
 import { card_connector_constructor_cell, internal_build_card, internal_cell_getter, internal_cell_this } from "./schema.js";
+import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 const connector_key_separator = "!!*!!";
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
@@ -17,6 +18,15 @@ const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
 
 const connector_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
+const source_this_cell_storage = new Map<string, Cell<unknown>>();
+
+const source = source_cell("user_inputs")
+
+const bind_card_to_user_inputs = (id: string, card: Cell<unknown>): void => {
+    const card_this = internal_cell_this(card);
+    p_reactive_dispatch(source, card_this);
+    source_this_cell_storage.set(id, card_this);
+};
 
 const parse_connector_key = (key: string) => {
     const parts = key.split(connector_key_separator);
@@ -28,6 +38,7 @@ const parse_connector_key = (key: string) => {
 
 export const runtime_add_card = (id: string): Cell<unknown> => {
     const card = construct_cell("card", id) as Cell<unknown>;
+    bind_card_to_user_inputs(id, card);
     card_storage.set(id, card);
     return card;
 };
@@ -35,10 +46,50 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
 export const runtime_get_card = (id: string): Cell<unknown> | undefined =>
     card_storage.get(id);
 
+
 export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
     const card = internal_build_card(env)(id);
+    bind_card_to_user_inputs(id, card);
     card_storage.set(id, card);
     return card;
+};
+
+function value_signature(value: unknown): string {
+    if (
+        value === null ||
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+    ) {
+        return `${typeof value}:${String(value)}`;
+    }
+    try {
+        return `json:${JSON.stringify(value)}`;
+    } catch {
+        return `string:${String(value)}`;
+    }
+}
+
+export const runtime_update_card = (id: string, value: unknown): { updated: boolean } => {
+    const card = runtime_get_card(id);
+    if (card == null) {
+        return { updated: false };
+    }
+
+    // this can be optimized if we decide 
+    // cell reactive update is idempotent
+    const this_cell = internal_cell_this(card);
+    const current_value = cell_strongest_base_value(this_cell);
+    if (value_signature(current_value) === value_signature(value)) {
+        return { updated: false };
+    }
+
+    const source_this_cell = source_this_cell_storage.get(id);
+    if (source_this_cell == null) {
+        return { updated: false };
+    }
+    update_source_cell(source, new Map([[source_this_cell, value]]));
+    return { updated: true };
 };
 
 export const runtime_remove_card = (id: string): void => {
@@ -49,6 +100,7 @@ export const runtime_remove_card = (id: string): void => {
     }
     dispose_cell(card);
     card_storage.delete(id);
+    source_this_cell_storage.delete(id);
 };
 
 export const runtime_connect_cards = (

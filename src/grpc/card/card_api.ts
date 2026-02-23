@@ -19,6 +19,7 @@ export {
 
 export {
     build_card,
+    update_card,
     add_card,
     remove_card,
     connect_cards,
@@ -42,6 +43,7 @@ export {
 export {
     runtime_add_card,
     runtime_build_card,
+    runtime_update_card,
     runtime_remove_card,
     runtime_connect_cards,
     runtime_detach_cards,

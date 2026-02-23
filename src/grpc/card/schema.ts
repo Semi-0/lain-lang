@@ -2,7 +2,7 @@
  * Card schema: slot definitions, internal cell structure, build_card, connector constructor.
  * Internal module – prefer importing from card_api or card/index.
  */
-import { Cell, cell_strongest_base_value, compound_propagator, construct_cell, register_predicate } from "ppropogator";
+import { Cell, cell_id, cell_strongest, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, register_predicate } from "ppropogator";
 import { c_dict_accessor, ce_dict, ce_dict_accessor, p_construct_dict_carrier } from "ppropogator/DataTypes/CarriedCell";
 import { bi_sync, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { define, extend_env, is_parent_key, LexicalEnvironment } from "../../../compiler/env";
@@ -12,6 +12,7 @@ import { predicate_not } from "generic-handler/built_in_generics/generic_combina
 import { compose } from "generic-handler/built_in_generics/generic_combinator";
 import { log_tracer } from "generic-handler/built_in_generics/generic_debugger";
 import { lain_string } from "../../../compiler/lain_element";
+import { emit_runtime_card_output_io } from "../bridge/card_runtime_events";
 export interface CardDescription {
     id: string;
     content: string;
@@ -78,6 +79,25 @@ export const extends_local_environment = (
     return local_env;
 };
 
+export const p_emit_card_updates_to_runtime = (
+    card: Cell<any>,   
+) => construct_propagator(
+    [card],
+    [],
+    () => {
+        const this_cell = internal_cell_this(card);
+        const card_id = cell_id(card);
+        emit_runtime_card_output_io(
+            { 
+                cardId: cell_id(card), 
+                slot: "::this", 
+                value: cell_strongest(this_cell)
+            }
+        );
+    },
+    "p_emit_card_updates_to_runtime"
+)
+
 export const compile_card_internal_code = (
     card_slot_this: Cell<unknown>,
     local_env: LexicalEnvironment
@@ -115,6 +135,7 @@ export const unfold_card_internal_network = (
                 [slot_below, below_cell],
             ]);
             compile_card_internal_code(this_cell, local_env);
+            p_emit_card_updates_to_runtime(card);
         },
         "unfold_card_internal_network"
     );
@@ -153,6 +174,8 @@ export const card_connector_constructor =
             },
             `card_connector_${connect_key_A}_${connect_key_B}`
         );
+
+
 
 export const card_connector_left_right = card_connector_constructor("::left", "::right");
 export const card_connector_right_left = card_connector_constructor("::right", "::left");
