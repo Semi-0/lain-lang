@@ -4,8 +4,9 @@
  * via Cell.getNeighbors() and Propagator.getInputs()/getOutputs().
  * Based on Propogator/Cell/Cell.ts and Propogator/Propagator/Propagator.ts.
  *
- * Note: detach disposes the connector compound but not the bi_sync child propagators
- * (compound_propagator does not track children for disposal). Storage is cleared.
+ * Note: detach marks the connector (and its bi_sync children, via relation hierarchy) for disposal;
+ * actual cleanup runs in execute_all_tasks_sequential. Run it after detach so propagation stops (see tests 1, 6).
+ * Storage is cleared immediately on detach.
  */
 
 import { expect, test, beforeEach, describe } from "bun:test";
@@ -377,9 +378,9 @@ describe("Card API Tests", () => {
             const secondDetach = detach_cards_by_key(idA, idB);
             expect(Either.isLeft(secondDetach)).toBe(true);
 
-            // Known limitation: bi_sync child propagators are not disposed, so topology
-            // still shows link. Storage is cleared; graph cleanup would require
-            // compound_propagator to track and dispose children.
+            // We did not run execute_all_tasks_sequential after detach, so cleanup never ran:
+            // connector and bi_sync children are only marked for disposal; they get disposed when
+            // cleanup runs (inside the next execute_all_tasks_sequential). So topology still shows the link.
             expect(cells_linked_by_propagator(
                 internal_cell_right(cards[mid]!),
                 internal_cell_this(cards[mid + 1]!)
@@ -615,3 +616,6 @@ describe("Card API Tests", () => {
         });
     });
 });
+
+
+// deprecate add card tomorrow

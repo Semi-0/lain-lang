@@ -26,6 +26,29 @@ export {
     detach_cards_by_key,
 } from "./storage.js";
 
+export type {
+    GraphEdge,
+    SlotName,
+} from "./graph.js";
+
+export {
+    add_graph_card,
+    get_graph_edge,
+    remove_graph_card,
+    remove_graph_edge,
+    upsert_graph_edge,
+} from "./graph.js";
+
+export {
+    runtime_add_card,
+    runtime_build_card,
+    runtime_remove_card,
+    runtime_connect_cards,
+    runtime_detach_cards,
+    runtime_detach_cards_by_key,
+    runtime_detach_incident_connectors,
+} from "./runtime.js";
+
 import { connect_cards } from "./storage.js";
 
 /** Alias for connect_cards. */
