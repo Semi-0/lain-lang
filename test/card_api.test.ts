@@ -29,12 +29,18 @@ import {
     internal_cell_this,
     internal_cell_left,
     internal_cell_right,
+    internal_cell_above,
+    internal_cell_below,
     slot_this,
 } from "../src/grpc/card";
 import { primitive_env } from "../compiler/closure";
 import { init_system } from "../compiler/incremental_compiler";
 import { update_cell } from "ppropogator/Cell/Cell";
-import { vector_clock_prove_staled_by } from "ppropogator/DataTypes/TemporaryValueSet";
+import { p_sync } from "ppropogator/Propagator/BuiltInProps";
+import {
+    source_cell,
+    update_source_cell,
+} from "ppropogator/DataTypes/PremisesSource";
 
 beforeEach(() => {
     init_system();
@@ -98,7 +104,11 @@ const assert_cards_connected_via_topology = (
               ? internal_cell_left(card)
               : slot === "::right"
                 ? internal_cell_right(card)
-                : internal_cell_this(card);
+                : slot === "::above"
+                  ? internal_cell_above(card)
+                  : slot === "::below"
+                    ? internal_cell_below(card)
+                    : internal_cell_this(card);
     const cellA_connector = getSlot(cardA, slotA);
     const cellB_connector = getSlot(cardB, slotB);
     const cellA_this = internal_cell_this(cardA);
@@ -288,7 +298,7 @@ describe("Card API Tests", () => {
     });
 
     describe("Cross-card propagation", () => {
-        test.only("(+ ::above 1 ::right) with above and right neighbors: update above ::this, right ::this receives", async () => {
+        test("(+ ::above 1 ::right) with above and right neighbors: update above ::this, right ::this receives", async () => {
             const env = primitive_env();
             const cardAbove = build_card(env)("prop-above");
             const cardAboveThis = internal_cell_this(cardAbove);
@@ -374,6 +384,234 @@ describe("Card API Tests", () => {
                 internal_cell_right(cards[mid]!),
                 internal_cell_this(cards[mid + 1]!)
             )).toBe(true);
+        });
+    });
+
+    describe("Integration: lifecycle + propagation", () => {
+        // Use above-center-right layout: center::this holds code and is synced with above::below
+        // (not o
+        // verwritten by numbers). Drive above::this via source_cell + p_sync for reactive updates.
+        test("1. detach then spawn new card and attach: propagation stops then resumes", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("lifecycle-above");
+            const center = build_card(env)("lifecycle-center");
+            const right = build_card(env)("lifecycle-right");
+            const aboveSrc = source_cell("lifecycle-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(console.error);
+
+            update_source_cell(aboveSrc, 3);
+            await execute_all_tasks_sequential(console.error);
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+
+            const detachResult = detach_cards(center, right);
+            expect(Either.isRight(detachResult)).toBe(true);
+            await execute_all_tasks_sequential(console.error);
+
+            update_source_cell(aboveSrc, 5);
+            await execute_all_tasks_sequential(console.error);
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+
+            const newRight = build_card(env)("lifecycle-newRight");
+            connect_cards(center, newRight, "::right", "::left");
+            await execute_all_tasks_sequential(console.error);
+
+            update_source_cell(aboveSrc, 7);
+            await execute_all_tasks_sequential(console.error);
+            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(8);
+        });
+
+        test("2. swap neighbor: detach old, attach new", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("swap-above");
+            const center = build_card(env)("swap-center");
+            const oldRight = build_card(env)("swap-oldRight");
+            const newRight = build_card(env)("swap-newRight");
+            const aboveSrc = source_cell("swap-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, oldRight, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 10);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(oldRight))).toBe(11);
+
+            detach_cards(center, oldRight);
+            connect_cards(center, newRight, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 20);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(oldRight))).toBe(11);
+            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(21);
+        });
+
+        test("3. add_card + build_card + connect: propagation through chain", async () => {
+            const env = primitive_env();
+            add_card("chain-a");
+            add_card("chain-b");
+            const above = build_card(env)("chain-above");
+            const center = build_card(env)("chain-center");
+            const right = build_card(env)("chain-right");
+            const aboveSrc = source_cell("chain-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 2);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(3);
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+        });
+
+        test("4. remove_card detaches and stops propagation", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("rm-above");
+            const center = build_card(env)("rm-center");
+            const right = build_card(env)("rm-right");
+            add_card("rm-center");
+            const aboveSrc = source_cell("rm-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 1);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
+
+            remove_card("rm-center");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 5);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
+
+            expect(Either.isLeft(detach_cards_by_key("rm-above", "rm-center"))).toBe(true);
+            expect(Either.isLeft(detach_cards_by_key("rm-center", "rm-right"))).toBe(true);
+        });
+
+        test("5. two directions: above and right propagation", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("four-above");
+            const right = build_card(env)("four-right");
+            const center = build_card(env)("four-center");
+            const aboveSrc = source_cell("four-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 4);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(5);
+        });
+
+        test("6. long chain: detach middle link, propagation stops; reattach, resumes", async () => {
+            const env = primitive_env();
+            const a = build_card(env)("lifechain-a");
+            const b = build_card(env)("lifechain-b");
+            const c = build_card(env)("lifechain-c");
+            const aSrc = source_cell("lifechain-aSrc");
+            p_sync(aSrc, internal_cell_this(a));
+
+            update_cell(internal_cell_this(b), "(+ ::above 1 ::right)");
+            connect_cards(a, b, "::below", "::above");
+            connect_cards(b, c, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aSrc, 1);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(2);
+
+            const detachRes = detach_cards_by_key("lifechain-b", "lifechain-c");
+            expect(Either.isRight(detachRes)).toBe(true);
+
+            update_source_cell(aSrc, 10);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(2);
+
+            connect_cards(b, c, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aSrc, 5);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(6);
+        });
+
+        test("7. rebuild center and output: detach both, spawn new cards, rewire", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("rebuild-above");
+            const center = build_card(env)("rebuild-center");
+            const right = build_card(env)("rebuild-right");
+            const aboveSrc = source_cell("rebuild-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 5);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
+
+            detach_cards(above, center);
+            detach_cards(center, right);
+            await execute_all_tasks_sequential(() => {});
+
+            const newCenter = build_card(env)("rebuild-center2");
+            const newRight = build_card(env)("rebuild-right2");
+
+            update_cell(internal_cell_this(newCenter), "(+ ::above 1 ::right)");
+            connect_cards(above, newCenter, "::below", "::above");
+            connect_cards(newCenter, newRight, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 10);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
+            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(11);
+        });
+
+        test("8. reactive updates: multiple sequential input changes propagate", async () => {
+            const env = primitive_env();
+            const above = build_card(env)("reactive-above");
+            const center = build_card(env)("reactive-center");
+            const right = build_card(env)("reactive-right");
+            const aboveSrc = source_cell("reactive-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(above));
+
+            update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
+            connect_cards(above, center, "::below", "::above");
+            connect_cards(center, right, "::right", "::left");
+            await execute_all_tasks_sequential(() => {});
+
+            update_source_cell(aboveSrc, 3);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+
+            update_source_cell(aboveSrc, 10);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(11);
+
+            update_source_cell(aboveSrc, 0);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(1);
         });
     });
 });

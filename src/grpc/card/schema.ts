@@ -44,6 +44,7 @@ export const all_slots = [
 
 export const is_native_slot = register_predicate(
     "is_native_slot",
+    // @ts-ignore
     (value: unknown): value is string => typeof value === "string" && all_slots.includes(value)
 );
 
@@ -73,7 +74,7 @@ export const extends_local_environment = (
     pairs: [string, Cell<unknown>][]
 ) => {
     const local_env = extend_env(env, pairs);
-    selective_sync(log_tracer("is_not_native_slot", key_is_non_local), local_env, env);
+    selective_sync(key_is_non_local, local_env, env);
     return local_env;
 };
 
@@ -118,6 +119,24 @@ export const unfold_card_internal_network = (
         "unfold_card_internal_network"
     );
 
+
+
+ export const card_connector_constructor_cell =
+    (connect_key_B: Cell<unknown>, connect_key_A: Cell<unknown>) =>
+    (cardAthis: Cell<unknown>, cardBthis: Cell<unknown>) =>
+        compound_propagator(
+            [],
+            [cardAthis, cardBthis],
+            () => {
+                const cardA_connector = connect_key_A;
+                const cardB_connector = connect_key_B;
+                bi_sync(cardA_connector, cardBthis);
+                bi_sync(cardB_connector, cardAthis);
+            },
+            `card_connector_${connect_key_A}_${connect_key_B}`
+        );
+
+
 export const card_connector_constructor =
     (connect_key_B: string, connect_key_A: string) =>
     (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
@@ -126,8 +145,8 @@ export const card_connector_constructor =
             [cardA, cardB],
             () => {
                 const cardA_connector = ce_dict_accessor(connect_key_A)(cardA);
-                const cardA_this = ce_dict_accessor("::this")(cardA);
-                const cardB_this = ce_dict_accessor("::this")(cardB);
+                const cardA_this = internal_cell_this(cardA);
+                const cardB_this = internal_cell_this(cardB);
                 const cardB_connector = ce_dict_accessor(connect_key_B)(cardB);
                 bi_sync(cardA_connector, cardB_this);
                 bi_sync(cardB_connector, cardA_this);

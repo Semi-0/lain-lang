@@ -4,8 +4,8 @@
  */
 import { Either } from "effect";
 import { Cell, cell_id, construct_cell } from "ppropogator";
-import type { Propagator } from "ppropogator/Propagator/Propagator";
-import { card_connector_constructor } from "./schema.js";
+import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
+import { card_connector_constructor, card_connector_constructor_cell, internal_cell_above, internal_cell_getter, internal_cell_this } from "./schema.js";
 
 const connector_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
@@ -54,7 +54,11 @@ export const connect_cards = (
     connector_keyA: string,
     connector_keyB: string
 ): Either.Either<void, never> => {
-    const connector = card_connector_constructor(connector_keyB, connector_keyA)(cardA, cardB);
+    const connector_keyA_cell = internal_cell_getter(connector_keyA)(cardA);
+    const connector_keyB_cell = internal_cell_getter(connector_keyB)(cardB);
+    const cardAthis = internal_cell_this(cardA);
+    const cardBthis = internal_cell_this(cardB);
+    const connector = card_connector_constructor_cell(connector_keyB_cell, connector_keyA_cell)(cardAthis, cardBthis);
     connector_storage.set(make_connector_key(cardA, cardB), connector);
     return Either.right(undefined as void);
 };
@@ -66,7 +70,7 @@ export const detach_cards_by_key = (
     const connector_key = make_connector_key_from_ids(cardA_key, cardB_key);
     const connector = connector_storage.get(connector_key);
     if (connector != null) {
-        connector.dispose();
+        dispose_propagator(connector);
         remove_connector_key(connector_key);
         return Either.right(undefined as void);
     }
