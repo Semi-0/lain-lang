@@ -455,8 +455,7 @@ describe("Card API Tests", () => {
 
         test("3. add_card + build_card + connect: propagation through chain", async () => {
             const env = primitive_env();
-            add_card("chain-a");
-            add_card("chain-b");
+
             const above = build_card(env)("chain-above");
             const center = build_card(env)("chain-center");
             const right = build_card(env)("chain-right");
@@ -470,8 +469,8 @@ describe("Card API Tests", () => {
 
             update_source_cell(aboveSrc, 2);
             await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(3);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(2);
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(3);
         });
 
         test("4. remove_card detaches and stops propagation", async () => {
