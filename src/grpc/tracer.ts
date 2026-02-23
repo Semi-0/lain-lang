@@ -48,6 +48,9 @@ export function trace_open_session_io(_req: unknown, _data?: unknown): void {
 }
 
 export function trace_push_deltas_io(_req: unknown, _data?: unknown): void {
+  const d = _data as { slotCount?: number; removeCount?: number } | undefined
+  const empty = d != null && (d.slotCount ?? 0) === 0 && (d.removeCount ?? 0) === 0
+  if (empty) return
   console.log("[grpc] PushDeltas received")
   if (!enabled("DEBUG_GRPC")) return
   if (_data != null) {
@@ -55,4 +58,13 @@ export function trace_push_deltas_io(_req: unknown, _data?: unknown): void {
   } else {
     console.log("[grpc] PushDeltas", { req: to_string(_req) })
   }
+}
+
+export function trace_card_events_io(_source: string, _events: unknown): void {
+  if (!enabled("DEBUG_GRPC") && !enabled("DEBUG_COMPILE")) return
+  if (_source === "push_deltas" && Array.isArray(_events) && _events.length === 0) return
+  console.log("[grpc] Card events", {
+    source: _source,
+    events: to_string(_events),
+  })
 }
