@@ -145,7 +145,6 @@ export const compile_internal_network = (
             const this_cell = internal_cell_this(card);
             const local_env = get_local_env(env, card);
             compile_card_internal_code(this_cell, local_env);
-            // p_emit_card_updates_to_runtime(card);
         },
         "unfold_card_internal_network"
     );

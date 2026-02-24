@@ -353,6 +353,34 @@ describe("Card API Tests", () => {
             expect(propagators_touching_cell(thisCell).length).toBeGreaterThanOrEqual(0);
         });
 
+        test("build_card rebuild disposes old internal compile network", async () => {
+            const env = primitive_env();
+            add_card("build-rebuild");
+            build_card(env)("build-rebuild");
+            const card = runtime_get_card("build-rebuild")!;
+            const thisCell = internal_cell_this(card);
+
+            const count_compile_networks = () =>
+                propagators_touching_cell(thisCell).filter(
+                    (prop) => prop.getName() === "compile_card_internal_code"
+                ).length;
+
+            const firstCount = count_compile_networks();
+            expect(firstCount).toBeGreaterThan(0);
+
+            build_card(env)("build-rebuild");
+            await execute_all_tasks_sequential(() => {});
+            const secondCount = count_compile_networks();
+            expect(secondCount).toBe(firstCount);
+
+            update_cell(thisCell, "(+ 2 3 out_rebuild)");
+            await execute_all_tasks_sequential(() => {});
+            const envMap = cell_strongest_base_value(env) as Map<string, unknown>;
+            const outCell = envMap?.get?.("out_rebuild") as Cell<unknown> | undefined;
+            expect(outCell).toBeDefined();
+            expect(cell_strongest_base_value(outCell)).toBe(5);
+        });
+
         test("build_card with code: ::this has neighbors, out propagates to 3", async () => {
             const env = primitive_env();
             add_card("build-code");
@@ -788,6 +816,32 @@ describe("Card API Tests", () => {
             await execute_all_tasks_sequential(() => {});
             expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
             expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(11);
+        });
+
+        test("7b. rebuild center code switches from +1 to +2", async () => {
+            const env = primitive_env();
+            add_card("rebuild-code-above");
+            add_card("rebuild-code-center");
+            add_card("rebuild-code-right");
+            const right = runtime_get_card("rebuild-code-right")!;
+
+            connect_cards("rebuild-code-above", "rebuild-code-center", slot_below, slot_above);
+            connect_cards("rebuild-code-center", "rebuild-code-right", slot_right, slot_left);
+            update_card("rebuild-code-center", "(+ ::above 1 ::right)");
+            build_card(env)("rebuild-code-center");
+            await execute_all_tasks_sequential(() => {});
+
+            update_card("rebuild-code-above", 5);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
+
+            update_card("rebuild-code-center", "(+ ::above 2 ::right)");
+            build_card(env)("rebuild-code-center");
+            await execute_all_tasks_sequential(() => {});
+
+            update_card("rebuild-code-above", 6);
+            await execute_all_tasks_sequential(() => {});
+            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(8);
         });
 
         test("8a. runtime_update_card with add_card: reactive update via update_source_cell (advanceReactive pattern)", async () => {

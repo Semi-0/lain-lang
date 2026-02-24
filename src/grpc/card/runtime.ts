@@ -19,6 +19,7 @@ const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
     make_connector_key_from_ids(cell_id(cardA), cell_id(cardB));
 
 const connector_storage = new Map<string, Propagator>();
+const internal_network_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
 const source_this_cell_storage = new Map<string, Cell<unknown>>();
 
@@ -36,6 +37,16 @@ const parse_connector_key = (key: string) => {
         cardA_key: parts[0] ?? "",
         cardB_key: parts.slice(1).join(connector_key_separator) || "",
     };
+};
+
+const dispose_card_internal_network_io = (id: string): boolean => {
+    const internal_network = internal_network_storage.get(id);
+    if (internal_network == null) {
+        return false;
+    }
+    dispose_propagator(internal_network);
+    internal_network_storage.delete(id);
+    return true;
 };
 
 export const runtime_add_card = (id: string): Cell<unknown> => {
@@ -58,17 +69,23 @@ export const runtime_get_card = (id: string): Cell<unknown> | undefined =>
 export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
     const card = runtime_get_card(id);
     if (card == null) {
+        trace_card_runtime_io("build_card_error", { id, reason: "not_found" });
         console.error("Card not found", id);
         return undefined as unknown as Cell<unknown>;
     }
-    else{        
-        compile_internal_network(card, env);
-        // const card_content = internal_cell_this(card)
-        // compile_card_internal_code(card_content, env);
+
+    const has_old_network = dispose_card_internal_network_io(id);
+    if (has_old_network) {
         execute_all_tasks_sequential(console.error);
-        trace_card_runtime_io("build_card", { id });
-        return card;
+        trace_card_runtime_io("build_card_dispose_old_internal_network", { id });
     }
+
+    const internal_network = compile_internal_network(card, env);
+    internal_network_storage.set(id, internal_network);
+
+    execute_all_tasks_sequential(console.error);
+    trace_card_runtime_io("build_card", { id, rebuilt: has_old_network });
+    return card;
 };
 
 function value_signature(value: unknown): string {
@@ -120,6 +137,7 @@ export const runtime_remove_card = (id: string): void => {
         console.error("Card not found", id);
         return;
     }
+    dispose_card_internal_network_io(id);
     dispose_cell(card);
     card_storage.delete(id);
     source_this_cell_storage.delete(id);
