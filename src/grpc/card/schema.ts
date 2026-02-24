@@ -94,6 +94,7 @@ export const p_emit_card_updates_to_runtime = (
                 value: cell_strongest(this_cell)
             }
         );
+        console.log("emitted card updates to runtime", cell_strongest(this_cell));
     },
     "p_emit_card_updates_to_runtime"
 )
@@ -107,6 +108,7 @@ export const compile_card_internal_code = (
         [],
         () => {
             const code = cell_strongest_base_value(card_slot_this) as string;
+            console.log("compiling card internal code", code);
             console.log("code", code);
             raw_compile(code, local_env);
         },
@@ -118,7 +120,7 @@ export const unfold_card_internal_network = (
     env: LexicalEnvironment
 ) =>
     compound_propagator(
-        [card],
+        [],
         [],
         () => {
             console.log("unfolding card internal network");

@@ -2,7 +2,7 @@
  * Slot-map -> Card API synchronization (Part A reducer output -> Part B structure/runtime).
  */
 import type { LexicalEnvironment } from "../../compiler/env/env";
-import { build_card, connect_cards, detach_cards_by_key, remove_card, runtime_get_card, slot_above, slot_below, slot_left, slot_right, type SlotName, update_card } from "../card/card_api.js";
+import { add_card, build_card, connect_cards, detach_cards_by_key, remove_card, runtime_get_card, slot_above, slot_below, slot_left, slot_right, type SlotName, update_card } from "../card/card_api.js";
 import type { CompileRequestData, CardRefData } from "../codec/decode.js";
 import { key_to_card_and_slot } from "../codec/session_encode.js";
 
@@ -232,11 +232,7 @@ export function apply_card_api_events_io(
     }
     if (event.type === "card_update") {
       if (runtime_get_card(event.card_id) == null) {
-        issues.push({
-          type: "missing_card_for_update_card",
-          card_id: event.card_id,
-        });
-        continue;
+        add_card(event.card_id);
       }
       update_card(event.card_id, event.value);
       continue;

@@ -25,6 +25,7 @@ import {
 import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./handlers/compile_handler.js"
 import { cell_updates_iterable } from "./handlers/network_stream_handler.js"
 import {
+  trace_card_build_io,
   trace_card_events_io,
   trace_compile_request_io,
   trace_network_stream_io,
@@ -37,7 +38,7 @@ import {
   diff_slot_maps_to_card_api_events,
   type CardApiApplyReport,
 } from "./delta/card_slot_sync.js"
-import { build_card, runtime_get_card, update_card } from "./card/card_api.js"
+import { build_card, update_card } from "./card/card_api.js"
 import { subscribe_runtime_card_output, type RuntimeCardOutputEvent } from "./bridge/card_runtime_events.js"
 import { create_runtime_output_bridge_io } from "./bridge/connect_bridge_minireactor.js"
 
@@ -386,6 +387,7 @@ function card_build_apply_io(
   env: LexicalEnvironment
 ): CardBuildResponse {
   const { sessionId, cardId } = to_card_build_data(req)
+  Effect.runSync(Effect.sync(() => trace_card_build_io(req, { sessionId, cardId })))
   if (cardId.length === 0) {
     return new CardBuildResponse({ success: false, errorMessage: "card_id is required" })
   }
@@ -395,7 +397,7 @@ function card_build_apply_io(
     return new CardBuildResponse({ success: false, errorMessage: `session not found: ${sessionId}` })
   }
 
-  const card = runtime_get_card(cardId) ?? build_card(env)(cardId)
+  build_card(env)(cardId)
   const codeKey = `${cardId}code`
   const codeValue = state?.slotMap?.[codeKey]?.value
   if (typeof codeValue === "string") {

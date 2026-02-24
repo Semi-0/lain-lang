@@ -8,7 +8,9 @@
 import * as http from "node:http"
 import type { IncomingMessage, ServerResponse } from "node:http"
 import { empty_lexical_environment } from "../../compiler/env/env"
+import { init_system } from "../../compiler/incremental_compiler"
 import { create_connect_handler_io } from "../grpc/connect_server"
+import { primitive_env } from "../../compiler/closure"
 
 const DEFAULT_PORT = 50051
 
@@ -52,7 +54,8 @@ function main(): void {
     console.error("Usage: bun run ./src/cli/connect_server.ts [port] [--debug]")
     process.exit(1)
   }
-  const env = empty_lexical_environment("connect-root")
+  init_system()
+  const env = primitive_env() 
   const connectHandler = create_connect_handler_io(env)
   const handler = withCors(connectHandler)
   const server = http.createServer(handler)

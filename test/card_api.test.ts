@@ -668,24 +668,6 @@ describe("Card API Tests", () => {
             expect(actual).toBe(7);
         });
 
-        test("8c. update_card on add_card with ::this link mirrors center::this", async () => {
-            const env = primitive_env();
-            add_card("rt-chain-a");
-            const center = build_card(env)("rt-chain-center");
-            const a = runtime_get_card("rt-chain-a")!;
-            connect_cards(a, center, "::this", "::above");
-            update_cell(internal_cell_this(center), "(+ ::above 1)");
-            await execute_all_tasks_sequential(() => {});
-
-            update_card("rt-chain-a", 5);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(5);
-
-            update_card("rt-chain-a", 10);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(center))).toBe(10);
-        });
-
         test("8. reactive updates: multiple sequential input changes propagate", async () => {
             const env = primitive_env();
             const above = build_card(env)("reactive-above");

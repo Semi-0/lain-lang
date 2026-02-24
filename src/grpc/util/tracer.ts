@@ -47,6 +47,14 @@ export function trace_open_session_io(_req: unknown, _data?: unknown): void {
   }
 }
 
+export function trace_card_build_io(_req: unknown, _data?: { sessionId?: string; cardId?: string }): void {
+  console.log("[grpc] CardBuild received")
+  if (!enabled("DEBUG_GRPC") && !enabled("DEBUG_COMPILE")) return
+  if (_data != null) {
+    console.log("[grpc] CardBuild (decoded)", _data)
+  }
+}
+
 export function trace_push_deltas_io(_req: unknown, _data?: unknown): void {
   const d = _data as { slotCount?: number; removeCount?: number } | undefined
   const empty = d != null && (d.slotCount ?? 0) === 0 && (d.removeCount ?? 0) === 0
@@ -78,4 +86,13 @@ export function trace_runtime_output_io(
     action: _action,
     data: to_string(_data),
   })
+}
+
+/** Card runtime lifecycle: add, build, update, remove, connect, detach. */
+export function trace_card_runtime_io(
+  event: string,
+  payload: Record<string, unknown>
+): void {
+  if (!enabled("DEBUG_GRPC") && !enabled("DEBUG_COMPILE")) return
+  console.log("[grpc] Card runtime", { event, ...payload })
 }
