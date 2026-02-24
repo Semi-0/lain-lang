@@ -79,22 +79,24 @@ export const extends_local_environment = (
     return local_env;
 };
 
-export const p_emit_card_updates_to_runtime = (
-    card: Cell<any>,   
+export const p_emit_card_internal_updates_to_runtime = (
+    internal_content: Cell<any>,   
 ) => construct_propagator(
-    [card],
+    [internal_content],
     [],
     () => {
-        const this_cell = internal_cell_this(card);
-        const card_id = cell_id(card);
+   
+        const card_id = cell_id(internal_content);
         emit_runtime_card_output_io(
             { 
-                cardId: cell_id(card), 
-                slot: "::this", 
-                value: cell_strongest(this_cell)
+                cardId: cell_id(internal_content), 
+                slot: slot_this, 
+                value: cell_strongest(internal_content)
             }
         );
-        console.log("emitted card updates to runtime", cell_strongest(this_cell));
+        console.log("card id", card_id);
+        console.log("emitted card updates to runtime", cell_strongest(internal_content));
+        console.log("base value", cell_strongest_base_value(internal_content));
     },
     "p_emit_card_updates_to_runtime"
 )
@@ -115,7 +117,23 @@ export const compile_card_internal_code = (
         "compile_card_internal_code"
     );
 
-export const unfold_card_internal_network = (
+
+export const get_local_env = (env: LexicalEnvironment, card: Cell<unknown>) => {
+    const this_cell = internal_cell_this(card);
+    const left_cell = internal_cell_left(card);
+    const right_cell = internal_cell_right(card);
+    const above_cell = internal_cell_above(card);
+    const below_cell = internal_cell_below(card);
+    return extends_local_environment(env, [
+        [slot_this, this_cell],
+        [slot_left, left_cell],
+        [slot_right, right_cell],
+        [slot_above, above_cell],
+        [slot_below, below_cell],
+    ]);
+}
+
+export const compile_internal_network = (
     card: Cell<unknown>,
     env: LexicalEnvironment
 ) =>
@@ -125,19 +143,9 @@ export const unfold_card_internal_network = (
         () => {
             console.log("unfolding card internal network");
             const this_cell = internal_cell_this(card);
-            const left_cell = internal_cell_left(card);
-            const right_cell = internal_cell_right(card);
-            const above_cell = internal_cell_above(card);
-            const below_cell = internal_cell_below(card);
-            const local_env = extends_local_environment(env, [
-                [slot_this, this_cell],
-                [slot_left, left_cell],
-                [slot_right, right_cell],
-                [slot_above, above_cell],
-                [slot_below, below_cell],
-            ]);
+            const local_env = get_local_env(env, card);
             compile_card_internal_code(this_cell, local_env);
-            p_emit_card_updates_to_runtime(card);
+            // p_emit_card_updates_to_runtime(card);
         },
         "unfold_card_internal_network"
     );
@@ -179,14 +187,14 @@ export const card_connector_constructor =
 
 
 
-export const card_connector_left_right = card_connector_constructor("::left", "::right");
-export const card_connector_right_left = card_connector_constructor("::right", "::left");
-export const card_connector_above_below = card_connector_constructor("::above", "::below");
-export const card_connector_below_above = card_connector_constructor("::below", "::above");
+export const card_connector_left_right = card_connector_constructor(slot_left, slot_right);
+export const card_connector_right_left = card_connector_constructor(slot_right, slot_left);
+export const card_connector_above_below = card_connector_constructor(slot_above, slot_below);
+export const card_connector_below_above = card_connector_constructor(slot_below, slot_above);
 
 export const internal_build_card = (env: LexicalEnvironment) => (id: string) => {
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(card);
-    unfold_card_internal_network(card, env);
+    compile_internal_network(card, env);
     return card;
 };

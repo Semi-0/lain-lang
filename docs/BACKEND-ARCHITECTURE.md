@@ -80,12 +80,12 @@ The backend is split into two parts:
    - `cards: { card_id, code_string }` — via `card_storage`
    - `edges: { from_card_id, direction, to_card_id }` — via `connector_storage`
 2. **Apply events:**
-   - **CardAdd:** `add_card(id)` — create card, add to storage.
+   - **CardAdd:** `add_card(id)` — create card, add to storage; returns card id (string) for piping.
    - **CardRemove:** `remove_card(id)` — detach incident connectors, dispose card.
-   - **CardConnect:** `connect_cards(cardA, cardB, slotA, slotB)` — add bi_sync connector.
-   - **CardDetach:** `detach_cards(cardA, cardB)` — dispose connector, remove from storage.
+   - **CardConnect:** `connect_cards(idA, idB, slotA, slotB)` — add bi_sync connector; takes card IDs only (no Cell). Returns `Either<void, string>` (Left on missing card).
+   - **CardDetach:** `detach_cards(idA, idB)` — dispose connector, remove from storage; takes card IDs only.
    - **SpawnRequest(A, dir, CardDesc):** *Not yet implemented.* TODO: materialize new card from CardDesc when direction is unoccupied.
-   - **BuildCard(cardId):** `build_card(env)(id)` — create card with CarriedCells, unfold internal network, compile.
+   - **BuildCard(cardId):** `build_card(env)(id)` — compile existing card (CarriedCells, internal network); returns card id (string). Card must already exist (via add_card).
 3. **Build propagation graph:**
    - Build CarriedCell per card (::this, ::left, ::right, ::above, ::below) — `p_construct_card_cell`, `unfold_card_internal_network`.
    - Wire `bi_sync` per adjacency via `card_connector_constructor_cell` (slot cells ↔ neighbor ::this).

@@ -3,21 +3,22 @@
  * Internal module – prefer importing from card_api or card/index.
  */
 import { Either } from "effect";
-import { Cell, cell_id } from "ppropogator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
 import { SlotName, add_graph_card, get_graph_edge, remove_graph_card, remove_graph_edge, upsert_graph_edge } from "./graph.js";
-import { runtime_add_card, runtime_build_card, runtime_connect_cards, runtime_detach_cards_by_key, runtime_detach_incident_connectors, runtime_remove_card, runtime_update_card } from "./runtime.js";
+import { runtime_add_card, runtime_build_card, runtime_connect_cards, runtime_detach_cards_by_key, runtime_detach_incident_connectors, runtime_get_card, runtime_remove_card, runtime_update_card } from "./runtime.js";
 
 const to_slot_name = (slot: string): SlotName => slot as SlotName;
 
-export const add_card = (id: string): Cell<unknown> => {
+export const add_card = (id: string): string => {
     add_graph_card(id);
-    return runtime_add_card(id);
+    runtime_add_card(id);
+    return id;
 };
 
-export const build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
+export const build_card = (env: LexicalEnvironment) => (id: string): string => {
     add_graph_card(id);
-    return runtime_build_card(env)(id);
+    runtime_build_card(env)(id);
+    return id;
 };
 
 export const update_card = (id: string, value: unknown): { updated: boolean } =>
@@ -30,15 +31,19 @@ export const remove_card = (id: string): void => {
 };
 
 export const connect_cards = (
-    cardA: Cell<unknown>,
-    cardB: Cell<unknown>,
+    idA: string,
+    idB: string,
     connector_keyA: string,
     connector_keyB: string
-): Either.Either<void, never> => {
+): Either.Either<void, string> => {
+    const cardA = runtime_get_card(idA);
+    const cardB = runtime_get_card(idB);
+    if (cardA == null) return Either.left(`Card not found: ${idA}`);
+    if (cardB == null) return Either.left(`Card not found: ${idB}`);
     upsert_graph_edge({
-        from_id: cell_id(cardA),
+        from_id: idA,
         from_slot: to_slot_name(connector_keyA),
-        to_id: cell_id(cardB),
+        to_id: idB,
         to_slot: to_slot_name(connector_keyB),
     });
     return runtime_connect_cards(cardA, cardB, connector_keyA, connector_keyB);
@@ -56,8 +61,5 @@ export const detach_cards_by_key = (
     return runtime_detach_cards_by_key(edge.from_id, edge.to_id);
 };
 
-export const detach_cards = (
-    cardA: Cell<unknown>,
-    cardB: Cell<unknown>
-): Either.Either<void, string> =>
-    detach_cards_by_key(cell_id(cardA), cell_id(cardB));
+export const detach_cards = (idA: string, idB: string): Either.Either<void, string> =>
+    detach_cards_by_key(idA, idB);

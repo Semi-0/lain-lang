@@ -8,8 +8,9 @@ import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
-import { card_connector_constructor_cell, internal_build_card, internal_cell_getter, internal_cell_this } from "./schema.js";
+import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network } from "./schema.js";
 import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { report_executed_length } from "ppropogator/Shared/Scheduler/Scheduler";
 
 const connector_key_separator = "!!*!!";
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
@@ -39,7 +40,12 @@ const parse_connector_key = (key: string) => {
 
 export const runtime_add_card = (id: string): Cell<unknown> => {
     const card = construct_cell("card", id) as Cell<unknown>;
+    p_construct_card_cell(card);
     bind_card_to_user_inputs(id, card);
+
+    const internal_content = internal_cell_this(card);
+    p_emit_card_internal_updates_to_runtime(internal_content);
+
     card_storage.set(id, card);
     trace_card_runtime_io("add_card", { id });
     return card;
@@ -50,12 +56,19 @@ export const runtime_get_card = (id: string): Cell<unknown> | undefined =>
 
 
 export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
-    const card = internal_build_card(env)(id);
-    bind_card_to_user_inputs(id, card);
-    card_storage.set(id, card);
-    trace_card_runtime_io("build_card", { id });
-    execute_all_tasks_sequential(console.error);
-    return card;
+    const card = runtime_get_card(id);
+    if (card == null) {
+        console.error("Card not found", id);
+        return undefined as unknown as Cell<unknown>;
+    }
+    else{        
+        compile_internal_network(card, env);
+        // const card_content = internal_cell_this(card)
+        // compile_card_internal_code(card_content, env);
+        execute_all_tasks_sequential(console.error);
+        trace_card_runtime_io("build_card", { id });
+        return card;
+    }
 };
 
 function value_signature(value: unknown): string {
@@ -94,6 +107,8 @@ export const runtime_update_card = (id: string, value: unknown): { updated: bool
     }
     update_source_cell(source, new Map([[source_this_cell, value]]));
     execute_all_tasks_sequential(console.error);
+    console.log("executed length", report_executed_length().summarize());
+
     trace_card_runtime_io("update_card", { id, value });
     return { updated: true };
 };
@@ -120,15 +135,24 @@ export const runtime_connect_cards = (
     const key = make_connector_key(cardA, cardB);
     const idA = cell_id(cardA);
     const idB = cell_id(cardB);
+
     if (connector_storage.has(key)) {
         trace_card_runtime_io("connect_cards_skip", { cardA: idA, cardB: idB, reason: "already_connected" });
         return Either.right(undefined as void);
     }
+
     const connector_keyA_cell = internal_cell_getter(connector_keyA)(cardA);
     const connector_keyB_cell = internal_cell_getter(connector_keyB)(cardB);
     const cardAthis = internal_cell_this(cardA);
     const cardBthis = internal_cell_this(cardB);
-    const connector = card_connector_constructor_cell(connector_keyB_cell, connector_keyA_cell)(cardAthis, cardBthis);
+    const connector = card_connector_constructor_cell(
+        connector_keyB_cell, 
+        connector_keyA_cell
+    )(
+        cardAthis, 
+        cardBthis
+    );
+    
     connector_storage.set(key, connector);
     execute_all_tasks_sequential(console.error);
     trace_card_runtime_io("connect_cards", { cardA: idA, cardB: idB, connector_keyA, connector_keyB });

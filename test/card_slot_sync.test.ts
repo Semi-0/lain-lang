@@ -21,7 +21,7 @@ describe("card_slot_sync", () => {
     expect(connects.length).toBe(1)
   })
 
-  test("apply connect auto-builds cards", () => {
+  test("apply connect ensures cards exist then connects", () => {
     const env = empty_lexical_environment("card-slot-sync")
     const events = diff_slot_maps_to_card_api_events(
       {},
@@ -81,7 +81,7 @@ describe("card_slot_sync", () => {
     expect(updates.length).toBe(0)
   })
 
-  test("apply card_update on missing card is skipped with issue", () => {
+  test("apply card_update on missing card adds card then updates (no issue)", () => {
     const env = empty_lexical_environment("card-slot-sync")
     const report = apply_card_api_events_io(env, [
       {
@@ -90,11 +90,7 @@ describe("card_slot_sync", () => {
         value: 123,
       },
     ])
-    expect(report.issues).toEqual([
-      {
-        type: "missing_card_for_update_card",
-        card_id: "card-missing-update",
-      },
-    ])
+    expect(report.issues).toEqual([])
+    expect(runtime_get_card("card-missing-update")).toBeDefined()
   })
 })
