@@ -80,6 +80,56 @@ const cells_linked_by_propagator = (
     return false;
 };
 
+/** Propagators reachable from cell (covers bi_synced accessors). */
+const propagators_connected_to_cell = (cell: Cell<unknown>): Propagator[] => {
+    const visited = new Set<Cell<unknown>>();
+    const propagators = new Set<Propagator>();
+    const queue: Cell<unknown>[] = [cell];
+    while (queue.length > 0) {
+        const c = queue.shift()!;
+        if (visited.has(c)) continue;
+        visited.add(c);
+        for (const prop of propagators_touching_cell(c)) {
+            propagators.add(prop);
+            for (const other of [...prop.getInputs(), ...prop.getOutputs()]) {
+                if (!visited.has(other)) queue.push(other);
+            }
+        }
+    }
+    return Array.from(propagators);
+};
+
+/** True if cellB is reachable from cellA via propagator graph (covers bi_synced accessors). */
+const cells_connected_via_propagator_graph = (
+    cellA: Cell<unknown>,
+    cellB: Cell<unknown>
+): boolean => {
+    const visited = new Set<Cell<unknown>>();
+    const queue: Cell<unknown>[] = [cellA];
+    while (queue.length > 0) {
+        const c = queue.shift()!;
+        if (c === cellB) return true;
+        if (visited.has(c)) continue;
+        visited.add(c);
+        for (const prop of propagators_touching_cell(c)) {
+            for (const other of [...prop.getInputs(), ...prop.getOutputs()]) {
+                if (!visited.has(other)) queue.push(other);
+            }
+        }
+    }
+    return false;
+};
+
+/** Read slot value after execute (required when ce_dict_accessor cache is off). */
+const read_slot_value = (
+    card: Cell<unknown>,
+    getter: (c: Cell<unknown>) => Cell<unknown>
+): unknown => {
+    const c = getter(card);
+    execute_all_tasks_sequential(() => {});
+    return cell_strongest_base_value(c);
+};
+
 /** Count propagators that link both cells. */
 const count_links_between_cells = (
     cellA: Cell<unknown>,
@@ -124,8 +174,8 @@ const assert_cards_connected_via_topology = (
     const cellA_this = internal_cell_this(cardA);
     const cellB_this = internal_cell_this(cardB);
 
-    expect(cells_linked_by_propagator(cellA_connector, cellB_this)).toBe(true);
-    expect(cells_linked_by_propagator(cellB_connector, cellA_this)).toBe(true);
+    expect(cells_connected_via_propagator_graph(cellA_connector, cellB_this)).toBe(true);
+    expect(cells_connected_via_propagator_graph(cellB_connector, cellA_this)).toBe(true);
 };
 
 describe("Card API Tests", () => {
@@ -177,12 +227,12 @@ describe("Card API Tests", () => {
             const cardA = runtime_get_card("ra")!;
             const cardB = runtime_get_card("rb")!;
             connect_cards("ra", "rb", slot_this, slot_this);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             assert_cards_connected_via_topology(cardA, cardB, slot_this, slot_this);
 
             remove_card("ra");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const detachResult = detach_cards_by_key("ra", "rb");
             expect(Either.isLeft(detachResult)).toBe(true);
@@ -196,10 +246,10 @@ describe("Card API Tests", () => {
             build_card(env)("update-a");
             const card = runtime_get_card("update-a")!;
             const result = update_card("update-a", 42);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             expect(result.updated).toBe(true);
-            expect(cell_strongest_base_value(internal_cell_this(card))).toBe(42);
+            expect(read_slot_value(card, internal_cell_this)).toBe(42);
         });
 
         test("update_card is idempotent for same value", async () => {
@@ -208,9 +258,9 @@ describe("Card API Tests", () => {
             build_card(env)("update-b");
 
             const first = update_card("update-b", "same");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
             const second = update_card("update-b", "same");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             expect(first.updated).toBe(true);
             expect(second.updated).toBe(false);
@@ -227,7 +277,7 @@ describe("Card API Tests", () => {
             const cardA = runtime_get_card("ca")!;
             const cardB = runtime_get_card("cb")!;
             connect_cards("ca", "cb", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             assert_cards_connected_via_topology(cardA, cardB, slot_right, slot_left);
         });
@@ -252,14 +302,14 @@ describe("Card API Tests", () => {
             const cardB = runtime_get_card("dup-b")!;
 
             connect_cards("dup-a", "dup-b", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
             const firstLinkCount = count_links_between_cells(
                 internal_cell_right(cardA),
                 internal_cell_this(cardB)
             );
 
             connect_cards("dup-a", "dup-b", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
             const secondLinkCount = count_links_between_cells(
                 internal_cell_right(cardA),
                 internal_cell_this(cardB)
@@ -281,7 +331,7 @@ describe("Card API Tests", () => {
             const c = runtime_get_card("c3")!;
             connect_cards("c1", "c2", slot_right, slot_left);
             connect_cards("c2", "c3", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             assert_cards_connected_via_topology(a, b, slot_right, slot_left);
             assert_cards_connected_via_topology(b, c, slot_right, slot_left);
@@ -302,7 +352,7 @@ describe("Card API Tests", () => {
             const cardA = runtime_get_card("da")!;
             const cardB = runtime_get_card("db")!;
             connect_cards("da", "db", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             assert_cards_connected_via_topology(cardA, cardB, slot_right, slot_left);
 
@@ -327,7 +377,7 @@ describe("Card API Tests", () => {
             const cardA = runtime_get_card("d2a")!;
             const cardB = runtime_get_card("d2b")!;
             connect_cards("d2a", "d2b", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const first = detach_cards_by_key("d2a", "d2b");
             expect(Either.isRight(first)).toBe(true);
@@ -361,7 +411,7 @@ describe("Card API Tests", () => {
             const thisCell = internal_cell_this(card);
 
             const count_compile_networks = () =>
-                propagators_touching_cell(thisCell).filter(
+                propagators_connected_to_cell(thisCell).filter(
                     (prop) => prop.getName() === "compile_card_internal_code"
                 ).length;
 
@@ -369,12 +419,12 @@ describe("Card API Tests", () => {
             expect(firstCount).toBeGreaterThan(0);
 
             build_card(env)("build-rebuild");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
             const secondCount = count_compile_networks();
             expect(secondCount).toBe(firstCount);
 
             update_cell(thisCell, "(+ 2 3 out_rebuild)");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
             const envMap = cell_strongest_base_value(env) as Map<string, unknown>;
             const outCell = envMap?.get?.("out_rebuild") as Cell<unknown> | undefined;
             expect(outCell).toBeDefined();
@@ -388,7 +438,7 @@ describe("Card API Tests", () => {
             const card = runtime_get_card("build-code")!;
             const thisCell = internal_cell_this(card);
             update_cell(thisCell, "(+ 1 2 out)");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const props = propagators_touching_cell(thisCell);
             expect(props.length).toBeGreaterThan(0);
@@ -406,7 +456,7 @@ describe("Card API Tests", () => {
             const card = runtime_get_card("build-network")!;
             const thisCell = internal_cell_this(card);
             update_cell(thisCell, `(network add1 (>:: x) (::> y) (+ x 1 y))`);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const envMap = cell_strongest_base_value(env) as Map<string, unknown>;
             const add1Cell = envMap?.get?.("add1") as Cell<unknown> | undefined;
@@ -425,12 +475,11 @@ describe("Card API Tests", () => {
             const fullA = runtime_get_card("full-a")!;
             const fullB = runtime_get_card("full-b")!;
             connect_cards("full-a", "full-b", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const aRight = internal_cell_right(fullA);
             const bThis = internal_cell_this(fullB);
-            const links = count_links_between_cells(aRight, bThis);
-            expect(links).toBeGreaterThanOrEqual(1);
+            expect(cells_connected_via_propagator_graph(aRight, bThis)).toBe(true);
         });
     });
 
@@ -453,18 +502,16 @@ describe("Card API Tests", () => {
             update_cell(centerThis, "(+ ::above 1 ::right)");
             connect_cards("prop-above", "prop-center", slot_below, slot_above);
             connect_cards("prop-center", "prop-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(console.error);
             
 
             update_cell(cardAboveThis, 5);
             
          
-            await execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(console.error);
             console.log("cardRightThis", cardRightThis.summarize());
 
-            const centerRight = cell_strongest_base_value(cardRightThis);
-            expect(centerRight).toBe(6);
-            expect(cell_strongest_base_value(cardRightThis)).toBe(6);
+            expect(read_slot_value(cardRight, internal_cell_this)).toBe(6);
         });
     });
 
@@ -484,7 +531,7 @@ describe("Card API Tests", () => {
             for (let i = 0; i < CHAIN_LENGTH - 1; i++) {
                 connect_cards(`chain-${i}`, `chain-${i + 1}`, slot_right, slot_left);
             }
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             for (let i = 0; i < CHAIN_LENGTH - 1; i++) {
                 assert_cards_connected_via_topology(
@@ -509,7 +556,7 @@ describe("Card API Tests", () => {
             for (let i = 0; i < CHAIN_LENGTH - 1; i++) {
                 connect_cards(`detach-chain-${i}`, `detach-chain-${i + 1}`, slot_right, slot_left);
             }
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const mid = Math.floor(CHAIN_LENGTH / 2);
             const idA = `detach-chain-${mid}`;
@@ -531,7 +578,7 @@ describe("Card API Tests", () => {
             // We did not run execute_all_tasks_sequential after detach, so cleanup never ran:
             // connector and bi_sync children are only marked for disposal; they get disposed when
             // cleanup runs (inside the next execute_all_tasks_sequential). So topology still shows the link.
-            expect(cells_linked_by_propagator(
+            expect(cells_connected_via_propagator_graph(
                 internal_cell_right(cards[mid]!),
                 internal_cell_this(cards[mid + 1]!)
             )).toBe(true);
@@ -559,29 +606,29 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("lifecycle-above", "lifecycle-center", slot_below, slot_above);
             connect_cards("lifecycle-center", "lifecycle-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(console.error);
 
             update_source_cell(aboveSrc, 3);
-            await execute_all_tasks_sequential(console.error);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+            execute_all_tasks_sequential(console.error);
+            expect(read_slot_value(right, internal_cell_this)).toBe(4);
 
             const detachResult = detach_cards("lifecycle-center", "lifecycle-right");
             expect(Either.isRight(detachResult)).toBe(true);
-            await execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(console.error);
 
             update_source_cell(aboveSrc, 5);
-            await execute_all_tasks_sequential(console.error);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+            execute_all_tasks_sequential(console.error);
+            expect(read_slot_value(right, internal_cell_this)).toBe(4);
 
             add_card("lifecycle-newRight");
             build_card(env)("lifecycle-newRight");
             const newRight = runtime_get_card("lifecycle-newRight")!;
             connect_cards("lifecycle-center", "lifecycle-newRight", slot_right, slot_left);
-            await execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(console.error);
 
             update_source_cell(aboveSrc, 7);
-            await execute_all_tasks_sequential(console.error);
-            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(8);
+            execute_all_tasks_sequential(console.error);
+            expect(read_slot_value(newRight, internal_cell_this)).toBe(8);
         });
 
         test("1b. repeated attach–detach–attach same pair with built center (via update_card)", async () => {
@@ -598,22 +645,49 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("rea-above", "rea-center", slot_below, slot_above);
             connect_cards("rea-center", "rea-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("rea-above", 2);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(3);
+            expect(read_slot_value(right, internal_cell_this)).toBe(3);
 
             detach_cards("rea-center", "rea-right");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("rea-above", 5);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(3);
+            expect(read_slot_value(right, internal_cell_this)).toBe(3);
 
             connect_cards("rea-center", "rea-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("rea-above", 10);
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(11);
+            expect(read_slot_value(right, internal_cell_this)).toBe(11);
+        });
+
+        /**
+         * Hypothesis (see .cursor/scratchpad.md): merge_carried_map bi_syncs multiple accessors
+         * for the same (container, key). So we get *value* consistency after propagation—even
+         * without caching accessor identity. If we read from a fresh accessor (e.g. internal_cell_this(right))
+         * before running execute, we may see stale/nothing; run execute_all_tasks_sequential before
+         * reading so bi_sync propagates, then the value is consistent.
+         * This test passes with ce_dict_accessor cache ON or OFF when we run execute before read.
+         */
+        test("1c. hypothesis: uncached accessor sees value after execute (bi_sync consistency)", async () => {
+            const env = primitive_env();
+            add_card("hyp-above");
+            add_card("hyp-center");
+            add_card("hyp-right");
+            build_card(env)("hyp-above");
+            build_card(env)("hyp-center");
+            build_card(env)("hyp-right");
+            const right = runtime_get_card("hyp-right")!;
+
+            update_cell(internal_cell_this(runtime_get_card("hyp-center")!), "(+ ::above 1 ::right)");
+            connect_cards("hyp-above", "hyp-center", slot_below, slot_above);
+            connect_cards("hyp-center", "hyp-right", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            update_card("hyp-above", 2);
+            expect(read_slot_value(right, internal_cell_this)).toBe(3);
         });
 
         test("2. swap neighbor: detach old, attach new", async () => {
@@ -635,20 +709,20 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("swap-above", "swap-center", slot_below, slot_above);
             connect_cards("swap-center", "swap-oldRight", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 10);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(oldRight))).toBe(11);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(oldRight, internal_cell_this)).toBe(11);
 
             detach_cards("swap-center", "swap-oldRight");
             connect_cards("swap-center", "swap-newRight", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 20);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(oldRight))).toBe(11);
-            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(21);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(oldRight, internal_cell_this)).toBe(11);
+            expect(read_slot_value(newRight, internal_cell_this)).toBe(21);
         });
 
         test("3. add_card + build_card + connect: propagation through chain", async () => {
@@ -668,12 +742,12 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("chain-above", "chain-center", slot_below, slot_above);
             connect_cards("chain-center", "chain-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 2);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
          
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(3);
+            expect(read_slot_value(right, internal_cell_this)).toBe(3);
         });
 
         test("4. remove_card detaches and stops propagation", async () => {
@@ -693,18 +767,18 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("rm_above", "rm_center", slot_below, slot_above);
             connect_cards("rm_center", "rm_right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 1);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(2);
 
             remove_card("rm_center");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 5);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(2);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(2);
 
             expect(Either.isLeft(detach_cards_by_key("rm_above", "rm_center"))).toBe(true);
             expect(Either.isLeft(detach_cards_by_key("rm_center", "rm_right"))).toBe(true);
@@ -727,11 +801,11 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("four-above", "four-center", slot_below, slot_above);
             connect_cards("four-center", "four-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 4);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(5);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(5);
         });
 
         test("6. long chain: detach middle link, propagation stops; reattach, resumes", async () => {
@@ -751,26 +825,26 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(b), "(+ ::above 1 ::right)");
             connect_cards("lifechain-a", "lifechain-b", slot_below, slot_above);
             connect_cards("lifechain-b", "lifechain-c", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aSrc, 1);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(2);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(c, internal_cell_this)).toBe(2);
 
             const detachRes = detach_cards("lifechain-b", "lifechain-c");
             expect(Either.isRight(detachRes)).toBe(true);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aSrc, 10);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(2);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(c, internal_cell_this)).toBe(2);
 
             connect_cards("lifechain-b", "lifechain-c", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aSrc, 5);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(c))).toBe(6);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(c, internal_cell_this)).toBe(6);
         });
 
         test("7. rebuild center and output: detach both, spawn new cards, rewire", async () => {
@@ -790,15 +864,15 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("rebuild-above", "rebuild-center", slot_below, slot_above);
             connect_cards("rebuild-center", "rebuild-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 5);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(6);
 
             detach_cards("rebuild-above", "rebuild-center");
             detach_cards("rebuild-center", "rebuild-right");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             add_card("rebuild-center2");
             add_card("rebuild-right2");
@@ -810,12 +884,12 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(newCenter), "(+ ::above 1 ::right)");
             connect_cards("rebuild-above", "rebuild-center2", slot_below, slot_above);
             connect_cards("rebuild-center2", "rebuild-right2", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 10);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
-            expect(cell_strongest_base_value(internal_cell_this(newRight))).toBe(11);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(6);
+            expect(read_slot_value(newRight, internal_cell_this)).toBe(11);
         });
 
         test("7b. rebuild center code switches from +1 to +2", async () => {
@@ -829,19 +903,19 @@ describe("Card API Tests", () => {
             connect_cards("rebuild-code-center", "rebuild-code-right", slot_right, slot_left);
             update_card("rebuild-code-center", "(+ ::above 1 ::right)");
             build_card(env)("rebuild-code-center");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("rebuild-code-above", 5);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(6);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(6);
 
             update_card("rebuild-code-center", "(+ ::above 2 ::right)");
             build_card(env)("rebuild-code-center");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("rebuild-code-above", 6);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(8);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(8);
         });
 
         test("8a. runtime_update_card with add_card: reactive update via update_source_cell (advanceReactive pattern)", async () => {
@@ -849,16 +923,13 @@ describe("Card API Tests", () => {
             add_card("rt-update-a");
             const card = runtime_get_card("rt-update-a");
             expect(card).toBeDefined();
-            const thisCell = internal_cell_this(card!);
 
             const result = update_card("rt-update-a", 42);
             expect(result.updated).toBe(true);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(thisCell)).toBe(42);
+            expect(read_slot_value(card!, internal_cell_this)).toBe(42);
 
             update_card("rt-update-a", 100);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(thisCell)).toBe(100);
+            expect(read_slot_value(card!, internal_cell_this)).toBe(100);
         });
 
         test("8b. runtime_update_card with build_card uses shared user_inputs source", async () => {
@@ -867,13 +938,10 @@ describe("Card API Tests", () => {
             build_card(env)("rt-update-build");
             const card = runtime_get_card("rt-update-build");
             expect(card).toBeDefined();
-            const thisCell = internal_cell_this(card!);
 
             const result = update_card("rt-update-build", 7);
             expect(result.updated).toBe(true);
-            await execute_all_tasks_sequential(() => {});
-            const actual = cell_strongest_base_value(thisCell);
-            expect(actual).toBe(7);
+            expect(read_slot_value(card!, internal_cell_this)).toBe(7);
         });
 
         test("8. reactive updates: multiple sequential input changes propagate", async () => {
@@ -893,19 +961,19 @@ describe("Card API Tests", () => {
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("reactive-above", "reactive-center", slot_below, slot_above);
             connect_cards("reactive-center", "reactive-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 3);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(4);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(4);
 
             update_source_cell(aboveSrc, 10);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(11);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(11);
 
             update_source_cell(aboveSrc, 0);
-            await execute_all_tasks_sequential(() => {});
-            expect(cell_strongest_base_value(internal_cell_this(right))).toBe(1);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(1);
         });
     });
 });

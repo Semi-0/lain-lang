@@ -110,9 +110,9 @@ export const runtime_update_card = (id: string, value: unknown): { updated: bool
         return { updated: false };
     }
 
-    // this can be optimized if we decide 
-    // cell reactive update is idempotent
+    // Run execute before reading so bi_sync propagates to a fresh accessor (cache off).
     const this_cell = internal_cell_this(card);
+    execute_all_tasks_sequential(console.error);
     const current_value = cell_strongest_base_value(this_cell);
     if (value_signature(current_value) === value_signature(value)) {
         return { updated: false };
