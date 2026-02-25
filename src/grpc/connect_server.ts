@@ -9,19 +9,12 @@ import { compose } from "generic-handler/built_in_generics/generic_combinator"
 import type { LexicalEnvironment } from "../../compiler/env/env"
 import { CardBuildResponse, CompileResponse, Empty, NetworkUpdate, ServerMessage, StrongestValueLayer } from "./connect_generated/lain_pb.js"
 import { LainViz } from "./connect_generated/lain_connect.js"
-import { to_card_build_data, to_compile_request_data, to_cards_delta_data, to_open_session_data, to_push_deltas_data } from "./codec/decode.js"
+import { to_card_build_data, to_compile_request_data, to_cards_delta_data, to_push_deltas_data } from "./codec/decode.js"
 import { apply_cards_delta_to_slot_map } from "./delta/cards_delta_apply.js"
 import { encode_network_update, type NetworkUpdateData } from "./codec/encode.js"
-import { to_heartbeat_message, to_card_update_message } from "./codec/session_encode.js"
-import { delta_to_server_messages, open_session_initial_slot_map } from "./session/connect_session_helpers.js"
-import {
-  get_or_create_session,
-  get_session,
-  remove_session,
-  session_push,
-  wait_for_message_or_timeout,
-  type SessionState,
-} from "./session/session_store.js"
+import { delta_to_server_messages } from "./session/connect_session_helpers.js"
+import { get_or_create_session, get_session, type SessionState } from "./session/session_store.js"
+import { create_session_combinator } from "./session/session_combinator.js"
 import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./handlers/compile_handler.js"
 import { cell_updates_iterable } from "./handlers/network_stream_handler.js"
 import {
@@ -29,10 +22,7 @@ import {
   trace_card_events_io,
   trace_compile_request_io,
   trace_network_stream_io,
-  trace_open_session_io,
-  trace_open_session_yield_io,
   trace_push_deltas_io,
-  trace_runtime_output_io,
 } from "./util/tracer.js"
 import {
   apply_card_api_events_io,
@@ -40,8 +30,6 @@ import {
   type CardApiApplyReport,
 } from "./delta/card_slot_sync.js"
 import { build_card, update_card } from "./card/card_api.js"
-import { subscribe_runtime_card_output, type RuntimeCardOutputEvent } from "./bridge/card_runtime_events.js"
-import { create_runtime_output_bridge_io } from "./bridge/connect_bridge_minireactor.js"
 
 type EncodedNetworkUpdate = ReturnType<typeof encode_network_update>
 
@@ -158,92 +146,6 @@ async function* handle_session_route(
   }
 }
 
-/** Trace, create session, optionally bind. Returns session state. */
-function open_session_setup_io(
-  req: Parameters<typeof to_open_session_data>[0],
-  env: LexicalEnvironment,
-  sessionId: string,
-  initialSlotMap: CompileRequestData
-): SessionState {
-  Effect.runSync(Effect.sync(() => trace_open_session_io(req, { sessionId, slotCount: Object.keys(initialSlotMap).length })))
-  const state = get_or_create_session(sessionId, initialSlotMap)
-  if (Object.keys(initialSlotMap).length > 0) {
-    const events = diff_slot_maps_to_card_api_events({}, state.slotMap)
-    const report = Effect.runSync(
-      Effect.sync(() => {
-        trace_card_events_io("open_session_initial", events)
-        return apply_card_api_events_io(env, events)
-      })
-    )
-    if (report.issues.length > 0) {
-      Effect.runSync(Effect.sync(() => trace_card_events_io("open_session_apply", report.issues)))
-    }
-    Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
-  }
-  return state
-}
-
-async function* open_session_yield_loop(
-  state: SessionState,
-  context: { signal?: AbortSignal },
-  sessionId: string
-): AsyncGenerator<ServerMessage> {
-  const aborted = () => context.signal?.aborted === true
-  while (!aborted()) {
-    const hasMessage = await wait_for_message_or_timeout(state)
-    if (aborted()) return
-    if (hasMessage && state.queue.length > 0) {
-      while (state.queue.length > 0) {
-        const msg = state.queue.shift()!
-        trace_open_session_yield_io(sessionId, msg)
-        yield msg
-      }
-    } else {
-      const heartbeat = to_heartbeat_message()
-      trace_open_session_yield_io(sessionId, heartbeat)
-      yield heartbeat
-    }
-  }
-}
-
-function attach_runtime_output_bridge_io(
-  state: SessionState
-): () => void {
-  const bridge = create_runtime_output_bridge_io(state, trace_runtime_output_io)
-  const unsubscribe_runtime_events = subscribe_runtime_card_output((event: RuntimeCardOutputEvent) => {
-    bridge.receive_io(event)
-  })
-  return () => {
-    unsubscribe_runtime_events()
-    bridge.dispose_io()
-  }
-}
-
-/** Attach runtime output bridge to state if not already attached (so PushDeltas propagation emits are forwarded). */
-function ensure_runtime_output_bridge_io(state: SessionState): void {
-  if (state.bridgeCleanup != null) return
-  state.bridgeCleanup = attach_runtime_output_bridge_io(state)
-}
-
-async function* handle_open_session_route(
-  req: Parameters<typeof to_open_session_data>[0],
-  context: { signal?: AbortSignal },
-  env: LexicalEnvironment
-): AsyncGenerator<ServerMessage> {
-  const { sessionId, initialData } = to_open_session_data(req)
-  const initialSlotMap = open_session_initial_slot_map(initialData)
-  const state = open_session_setup_io(req, env, sessionId, initialSlotMap)
-  ensure_runtime_output_bridge_io(state)
-  try {
-    yield to_heartbeat_message()
-    yield* open_session_yield_loop(state, context, sessionId)
-  } finally {
-    state.bridgeCleanup?.()
-    state.bridgeCleanup = undefined
-    remove_session(sessionId)
-  }
-}
-
 function push_deltas_apply_io(
   req: Parameters<typeof to_push_deltas_data>[0],
   env: LexicalEnvironment
@@ -260,10 +162,7 @@ function push_deltas_apply_io(
         transition: derive_push_transition(ctx.resolved.state.slotMap, ctx.decoded.delta),
       })),
       Effect.tap((ctx) =>
-        Effect.sync(() => {
-          ensure_runtime_output_bridge_io(ctx.resolved.state)
-          apply_push_events_and_bind_io(env, ctx.resolved.state, ctx.transition)
-        })
+        Effect.sync(() => apply_push_events_and_bind_io(env, ctx.resolved.state, ctx.transition))
       ),
       Effect.tap((ctx) =>
         Effect.sync(() =>
@@ -427,12 +326,15 @@ async function* handle_network_stream_route(
 }
 
 export function create_connect_routes(env: LexicalEnvironment): (router: ConnectRouter) => void {
+  const session = create_session_combinator(env)
+  session.init()
+
   return (router: ConnectRouter) => {
     router.service(LainViz, {
       compile: (req) => handle_compile(req, env),
       networkStream: (req, ctx) => handle_network_stream_route(req, ctx),
       session: (stream, ctx) => handle_session_route(stream, ctx, env),
-      openSession: (req, ctx) => handle_open_session_route(req, ctx, env),
+      openSession: (req, ctx) => session.openSession(req, ctx),
       pushDeltas: (req) => Promise.resolve(push_deltas_apply_io(req, env)),
       cardBuild: (req) => Promise.resolve(card_build_apply_io(req, env)),
     })

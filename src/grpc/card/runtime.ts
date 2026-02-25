@@ -53,23 +53,27 @@ const dispose_card_internal_network_io = (id: string): boolean => {
 };
 
 export const runtime_add_card = (id: string): Cell<unknown> => {
+    // init card 
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(card);
 
+    // init card io
     const updater = construct_cell("updater" + id) as Cell<unknown>;
     const emitter = construct_cell("emitter" + id) as Cell<unknown>;
     const internal_this = internal_cell_this(card);
     no_echo_card_io(internal_this, updater, emitter);
 
-    
-    // const interface_io = construct_cell("interface_io" + id) as Cell<unknown>;
+    // bind inputs
     bind_card_to_user_inputs(card, source, updater);
-    // because interface io would receive updates whenever it gets a new updates
+
+    // bind outputs
     p_emit_card_internal_updates_to_runtime(id)(emitter);
     
-
+    // store card and update
     card_storage.set(id, card);
     updater_storage.set(id, updater);
+
+    // trace
     trace_card_runtime_io("add_card", { id });
     return card;
 };
@@ -100,21 +104,7 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
     return card;
 };
 
-function value_signature(value: unknown): string {
-    if (
-        value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-    ) {
-        return `${typeof value}:${String(value)}`;
-    }
-    try {
-        return `json:${JSON.stringify(value)}`;
-    } catch {
-        return `string:${String(value)}`;
-    }
-}
+
 
 export const runtime_update_card = (id: string, value: unknown): { updated: boolean } => {
     const card = runtime_get_card(id);

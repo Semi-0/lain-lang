@@ -12,8 +12,6 @@ export type SessionState = {
   slotMap: CompileRequestData
   readonly queue: ServerMessage[]
   resolveWait: (() => void) | null
-  /** Set by connect_server when runtime output bridge is attached; called on session teardown. */
-  bridgeCleanup?: () => void
   /** Session id for logging (set when session is created). */
   sessionId?: string
 }
@@ -46,6 +44,11 @@ export function get_session(sessionId: string): SessionState | undefined {
 
 export function remove_session(sessionId: string): void {
   sessions.delete(sessionId)
+}
+
+/** Return all active sessions (for runtime output forwarding). */
+export function get_all_sessions(): SessionState[] {
+  return Array.from(sessions.values())
 }
 
 /** Push messages to session queue and wake any waiter. */
