@@ -4,7 +4,7 @@
 
 import { for_each } from "generic-handler/built_in_generics/generic_collection";
 import { register_predicate } from "generic-handler/Predicates";
-import { vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock";
+import { vector_clock_layer } from "sando-layer/Specified/VectorClockLayer";
 import { support_layer } from "sando-layer/Specified/SupportLayer";
 import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum";
 import { LayeredObject } from "sando-layer/Basic/LayeredObject";

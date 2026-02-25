@@ -30,6 +30,7 @@ import {
   type CardApiApplyReport,
 } from "./delta/card_slot_sync.js"
 import { build_card, update_card } from "./card/card_api.js"
+import { load_vector_clock_serializer_deserializer } from "sando-layer/Specified/VectorClockLayer"
 
 type EncodedNetworkUpdate = ReturnType<typeof encode_network_update>
 
@@ -326,6 +327,7 @@ async function* handle_network_stream_route(
 }
 
 export function create_connect_routes(env: LexicalEnvironment): (router: ConnectRouter) => void {
+  load_vector_clock_serializer_deserializer()
   const session = create_session_combinator(env)
   session.init()
 

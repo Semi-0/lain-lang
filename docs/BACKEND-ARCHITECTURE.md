@@ -64,7 +64,7 @@ The backend is split into two parts:
 - Stream of **card events** (CardDetach, CardConnect, CardAdd, CardRemove, SpawnRequest) to Part B.
 - Stream of **ServerMessage** (Heartbeat, CardUpdate) to frontend.
 
-**Location:** Lives in/alongside `connect_server.ts` and `card_slot_sync.ts` — applies delta, computes structural changes, syncs Part B, and yields ServerMessage.
+**Location:** `connect_server.ts` (route wiring), `card_slot_sync.ts` (diff + apply events), `session/` (session state and combinator).
 
 ---
 
@@ -92,7 +92,7 @@ The backend is split into two parts:
    - Compile per card via `compile_card_internal_code` (incremental compiler).
 4. **Emit runtime output events (observer hook):**
    - Part B emits card runtime updates (`card_id`, `::this`, `value`) via `emit_runtime_card_output_io`.
-   - Part A bridges runtime outputs to frontend `CardUpdate` via a MiniReactor pipeline.
+   - The session layer forwards these to frontend `CardUpdate` via `sessions_push` (broadcast to all session queues).
 
 **Output:**
 - Updated propagation network (cells, propagators).
@@ -182,23 +182,43 @@ CardsDelta (slots + remove)
 - `PushDeltas` diff no longer emits unconditional `card_build` events.
 - Runtime observer channel:
   - Part B emits `::this` updates via `emit_runtime_card_output_io`.
-  - Part A processes outputs through MiniReactor stages and forwards as `CardUpdate(card_id, ::this, value)`.
-  - Loop guard in Part A uses value dedupe against session state and outbox cache.
+  - `sessions_push` (from session combinator) forwards each event as `CardUpdate` to all active session queues.
+  - Each OpenSession stream yields from its session queue.
 
-### Runtime output pipeline: propagation → frontend (no echo loop)
+### Session layer (combinator architecture)
 
-**Purpose:** When the propagation layer computes a new `::this` value for a card, it must be sent to the frontend as `CardUpdate`. We must avoid echoing values that originated from the frontend back to it (infinite loop).
+Session-related logic is centralized in the session layer so `connect_server` only wires routes.
 
-**Where to call `emit_runtime_card_output_io`:** In the **propagation layer** — wherever a card's `::this` cell value changes. For example, when the `bi_sync` or compiled propagator writes to the `::this` cell, that write should trigger `emit_runtime_card_output_io({ cardId, slot: "::this", value })`. *(Hook point is currently in Part B; exact placement TBD in schema/runtime.)*
+**Primitives:**
+- `session_store.ts` — `get_all_sessions`, `get_or_create_session`, `session_push`, `wait_for_message_or_timeout`, `remove_session`
+- `session_push_constructor.ts` — `(get_sessions) => (event) => void` — forwards runtime events to all session queues
+- `connect_session_helpers.ts` — pure helpers: `delta_to_server_messages`, `open_session_initial_slot_map`
+
+**Combinator:**
+- `session_combinator.ts` — `create_session_combinator(env)` returns:
+  - `sessions_push` — `session_push_constructor(get_all_sessions)`
+  - `init` — calls `init_runtime_card_output_io(sessions_push)` to wire Part B output → session queues
+  - `openSession` — handler: setup, yield loop (drain queue or heartbeat), cleanup on close
+
+**Wire-up in `connect_server.ts`:**
+```ts
+const session = create_session_combinator(env)
+session.init()
+// ...
+openSession: (req, ctx) => session.openSession(req, ctx)
+```
+
+### Runtime output pipeline: propagation → frontend
+
+**Purpose:** When the propagation layer computes a new `::this` value for a card, it must be sent to the frontend as `CardUpdate`.
+
+**Where to call `emit_runtime_card_output_io`:** In the **propagation layer** — wherever a card's `::this` cell value changes (e.g. when `bi_sync` or compiled propagator writes to `::this`).
 
 **Pipeline flow:**
-1. Propagation updates cell → `emit_runtime_card_output_io` in `src/grpc/bridge/card_runtime_events.ts` (global source)
-2. Bridge subscribes via `subscribe_runtime_card_output` in `src/grpc/connect_server.ts` (`attach_runtime_output_bridge_io`, lines 205–215)
-3. Bridge pipeline in `src/grpc/bridge/connect_bridge_minireactor.ts` (`create_runtime_output_bridge_io`, lines 96–123):
-   - `filter(not_equal_to_session_state)` — **loop guard:** if `state.slotMap[key]?.value` already equals the emitted value, skip (frontend sent it)
-   - `filter(not_equal_to_outbox)` — temporal dedup: avoid sending same value twice in quick succession
-   - `tap(forward_to_session_io)` — push `CardUpdate` to `session_push(state, ...)`
-4. `open_session_yield_loop` in `src/grpc/connect_server.ts` (lines 185–203) yields from `state.queue` → streamed to frontend
+1. Propagation updates cell → `emit_runtime_card_output_io` in `src/grpc/bridge/card_runtime_events.ts`
+2. `init_runtime_card_output_io(sessions_push)` is called at Connect server startup (from `session.init()`)
+3. `sessions_push` = `session_push_constructor(get_all_sessions)` — for each event, pushes `CardUpdate` to every session queue via `session_push(state, msg)`
+4. `open_session_yield_loop` in `session_combinator.ts` yields from `state.queue` → streamed to frontend
 
 ### OpenSession logging (DEBUG_GRPC=1)
 
@@ -208,10 +228,7 @@ CardsDelta (slots + remove)
 - **Frontend:** when consuming the OpenSession stream, log each received `ServerMessage` to compare with backend. Example (pseudocode):
   - For each message: `console.log("[OpenSession] received", msg.kind?.case, msg.kind?.case === "cardUpdate" ? { cardId: msg.kind.value?.cardId, slot: msg.kind.value?.slot, ref: msg.kind.value?.ref } : null)`
 
-**How the echo loop is avoided:**
-- `state.slotMap` is updated when CardsDelta is applied (frontend input).
-- If propagation produces the same value the frontend already sent, `state.slotMap[key]?.value` matches → `not_equal_to_session_state` returns false → event is dropped.
-- Only values that differ from slotMap (i.e. computed by propagation, not echoed from frontend) are forwarded.
+**Echo loop avoidance:** `state.slotMap` is updated when CardsDelta is applied (frontend input). Deduplication of echoed values may be handled in the propagation layer or frontend; the session layer broadcasts all emitted events to session queues.
 
 ### Detach and disposal timing
 
@@ -225,6 +242,8 @@ CardsDelta (slots + remove)
 
 - [CARDS-IMPLEMENTATION-PLAN.md](./CARDS-IMPLEMENTATION-PLAN.md) — Ontology, CardDesc, reducer rules, spawn, contradiction
 - [card_api.ts](../src/grpc/card/card_api.ts) — Part B: build, add, remove, connect, detach
-- [connect_server.ts](../src/grpc/connect_server.ts) — Session / OpenSession + PushDeltas handlers
-- [card_runtime_events.ts](../src/grpc/bridge/card_runtime_events.ts) — Global source for `emit_runtime_card_output_io` / `subscribe_runtime_card_output`
-- [connect_bridge_minireactor.ts](../src/grpc/bridge/connect_bridge_minireactor.ts) — MiniReactor pipeline: dedupe filters + `session_push(CardUpdate)`
+- [connect_server.ts](../src/grpc/connect_server.ts) — Route wiring; Compile, NetworkStream, Session, OpenSession, PushDeltas, CardBuild
+- [session_combinator.ts](../src/grpc/session/session_combinator.ts) — Session combinator: `sessions_push`, `init`, `openSession` from session store
+- [session_store.ts](../src/grpc/session/session_store.ts) — Session state, `get_all_sessions`, `session_push`, `wait_for_message_or_timeout`
+- [session_push_constructor.ts](../src/grpc/session/session_push_constructor.ts) — `(get_sessions) => (event) => void` — forward runtime events to all sessions
+- [card_runtime_events.ts](../src/grpc/bridge/card_runtime_events.ts) — `init_runtime_card_output_io`, `emit_runtime_card_output_io`

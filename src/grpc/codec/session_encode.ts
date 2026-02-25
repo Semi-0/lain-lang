@@ -4,17 +4,22 @@
  */
 import { CardRef, CardUpdate, Heartbeat, ServerMessage } from "../connect_generated/lain_pb.js"
 import type { CardRefData } from "./decode.js"
+import type { LayeredObject } from "sando-layer/Basic/LayeredObject"
+import { is_layered_object } from "sando-layer/Basic/LayeredObject"
+import { json_layered_object_serializer } from "sando-layer/Basic/LayeredSerializer"
 
 const encoder = new TextEncoder()
 
 function encode_value(value: unknown): Uint8Array {
-  return encoder.encode(JSON.stringify(value))
+  const json = is_layered_object(value) ? json_layered_object_serializer(value as LayeredObject<unknown>) : JSON.stringify(value)
+  return encoder.encode(json)
 }
 
 function card_ref_data_to_proto(ref: CardRefData): CardRef {
+  const bytes = encode_value(ref.value)
   return new CardRef({
     id: ref.id,
-    value: encode_value(ref.value),
+    value: new Uint8Array(bytes) as Uint8Array<ArrayBuffer>,
   })
 }
 

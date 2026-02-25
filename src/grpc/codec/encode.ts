@@ -2,6 +2,9 @@
  * Encode internal shapes to proto for server responses (e.g. NetworkUpdate).
  */
 import type { NetworkUpdate as PbNetworkUpdate, StrongestValueLayer as PbStrongestValueLayer } from "../generated/lain"
+import type { LayeredObject } from "sando-layer/Basic/LayeredObject"
+import { is_layered_object } from "sando-layer/Basic/LayeredObject"
+import { json_layered_object_serializer } from "sando-layer/Basic/LayeredSerializer"
 
 export type NetworkUpdateData = {
   readonly cell_id: string
@@ -16,7 +19,10 @@ export type NetworkUpdateData = {
 const encoder = new TextEncoder()
 
 function encode_value(value: unknown): Uint8Array {
-  return encoder.encode(JSON.stringify(value))
+  const json = is_layered_object(value)
+    ? json_layered_object_serializer(value as LayeredObject<unknown>)
+    : JSON.stringify(value)
+  return encoder.encode(json)
 }
 
 export function encode_network_update(u: NetworkUpdateData): PbNetworkUpdate {
