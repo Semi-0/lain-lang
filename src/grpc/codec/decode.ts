@@ -8,9 +8,38 @@ export type CompileRequestData = Readonly<Record<string, CardRefData>>
 
 const decoder = new TextDecoder()
 
+/** Lain/Scheme-style boolean literals. */
+const LAIN_TRUE = "#t"
+const LAIN_FALSE = "#f"
+
+/**
+ * Normalize decoded value: coerce Lain-style #t/#f to boolean, preserve string/number/boolean.
+ * Used for PushDeltas and CompileRequest value bytes so primitives are properly typed.
+ */
+export function normalize_decoded_value(value: unknown): unknown {
+  if (value === null || value === undefined) return value
+  if (typeof value === "boolean") return value
+  if (typeof value === "number") return value
+  if (typeof value === "string") {
+    if (value === LAIN_TRUE) return true
+    if (value === LAIN_FALSE) return false
+    const n = Number(value)
+    if (value.trim() !== "" && !Number.isNaN(n)) return n
+    return value
+  }
+  if (typeof value === "object" && value !== null && "base" in value) {
+    const obj = value as { base?: unknown }
+    const base = obj.base
+    if (base === LAIN_TRUE) return { ...obj, base: true }
+    if (base === LAIN_FALSE) return { ...obj, base: false }
+  }
+  return value
+}
+
 function decode_card_ref_value(bytes: Uint8Array): unknown {
   if (bytes.length === 0) return undefined
-  return JSON.parse(decoder.decode(bytes)) as unknown
+  const parsed = JSON.parse(decoder.decode(bytes)) as unknown
+  return normalize_decoded_value(parsed)
 }
 
 /** Protocol-agnostic: turns any request shape with data map (id, value bytes) into CompileRequestData. */
