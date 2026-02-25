@@ -100,7 +100,7 @@ describe("Connect server", () => {
     expect(cardUpdates.length).toBeGreaterThanOrEqual(1)
   })
 
-  test("OpenSession + PushDeltas: client sends delta, backend receives and stream yields CardUpdate", async () => {
+  test("OpenSession + PushDeltas: client sends delta, backend receives (no echo; propagation yields CardUpdate)", async () => {
     const sessionId = "test-session-" + Date.now()
     const openReq = new OpenSessionRequest({ sessionId })
     const received: { kind: string }[] = []
@@ -132,9 +132,8 @@ describe("Connect server", () => {
     controller.abort()
     await streamPromise
     const heartbeats = received.filter((r) => r.kind === "heartbeat")
-    const cardUpdates = received.filter((r) => r.kind === "cardUpdate")
     expect(heartbeats.length).toBeGreaterThanOrEqual(1)
-    expect(cardUpdates.length).toBeGreaterThanOrEqual(1)
+    /* We no longer echo the delta; CardUpdates come only from propagation (bridge). */
   })
 
   test("CardBuild: builds a card in session context", async () => {

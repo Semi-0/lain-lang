@@ -4,13 +4,18 @@
  */
 import type { ServerMessage } from "../connect_generated/lain_pb.js"
 import type { CompileRequestData } from "../codec/decode.js"
+import { trace_session_push_io } from "../util/tracer.js"
 
-const HEARTBEAT_MS = 8000
+const HEARTBEAT_MS = 100000
 
 export type SessionState = {
   slotMap: CompileRequestData
   readonly queue: ServerMessage[]
   resolveWait: (() => void) | null
+  /** Set by connect_server when runtime output bridge is attached; called on session teardown. */
+  bridgeCleanup?: () => void
+  /** Session id for logging (set when session is created). */
+  sessionId?: string
 }
 
 const sessions = new Map<string, SessionState>()
@@ -30,6 +35,7 @@ export function get_or_create_session(sessionId: string, initialSlotMap: Compile
     return existing
   }
   const state = create_state(initialSlotMap)
+  state.sessionId = sessionId
   sessions.set(sessionId, state)
   return state
 }
@@ -44,6 +50,7 @@ export function remove_session(sessionId: string): void {
 
 /** Push messages to session queue and wake any waiter. */
 export function session_push(state: SessionState, ...messages: ServerMessage[]): void {
+  trace_session_push_io(state.sessionId, messages)
   state.queue.push(...messages)
   if (state.resolveWait != null) {
     const r = state.resolveWait

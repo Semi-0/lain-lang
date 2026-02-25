@@ -30,6 +30,7 @@ import {
   trace_compile_request_io,
   trace_network_stream_io,
   trace_open_session_io,
+  trace_open_session_yield_io,
   trace_push_deltas_io,
   trace_runtime_output_io,
 } from "./util/tracer.js"
@@ -185,7 +186,7 @@ function open_session_setup_io(
 async function* open_session_yield_loop(
   state: SessionState,
   context: { signal?: AbortSignal },
-  _sessionId: string
+  sessionId: string
 ): AsyncGenerator<ServerMessage> {
   const aborted = () => context.signal?.aborted === true
   while (!aborted()) {
@@ -194,10 +195,13 @@ async function* open_session_yield_loop(
     if (hasMessage && state.queue.length > 0) {
       while (state.queue.length > 0) {
         const msg = state.queue.shift()!
+        trace_open_session_yield_io(sessionId, msg)
         yield msg
       }
     } else {
-      yield to_heartbeat_message()
+      const heartbeat = to_heartbeat_message()
+      trace_open_session_yield_io(sessionId, heartbeat)
+      yield heartbeat
     }
   }
 }
@@ -215,6 +219,12 @@ function attach_runtime_output_bridge_io(
   }
 }
 
+/** Attach runtime output bridge to state if not already attached (so PushDeltas propagation emits are forwarded). */
+function ensure_runtime_output_bridge_io(state: SessionState): void {
+  if (state.bridgeCleanup != null) return
+  state.bridgeCleanup = attach_runtime_output_bridge_io(state)
+}
+
 async function* handle_open_session_route(
   req: Parameters<typeof to_open_session_data>[0],
   context: { signal?: AbortSignal },
@@ -223,12 +233,13 @@ async function* handle_open_session_route(
   const { sessionId, initialData } = to_open_session_data(req)
   const initialSlotMap = open_session_initial_slot_map(initialData)
   const state = open_session_setup_io(req, env, sessionId, initialSlotMap)
-  const unsubscribe_runtime_bridge = attach_runtime_output_bridge_io(state)
+  ensure_runtime_output_bridge_io(state)
   try {
     yield to_heartbeat_message()
     yield* open_session_yield_loop(state, context, sessionId)
   } finally {
-    unsubscribe_runtime_bridge()
+    state.bridgeCleanup?.()
+    state.bridgeCleanup = undefined
     remove_session(sessionId)
   }
 }
@@ -249,9 +260,10 @@ function push_deltas_apply_io(
         transition: derive_push_transition(ctx.resolved.state.slotMap, ctx.decoded.delta),
       })),
       Effect.tap((ctx) =>
-        Effect.sync(() =>
+        Effect.sync(() => {
+          ensure_runtime_output_bridge_io(ctx.resolved.state)
           apply_push_events_and_bind_io(env, ctx.resolved.state, ctx.transition)
-        )
+        })
       ),
       Effect.tap((ctx) =>
         Effect.sync(() =>
@@ -263,11 +275,11 @@ function push_deltas_apply_io(
           )
         )
       ),
-      Effect.tap((ctx) =>
-        Effect.sync(() =>
-          enqueue_push_messages_io(ctx.resolved.state, ctx.decoded.delta, ctx.resolved.existed)
-        )
-      ),
+      // Effect.tap((ctx) =>
+      //   Effect.sync(() =>
+      //     enqueue_push_messages_io(ctx.resolved.state, ctx.decoded.delta, ctx.resolved.existed)
+      //   )
+      // ),
       Effect.map(() => new Empty())
     )
   )
@@ -341,7 +353,6 @@ function apply_push_events_and_bind_io(
   )
   state.slotMap = transition.nextSlotMap
   transition.report = report
-  Effect.runSync(Effect.sync(() => bind_context_slots_io(env, state.slotMap)))
 }
 
 function trace_push_outcome_io(
@@ -373,13 +384,13 @@ function enqueue_push_messages_io(
   if (!existed) {
     return
   }
-  session_push(state, to_heartbeat_message())
-  for (const [key, ref] of Object.entries(decoded.slots)) {
-    session_push(state, to_card_update_message(key, ref))
-  }
-  for (const key of decoded.remove) {
-    session_push(state, to_card_update_message(key, null))
-  }
+  // session_push(state, to_heartbeat_message())
+  // for (const [key, ref] of Object.entries(decoded.slots)) {
+  //   session_push(state, to_card_update_message(key, ref))
+  // }
+  // for (const key of decoded.remove) {
+  //   session_push(state, to_card_update_message(key, null))
+  // }
 }
 
 function card_build_apply_io(

@@ -141,6 +141,8 @@ function value_signature(value: unknown): string {
   }
 }
 
+const slot_code = "code";
+
 const sync_this_slots = (
   prev_slot_map: CompileRequestData,
   next_slot_map: CompileRequestData,
@@ -149,6 +151,30 @@ const sync_this_slots = (
   for (const [key, ref] of Object.entries(next_slot_map)) {
     const parsed = key_to_card_and_slot(key);
     if (parsed.slot !== slot_this) {
+      continue;
+    }
+    const prev = prev_slot_map[key];
+    const prev_signature = value_signature(prev?.value);
+    const next_signature = value_signature(ref.value);
+    if (prev !== undefined && prev_signature === next_signature) {
+      continue;
+    }
+    out.push({
+      type: "card_update",
+      card_id: parsed.card_id,
+      value: ref.value,
+    });
+  }
+};
+
+const sync_code_slots = (
+  prev_slot_map: CompileRequestData,
+  next_slot_map: CompileRequestData,
+  out: CardApiEvent[]
+): void => {
+  for (const [key, ref] of Object.entries(next_slot_map)) {
+    const parsed = key_to_card_and_slot(key);
+    if (parsed.slot !== slot_code) {
       continue;
     }
     const prev = prev_slot_map[key];
@@ -208,7 +234,8 @@ export function diff_slot_maps_to_card_api_events(
     });
   }
 
-  sync_this_slots(prev_slot_map, next_slot_map, out);
+  // sync_this_slots(prev_slot_map, next_slot_map, out);
+  sync_code_slots(prev_slot_map, next_slot_map, out);
   return out;
 }
 

@@ -200,6 +200,14 @@ CardsDelta (slots + remove)
    - `tap(forward_to_session_io)` — push `CardUpdate` to `session_push(state, ...)`
 4. `open_session_yield_loop` in `src/grpc/connect_server.ts` (lines 185–203) yields from `state.queue` → streamed to frontend
 
+### OpenSession logging (DEBUG_GRPC=1)
+
+- **Backend** logs when messages are pushed to the session queue and when they are yielded to the client:
+  - `[grpc] OpenSession queue push` — `sessionId`, summary of each message (heartbeat / cardUpdate key set|remove)
+  - `[grpc] OpenSession yield to client` — `sessionId`, summary of the message sent
+- **Frontend:** when consuming the OpenSession stream, log each received `ServerMessage` to compare with backend. Example (pseudocode):
+  - For each message: `console.log("[OpenSession] received", msg.kind?.case, msg.kind?.case === "cardUpdate" ? { cardId: msg.kind.value?.cardId, slot: msg.kind.value?.slot, ref: msg.kind.value?.ref } : null)`
+
 **How the echo loop is avoided:**
 - `state.slotMap` is updated when CardsDelta is applied (frontend input).
 - If propagation produces the same value the frontend already sent, `state.slotMap[key]?.value` matches → `not_equal_to_session_state` returns false → event is dropped.

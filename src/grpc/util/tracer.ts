@@ -96,3 +96,35 @@ export function trace_card_runtime_io(
   if (!enabled("DEBUG_GRPC") && !enabled("DEBUG_COMPILE")) return
   console.log("[grpc] Card runtime", { event, ...payload })
 }
+
+/** Summarize a ServerMessage for logging (heartbeat vs cardUpdate key/ref). */
+function summarize_server_message(msg: { kind?: { case?: string; value?: unknown } }): string {
+  const k = msg.kind?.case
+  if (k === "heartbeat") return "heartbeat"
+  if (k === "cardUpdate") {
+    const cu = msg.kind?.value as { cardId?: string; slot?: string; ref?: unknown } | undefined
+    const key = cu ? `${cu.cardId ?? "?"}${cu.slot ?? ""}` : "?"
+    return `cardUpdate ${key} ${cu?.ref != null ? "set" : "remove"}`
+  }
+  return String(k ?? "?")
+}
+
+/** Log when messages are pushed to a session queue (DEBUG_GRPC). */
+export function trace_session_push_io(
+  sessionId: string | undefined,
+  messages: readonly { kind?: { case?: string; value?: unknown } }[]
+): void {
+  if (!enabled("DEBUG_GRPC")) return
+  if (messages.length === 0) return
+  const summary = messages.map(summarize_server_message).join(", ")
+  console.log("[grpc] OpenSession queue push", { sessionId: sessionId ?? "?", messages: summary })
+}
+
+/** Log when a message is yielded to the OpenSession client (DEBUG_GRPC). */
+export function trace_open_session_yield_io(
+  sessionId: string,
+  msg: { kind?: { case?: string; value?: unknown } }
+): void {
+  if (!enabled("DEBUG_GRPC")) return
+  console.log("[grpc] OpenSession yield to client", { sessionId, message: summarize_server_message(msg) })
+}

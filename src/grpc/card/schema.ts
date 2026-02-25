@@ -4,7 +4,7 @@
  */
 import { Cell, cell_id, cell_strongest, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, register_predicate } from "ppropogator";
 import { c_dict_accessor, ce_dict, ce_dict_accessor, p_construct_dict_carrier } from "ppropogator/DataTypes/CarriedCell";
-import { bi_sync, p_sync } from "ppropogator/Propagator/BuiltInProps";
+import { bi_sync, p_filter_a, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { define, extend_env, is_parent_key, LexicalEnvironment } from "../../../compiler/env";
 import { selective_sync } from "ppropogator/DataTypes/CarriedCell/HigherOrder";
 import { raw_compile } from "../../../compiler/compiler_entry";
@@ -79,22 +79,33 @@ export const extends_local_environment = (
     return local_env;
 };
 
-export const p_emit_card_internal_updates_to_runtime = (
-    internal_content: Cell<any>,   
+
+export const no_echo_card_io = (card_content: Cell<any>, updater: Cell<any>, emitter: Cell<any>) => compound_propagator(
+    [updater],
+    [card_content, emitter],
+
+    () => {
+        const emit_without_overlap_with_updater = p_filter_a((value: any) => value !== cell_strongest_base_value(updater));
+        p_sync(updater, card_content);
+        emit_without_overlap_with_updater(card_content, emitter);
+    },
+    "bi_card_io"
+)
+
+
+/** cardId must be the card's id (e.g. from runtime_add_card), not the accessor cell id. */
+export const p_emit_card_internal_updates_to_runtime = (cardId: string) => (
+    internal_content: Cell<any>,
 ) => construct_propagator(
     [internal_content],
     [],
     () => {
-   
-        const card_id = cell_id(internal_content);
-        emit_runtime_card_output_io(
-            { 
-                cardId: cell_id(internal_content), 
-                slot: slot_this, 
-                value: cell_strongest(internal_content)
-            }
-        );
-        console.log("card id", card_id);
+        emit_runtime_card_output_io({
+            cardId,
+            slot: slot_this,
+            value: cell_strongest(internal_content),
+        });
+        console.log("card id", cardId);
         console.log("emitted card updates to runtime", cell_strongest(internal_content));
         console.log("base value", cell_strongest_base_value(internal_content));
     },

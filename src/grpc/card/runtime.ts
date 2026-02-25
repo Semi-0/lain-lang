@@ -8,9 +8,10 @@ import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
-import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network } from "./schema.js";
+import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
 import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 import { report_executed_length } from "ppropogator/Shared/Scheduler/Scheduler";
+import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
 
 const connector_key_separator = "!!*!!";
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
@@ -21,14 +22,16 @@ const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
 const connector_storage = new Map<string, Propagator>();
 const internal_network_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
-const source_this_cell_storage = new Map<string, Cell<unknown>>();
+const updater_storage = new Map<string, Cell<unknown>>();
+
 
 const source = source_cell("user_inputs")
 
-const bind_card_to_user_inputs = (id: string, card: Cell<unknown>): void => {
+const bind_card_to_user_inputs = (card: Cell<unknown>, source: Cell<unknown>, interface_io: Cell<unknown>): void => {
     const card_this = internal_cell_this(card);
-    p_reactive_dispatch(source, card_this);
-    source_this_cell_storage.set(id, card_this);
+
+    bi_sync(interface_io, card_this);
+    p_reactive_dispatch(source, interface_io);
 };
 
 const parse_connector_key = (key: string) => {
@@ -52,12 +55,21 @@ const dispose_card_internal_network_io = (id: string): boolean => {
 export const runtime_add_card = (id: string): Cell<unknown> => {
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(card);
-    bind_card_to_user_inputs(id, card);
 
-    const internal_content = internal_cell_this(card);
-    p_emit_card_internal_updates_to_runtime(internal_content);
+    const updater = construct_cell("updater" + id) as Cell<unknown>;
+    const emitter = construct_cell("emitter" + id) as Cell<unknown>;
+    const internal_this = internal_cell_this(card);
+    no_echo_card_io(internal_this, updater, emitter);
+
+    
+    // const interface_io = construct_cell("interface_io" + id) as Cell<unknown>;
+    bind_card_to_user_inputs(card, source, updater);
+    // because interface io would receive updates whenever it gets a new updates
+    p_emit_card_internal_updates_to_runtime(id)(emitter);
+    
 
     card_storage.set(id, card);
+    updater_storage.set(id, updater);
     trace_card_runtime_io("add_card", { id });
     return card;
 };
@@ -111,20 +123,13 @@ export const runtime_update_card = (id: string, value: unknown): { updated: bool
     }
 
     // Run execute before reading so bi_sync propagates to a fresh accessor (cache off).
-    const this_cell = internal_cell_this(card);
-    execute_all_tasks_sequential(console.error);
-    const current_value = cell_strongest_base_value(this_cell);
-    if (value_signature(current_value) === value_signature(value)) {
+    const interface_io = updater_storage.get(id);
+    if (interface_io == null) {
         return { updated: false };
     }
 
-    const source_this_cell = source_this_cell_storage.get(id);
-    if (source_this_cell == null) {
-        return { updated: false };
-    }
-    update_source_cell(source, new Map([[source_this_cell, value]]));
+    update_source_cell(source, new Map([[interface_io, value]]));
     execute_all_tasks_sequential(console.error);
-    console.log("executed length", report_executed_length().summarize());
 
     trace_card_runtime_io("update_card", { id, value });
     return { updated: true };
@@ -140,7 +145,7 @@ export const runtime_remove_card = (id: string): void => {
     dispose_card_internal_network_io(id);
     dispose_cell(card);
     card_storage.delete(id);
-    source_this_cell_storage.delete(id);
+    // source_this_cell_storage.delete(id);
     trace_card_runtime_io("remove_card", { id });
 };
 
