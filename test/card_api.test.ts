@@ -45,6 +45,7 @@ import {
 } from "../src/grpc/card";
 import { primitive_env } from "../compiler/closure";
 import { init_system } from "../compiler/incremental_compiler";
+import { run } from "../compiler/compiler_entry";
 import { update_cell } from "ppropogator/Cell/Cell";
 import { p_sync } from "ppropogator/Propagator/BuiltInProps";
 import {
@@ -462,6 +463,68 @@ describe("Card API Tests", () => {
             const add1Cell = envMap?.get?.("add1") as Cell<unknown> | undefined;
             expect(add1Cell).toBeDefined();
             expect(propagators_touching_cell(add1Cell!).length).toBeGreaterThanOrEqual(0);
+        });
+
+        test("card calls network defined in env: (add1 ::above ::right) resolves", async () => {
+            const env = primitive_env();
+            run("(network add1 (>:: x) (::> y) (+ x 1 y))", env);
+            await execute_all_tasks_sequential(() => {});
+
+            add_card("inc-above");
+            add_card("inc-center");
+            add_card("inc-right");
+            build_card(env)("inc-above");
+            build_card(env)("inc-center");
+            build_card(env)("inc-right");
+            const cardAbove = runtime_get_card("inc-above")!;
+            const cardCenter = runtime_get_card("inc-center")!;
+            const cardRight = runtime_get_card("inc-right")!;
+            const centerThis = internal_cell_this(cardCenter);
+            const aboveThis = internal_cell_this(cardAbove);
+
+            update_cell(centerThis, "(add1 ::above ::right)");
+            connect_cards("inc-above", "inc-center", slot_below, slot_above);
+            connect_cards("inc-center", "inc-right", slot_right, slot_left);
+            await execute_all_tasks_sequential(() => {});
+
+            update_cell(aboveThis, 5);
+            await execute_all_tasks_sequential(() => {});
+
+            const rightValue = read_slot_value(cardRight, internal_cell_this);
+            expect(rightValue).toBe(6);
+        });
+
+        test("card calls network defined in another card: add1 via card_update resolves", async () => {
+            const env = primitive_env();
+            add_card("def-card");
+            add_card("inc-above");
+            add_card("inc-center");
+            add_card("inc-right");
+            build_card(env)("def-card");
+            build_card(env)("inc-above");
+            build_card(env)("inc-center");
+            build_card(env)("inc-right");
+            const defCard = runtime_get_card("def-card")!;
+            const defThis = internal_cell_this(defCard);
+            const cardAbove = runtime_get_card("inc-above")!;
+            const cardCenter = runtime_get_card("inc-center")!;
+            const cardRight = runtime_get_card("inc-right")!;
+            const centerThis = internal_cell_this(cardCenter);
+            const aboveThis = internal_cell_this(cardAbove);
+
+            update_cell(defThis, "(network add1 (>:: x) (::> y) (+ x 1 y))");
+            await execute_all_tasks_sequential(() => {});
+
+            update_cell(centerThis, "(add1 ::above ::right)");
+            connect_cards("inc-above", "inc-center", slot_below, slot_above);
+            connect_cards("inc-center", "inc-right", slot_right, slot_left);
+            await execute_all_tasks_sequential(() => {});
+
+            update_cell(aboveThis, 5);
+            await execute_all_tasks_sequential(() => {});
+
+            const rightValue = read_slot_value(cardRight, internal_cell_this);
+            expect(rightValue).toBe(6);
         });
     });
 
