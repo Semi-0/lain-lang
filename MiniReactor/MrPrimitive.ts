@@ -40,6 +40,7 @@ export function get_node(id: number): Node<any>{
 
 
 export function construct_node<E>(): Node<E>{
+    // this needs to be changed to uuid
     const id: number = get_reference();
 
     var children_edges = construct_better_set<any>([])
