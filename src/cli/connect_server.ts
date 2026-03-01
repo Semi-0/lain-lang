@@ -11,6 +11,7 @@ import { empty_lexical_environment } from "../../compiler/env/env"
 import { init_system } from "../../compiler/incremental_compiler"
 import { create_connect_handler_io } from "../grpc/connect_server"
 import { primitive_env } from "../../compiler/closure"
+import { init_constant_scheduler_flush } from "../../compiler/init"
 
 const DEFAULT_PORT = 50051
 
@@ -55,6 +56,7 @@ function main(): void {
     process.exit(1)
   }
   init_system()
+  init_constant_scheduler_flush(10)
   const env = primitive_env() 
   const connectHandler = create_connect_handler_io(env)
   const handler = withCors(connectHandler)
