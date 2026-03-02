@@ -13,7 +13,7 @@ import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogato
 import { get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
 import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
 import { construct_vector_clock, get_vector_clock_layer, is_reactive_value, is_vector_clock, vector_clock_get_source_direct, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock";
-import { LayeredObject } from "sando-layer/Basic/LayeredObject.js";
+import { type LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { compound_tell } from "ppropogator/Helper/UI";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic.js";
 
@@ -29,7 +29,7 @@ const card_storage = new Map<string, Cell<unknown>>();
 const updater_storage = new Map<string, Cell<unknown>>();
 const this_cell_storage = new Map<string, Cell<unknown>>();
 
-const source = source_cell("user_inputs")
+// const source = source_cell("user_inputs")
 
 const bind_card_to_user_inputs = (card: Cell<unknown>, source: Cell<unknown>, interface_io: Cell<unknown>): void => {
     const card_this = internal_cell_this(card);
@@ -67,9 +67,6 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     const internal_this = internal_cell_this(card);
     no_echo_card_io(internal_this, updater, emitter);
     this_cell_storage.set(id, internal_this);
-
-    // bind inputs
-    // bind_card_to_user_inputs(card, source, updater);
 
     // bind outputs
     p_emit_card_internal_updates_to_runtime(id)(emitter);
@@ -132,24 +129,9 @@ export const runtime_update_card = (id: string, current: unknown): { updated: bo
     if (is_equal(get_base_value(previous), get_base_value(current))) {
         return { updated: false };
     }
-    else if (is_reactive_value(previous)) {
-        const vector_clock = get_vector_clock_layer(previous);
 
-        const source_value = vector_clock_get_source_direct(id, vector_clock) as number;
-        compound_tell(
-            updater, 
-            current, 
-            vector_clock_layer, 
-            construct_vector_clock([{ source: id, value: source_value + 1 }])
-        )
-    }
     else {
-        compound_tell(
-            updater, 
-            current, 
-            vector_clock_layer, 
-            construct_vector_clock([{ source: id, value: 0 }])
-        ) 
+        update_source_cell(updater, current)
     }
 
     // update_source_cell(source, new Map([[interface_io, value]]));

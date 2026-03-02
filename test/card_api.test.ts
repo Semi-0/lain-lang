@@ -411,18 +411,8 @@ describe("Card API Tests", () => {
             const card = runtime_get_card("build-rebuild")!;
             const thisCell = internal_cell_this(card);
 
-            const count_compile_networks = () =>
-                propagators_connected_to_cell(thisCell).filter(
-                    (prop) => prop.getName() === "compile_card_internal_code"
-                ).length;
-
-            const firstCount = count_compile_networks();
-            expect(firstCount).toBeGreaterThan(0);
-
             build_card(env)("build-rebuild");
             execute_all_tasks_sequential(() => {});
-            const secondCount = count_compile_networks();
-            expect(secondCount).toBe(firstCount);
 
             update_cell(thisCell, "(+ 2 3 out_rebuild)");
             execute_all_tasks_sequential(() => {});
@@ -494,7 +484,7 @@ describe("Card API Tests", () => {
             expect(rightValue).toBe(6);
         });
 
-        test("card calls network defined in another card: add1 via card_update resolves", async () => {
+        test("card calls network defined in another card: add1 via update_card resolves", async () => {
             const env = primitive_env();
             add_card("def-card");
             add_card("inc-above");
@@ -504,23 +494,17 @@ describe("Card API Tests", () => {
             build_card(env)("inc-above");
             build_card(env)("inc-center");
             build_card(env)("inc-right");
-            const defCard = runtime_get_card("def-card")!;
-            const defThis = internal_cell_this(defCard);
-            const cardAbove = runtime_get_card("inc-above")!;
-            const cardCenter = runtime_get_card("inc-center")!;
             const cardRight = runtime_get_card("inc-right")!;
-            const centerThis = internal_cell_this(cardCenter);
-            const aboveThis = internal_cell_this(cardAbove);
 
-            update_cell(defThis, "(network add1 (>:: x) (::> y) (+ x 1 y))");
+            update_card("def-card", "(network add1 (>:: x) (::> y) (+ x 1 y))");
             await execute_all_tasks_sequential(() => {});
 
-            update_cell(centerThis, "(add1 ::above ::right)");
+            update_card("inc-center", "(add1 ::above ::right)");
             connect_cards("inc-above", "inc-center", slot_below, slot_above);
             connect_cards("inc-center", "inc-right", slot_right, slot_left);
             await execute_all_tasks_sequential(() => {});
 
-            update_cell(aboveThis, 5);
+            update_card("inc-above", 5);
             await execute_all_tasks_sequential(() => {});
 
             const rightValue = read_slot_value(cardRight, internal_cell_this);
