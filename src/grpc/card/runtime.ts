@@ -31,23 +31,6 @@ const this_cell_storage = new Map<string, Cell<unknown>>();
 
 // const source = source_cell("user_inputs")
 
-const safe_fetch_this_cell = (card: Cell<unknown>) => {
-    const id = cell_id(card);
-    const this_cell = this_cell_storage.get(id);
-    if (this_cell == null) {
-        const new_this_cell = internal_cell_this(card);
-        this_cell_storage.set(id, new_this_cell);
-        return new_this_cell;
-    }
-    return this_cell;
-}
-const bind_card_to_user_inputs = (card: Cell<unknown>, source: Cell<unknown>, interface_io: Cell<unknown>): void => {
-    const card_this = internal_cell_this(card);
-
-    bi_sync(interface_io, card_this);
-    p_reactive_dispatch(source, interface_io);
-};
-
 const parse_connector_key = (key: string) => {
     const parts = key.split(connector_key_separator);
     return {
@@ -107,6 +90,9 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
         return undefined as unknown as Cell<unknown>;
     }
 
+    // dispose old network is not working 
+    // that's okay 
+    // we will deal with this later
     const has_old_network = dispose_card_internal_network_io(id);
     if (has_old_network) {
         trace_card_runtime_io("build_card_dispose_old_internal_network", { id });
