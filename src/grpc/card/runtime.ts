@@ -3,15 +3,19 @@
  * Side-effect layer that realizes structural graph changes.
  */
 import { Either } from "effect";
-import { Cell, cell_id, construct_cell } from "ppropogator";
+import { Cell, cell_id, construct_cell, get_base_value } from "ppropogator";
 import { trace_card_runtime_io } from "../util/tracer.js";
-import { cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
+import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
 import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
 import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 import { get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
 import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
+import { construct_vector_clock, get_vector_clock_layer, is_reactive_value, is_vector_clock, vector_clock_get_source_direct, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock";
+import { LayeredObject } from "sando-layer/Basic/LayeredObject.js";
+import { compound_tell } from "ppropogator/Helper/UI";
+import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic.js";
 
 const connector_key_separator = "!!*!!";
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
@@ -23,7 +27,7 @@ const connector_storage = new Map<string, Propagator>();
 const internal_network_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
 const updater_storage = new Map<string, Cell<unknown>>();
-
+const this_cell_storage = new Map<string, Cell<unknown>>();
 
 const source = source_cell("user_inputs")
 
@@ -62,9 +66,10 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     const emitter = construct_cell("emitter" + id) as Cell<unknown>;
     const internal_this = internal_cell_this(card);
     no_echo_card_io(internal_this, updater, emitter);
+    this_cell_storage.set(id, internal_this);
 
     // bind inputs
-    bind_card_to_user_inputs(card, source, updater);
+    // bind_card_to_user_inputs(card, source, updater);
 
     // bind outputs
     p_emit_card_internal_updates_to_runtime(id)(emitter);
@@ -104,21 +109,52 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
 
 
 
-export const runtime_update_card = (id: string, value: unknown): { updated: boolean } => {
+export const runtime_update_card = (id: string, current: unknown): { updated: boolean } => {
     const card = runtime_get_card(id);
     if (card == null) {
         return { updated: false };
     }
 
     // Run execute before reading so bi_sync propagates to a fresh accessor (cache off).
-    const interface_io = updater_storage.get(id);
-    if (interface_io == null) {
+    const updater = updater_storage.get(id);
+    if (updater == null) {
         return { updated: false };
     }
 
-    update_source_cell(source, new Map([[interface_io, value]]));
+    const internal_this = this_cell_storage.get(id);
+    if (internal_this == null) {
+        return { updated: false };
+    }
 
-    trace_card_runtime_io("update_card", { id, value });
+    const previous = cell_strongest(internal_this) as LayeredObject<any>;
+    // console.log(updater.summarize())
+    // console.log(get_base_value(previous), get_base_value(current));
+    if (is_equal(get_base_value(previous), get_base_value(current))) {
+        return { updated: false };
+    }
+    else if (is_reactive_value(previous)) {
+        const vector_clock = get_vector_clock_layer(previous);
+
+        const source_value = vector_clock_get_source_direct(id, vector_clock) as number;
+        compound_tell(
+            updater, 
+            current, 
+            vector_clock_layer, 
+            construct_vector_clock([{ source: id, value: source_value + 1 }])
+        )
+    }
+    else {
+        compound_tell(
+            updater, 
+            current, 
+            vector_clock_layer, 
+            construct_vector_clock([{ source: id, value: 0 }])
+        ) 
+    }
+
+    // update_source_cell(source, new Map([[interface_io, value]]));
+
+    trace_card_runtime_io("update_card", { id, value: current });
     return { updated: true };
 };
 
