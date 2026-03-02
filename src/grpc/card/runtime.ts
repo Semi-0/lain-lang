@@ -3,7 +3,7 @@
  * Side-effect layer that realizes structural graph changes.
  */
 import { Either } from "effect";
-import { Cell, cell_id, construct_cell, get_base_value } from "ppropogator";
+import { Cell, cell_id, construct_cell, get_base_value, inspect_strongest } from "ppropogator";
 import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
@@ -31,6 +31,16 @@ const this_cell_storage = new Map<string, Cell<unknown>>();
 
 // const source = source_cell("user_inputs")
 
+const safe_fetch_this_cell = (card: Cell<unknown>) => {
+    const id = cell_id(card);
+    const this_cell = this_cell_storage.get(id);
+    if (this_cell == null) {
+        const new_this_cell = internal_cell_this(card);
+        this_cell_storage.set(id, new_this_cell);
+        return new_this_cell;
+    }
+    return this_cell;
+}
 const bind_card_to_user_inputs = (card: Cell<unknown>, source: Cell<unknown>, interface_io: Cell<unknown>): void => {
     const card_this = internal_cell_this(card);
 
@@ -65,7 +75,12 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     const updater = construct_cell("updater" + id) as Cell<unknown>;
     const emitter = construct_cell("emitter" + id) as Cell<unknown>;
     const internal_this = internal_cell_this(card);
+
+    inspect_strongest(console.log)(internal_this);
+    inspect_strongest(console.log)(updater);
+
     no_echo_card_io(internal_this, updater, emitter);
+  
     this_cell_storage.set(id, internal_this);
 
     // bind outputs
@@ -100,7 +115,7 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
     const internal_network = compile_internal_network(card, env);
     internal_network_storage.set(id, internal_network);
 
-    trace_card_runtime_io("build_card", { id, rebuilt: has_old_network });
+    trace_card_runtime_io("build_card", { id });
     return card;
 };
 
@@ -134,7 +149,6 @@ export const runtime_update_card = (id: string, current: unknown): { updated: bo
         update_source_cell(updater, current)
     }
 
-    // update_source_cell(source, new Map([[interface_io, value]]));
 
     trace_card_runtime_io("update_card", { id, value: current });
     return { updated: true };

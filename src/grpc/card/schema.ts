@@ -8,11 +8,8 @@ import { bi_sync, p_filter_a, p_sync } from "ppropogator/Propagator/BuiltInProps
 import { define, extend_env, is_parent_key, LexicalEnvironment } from "../../../compiler/env";
 import { selective_sync } from "ppropogator/DataTypes/CarriedCell/HigherOrder";
 import { raw_compile } from "../../../compiler/compiler_entry";
-import { predicate_not } from "generic-handler/built_in_generics/generic_combinator";
-import { compose } from "generic-handler/built_in_generics/generic_combinator";
-import { log_tracer } from "generic-handler/built_in_generics/generic_debugger";
-import { lain_string } from "../../../compiler/lain_element";
 import { emit_runtime_card_output_io } from "../bridge/card_runtime_events";
+import { p_connect_to_source, p_sync_back_without_source } from "ppropogator/DataTypes/PremisesSource";
 export interface CardDescription {
     id: string;
     content: string;
@@ -120,9 +117,13 @@ export const compile_card_internal_code = (
         [card_slot_this, local_env],
         [],
         () => {
-            const code = cell_strongest_base_value(card_slot_this) as string;
-            console.log("compiling card internal code", code);
-            console.log("code", code);
+            const code = cell_strongest_base_value(card_slot_this);
+            if (typeof code !== "string" || code.trim() === "") {
+                console.error("built failed: code is not a string or is empty");
+                console.error("code", code);
+                console.log("card_slot_this", card_slot_this.summarize());
+                return;
+            }
             raw_compile(code, local_env);
         },
         "compile_card_internal_code"
@@ -171,8 +172,10 @@ export const compile_internal_network = (
             () => {
                 const cardA_connector = connect_key_A;
                 const cardB_connector = connect_key_B;
+
                 bi_sync(cardA_connector, cardBthis);
                 bi_sync(cardB_connector, cardAthis);
+                
             },
             `card_connector_${connect_key_A}_${connect_key_B}`
         );

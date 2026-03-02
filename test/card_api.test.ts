@@ -7,9 +7,8 @@
  * Runtime contract: Cards must be added first (add_card). build_card only compiles internal
  * code for an existing card; it does not create cards. Cards emit/receive regardless of build.
  *
- * Note: detach marks the connector (and its bi_sync children, via relation hierarchy) for disposal;
- * actual cleanup runs in execute_all_tasks_sequential. Run it after detach so propagation stops (see tests 1, 6).
- * Storage is cleared immediately on detach.
+ * Note: detach marks the connector for disposal; actual cleanup runs in execute_all_tasks_sequential.
+ * Run it after detach so propagation stops (see tests 1, 6).
  */
 
 import { expect, test, beforeEach, describe } from "bun:test";
@@ -46,12 +45,9 @@ import {
 import { primitive_env } from "../compiler/closure";
 import { init_system } from "../compiler/incremental_compiler";
 import { run } from "../compiler/compiler_entry";
-import { update_cell } from "ppropogator/Cell/Cell";
+import { construct_cell, update_cell } from "ppropogator/Cell/Cell";
 import { p_sync } from "ppropogator/Propagator/BuiltInProps";
-import {
-    source_cell,
-    update_source_cell,
-} from "ppropogator/DataTypes/PremisesSource";
+import { update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 
 beforeEach(() => {
     init_system();
@@ -458,7 +454,7 @@ describe("Card API Tests", () => {
         test("card calls network defined in env: (add1 ::above ::right) resolves", async () => {
             const env = primitive_env();
             run("(network add1 (>:: x) (::> y) (+ x 1 y))", env);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             add_card("inc-above");
             add_card("inc-center");
@@ -475,10 +471,10 @@ describe("Card API Tests", () => {
             update_cell(centerThis, "(add1 ::above ::right)");
             connect_cards("inc-above", "inc-center", slot_below, slot_above);
             connect_cards("inc-center", "inc-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_cell(aboveThis, 5);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const rightValue = read_slot_value(cardRight, internal_cell_this);
             expect(rightValue).toBe(6);
@@ -497,15 +493,15 @@ describe("Card API Tests", () => {
             const cardRight = runtime_get_card("inc-right")!;
 
             update_card("def-card", "(network add1 (>:: x) (::> y) (+ x 1 y))");
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("inc-center", "(add1 ::above ::right)");
             connect_cards("inc-above", "inc-center", slot_below, slot_above);
             connect_cards("inc-center", "inc-right", slot_right, slot_left);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             update_card("inc-above", 5);
-            await execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(() => {});
 
             const rightValue = read_slot_value(cardRight, internal_cell_this);
             expect(rightValue).toBe(6);
@@ -549,13 +545,13 @@ describe("Card API Tests", () => {
             update_cell(centerThis, "(+ ::above 1 ::right)");
             connect_cards("prop-above", "prop-center", slot_below, slot_above);
             connect_cards("prop-center", "prop-right", slot_right, slot_left);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
             
 
             update_cell(cardAboveThis, 5);
             
          
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
             console.log("cardRightThis", cardRightThis.summarize());
 
             expect(read_slot_value(cardRight, internal_cell_this)).toBe(6);
@@ -622,9 +618,9 @@ describe("Card API Tests", () => {
             const secondDetach = detach_cards_by_key(idA, idB);
             expect(Either.isLeft(secondDetach)).toBe(true);
 
-            // We did not run execute_all_tasks_sequential after detach, so cleanup never ran:
+            // We did not run waitForPropagation after detach, so cleanup never ran:
             // connector and bi_sync children are only marked for disposal; they get disposed when
-            // cleanup runs (inside the next execute_all_tasks_sequential). So topology still shows the link.
+            // cleanup runs (inside the next waitForPropagation). So topology still shows the link.
             expect(cells_connected_via_propagator_graph(
                 internal_cell_right(cards[mid]!),
                 internal_cell_this(cards[mid + 1]!)
@@ -634,8 +630,7 @@ describe("Card API Tests", () => {
 
     describe("Integration: lifecycle + propagation", () => {
         // Use above-center-right layout: center::this holds code and is synced with above::below
-        // (not o
-        // verwritten by numbers). Drive above::this via source_cell + p_sync for reactive updates.
+        // (not overwritten by numbers). Drive above::this via construct_cell + p_sync for reactive updates.
         test("1. detach then spawn new card and attach: propagation stops then resumes", async () => {
             const env = primitive_env();
             add_card("lifecycle-above");
@@ -647,34 +642,34 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("lifecycle-above")!;
             const center = runtime_get_card("lifecycle-center")!;
             const right = runtime_get_card("lifecycle-right")!;
-            const aboveSrc = source_cell("lifecycle-aboveSrc");
+            const aboveSrc = construct_cell("lifecycle-aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
             connect_cards("lifecycle-above", "lifecycle-center", slot_below, slot_above);
             connect_cards("lifecycle-center", "lifecycle-right", slot_right, slot_left);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 3);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
             expect(read_slot_value(right, internal_cell_this)).toBe(4);
 
             const detachResult = detach_cards("lifecycle-center", "lifecycle-right");
             expect(Either.isRight(detachResult)).toBe(true);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 5);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
             expect(read_slot_value(right, internal_cell_this)).toBe(4);
 
             add_card("lifecycle-newRight");
             build_card(env)("lifecycle-newRight");
             const newRight = runtime_get_card("lifecycle-newRight")!;
             connect_cards("lifecycle-center", "lifecycle-newRight", slot_right, slot_left);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
 
             update_source_cell(aboveSrc, 7);
-            execute_all_tasks_sequential(console.error);
+            execute_all_tasks_sequential(() => {});
             expect(read_slot_value(newRight, internal_cell_this)).toBe(8);
         });
 
@@ -750,7 +745,7 @@ describe("Card API Tests", () => {
             const center = runtime_get_card("swap-center")!;
             const oldRight = runtime_get_card("swap-oldRight")!;
             const newRight = runtime_get_card("swap-newRight")!;
-            const aboveSrc = source_cell("swap-aboveSrc");
+            const aboveSrc = construct_cell("swap-aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -783,7 +778,7 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("chain-above")!;
             const center = runtime_get_card("chain-center")!;
             const right = runtime_get_card("chain-right")!;
-            const aboveSrc = source_cell("chain-aboveSrc");
+            const aboveSrc = construct_cell("chain-aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -808,7 +803,7 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("rm_above")!;
             const center = runtime_get_card("rm_center")!;
             const right = runtime_get_card("rm_right")!;
-            const aboveSrc = source_cell("rm_aboveSrc");
+            const aboveSrc = construct_cell("rm_aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -842,7 +837,7 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("four-above")!;
             const right = runtime_get_card("four-right")!;
             const center = runtime_get_card("four-center")!;
-            const aboveSrc = source_cell("four-aboveSrc");
+            const aboveSrc = construct_cell("four-aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -866,7 +861,7 @@ describe("Card API Tests", () => {
             const a = runtime_get_card("lifechain-a")!;
             const b = runtime_get_card("lifechain-b")!;
             const c = runtime_get_card("lifechain-c")!;
-            const aSrc = source_cell("lifechain-aSrc");
+            const aSrc = construct_cell("lifechain-aSrc");
             p_sync(aSrc, internal_cell_this(a));
 
             update_cell(internal_cell_this(b), "(+ ::above 1 ::right)");
@@ -905,7 +900,7 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("rebuild-above")!;
             const center = runtime_get_card("rebuild-center")!;
             const right = runtime_get_card("rebuild-right")!;
-            const aboveSrc = source_cell("rebuild-aboveSrc");
+            const aboveSrc = construct_cell("rebuild-aboveSrc");
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");
@@ -1002,7 +997,8 @@ describe("Card API Tests", () => {
             const above = runtime_get_card("reactive-above")!;
             const center = runtime_get_card("reactive-center")!;
             const right = runtime_get_card("reactive-right")!;
-            const aboveSrc = source_cell("reactive-aboveSrc");
+            const aboveSrc = construct_cell("reactive-aboveSrc");
+
             p_sync(aboveSrc, internal_cell_this(above));
 
             update_cell(internal_cell_this(center), "(+ ::above 1 ::right)");

@@ -308,13 +308,14 @@ function card_build_apply_io(
     return new CardBuildResponse({ success: false, errorMessage: `session not found: ${sessionId}` })
   }
 
-  build_card(env)(cardId)
+  // Apply code to ::this before build so compile_card_internal_code sees current content
   const codeKey = `${cardId}code`
   const codeValue = state?.slotMap?.[codeKey]?.value
   if (typeof codeValue === "string") {
     update_card(cardId, codeValue)
   }
 
+  build_card(env)(cardId)
   return new CardBuildResponse({ success: true, errorMessage: "" })
 }
 
