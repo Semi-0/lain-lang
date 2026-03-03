@@ -1,3 +1,12 @@
 
 backend sync updates back to frontend
 i prefer with a propagator for the this cell
+
+
+add a proapagator which retrieve the cell and propagator
+from a range as nodes and links 
+
+
+encode that graph into json bytes in the server message pipeline  
+ins session_encode
+encode value
