@@ -44,6 +44,7 @@
     "drawille-canvas": "^1.2.1",
     "effect": "^3.16.8",
     "generic-handler": "workspace:*",
+    "graphology": "^0.25.4",
     "gun": "^0.2020.1237",
     "parse-combinator": "^1.0.1",
     "pmatcher": "workspace:*",
