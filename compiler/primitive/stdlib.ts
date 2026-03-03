@@ -1,14 +1,16 @@
 import { 
     type Cell, p_add, p_subtract, p_multiply, p_divide, 
-    p_greater_than, p_less_than, p_equal, p_not, cell_strongest, construct_propagator 
+    p_greater_than, p_less_than, p_equal, p_not, cell_strongest, construct_propagator,
+    p
 } from "ppropogator";
-import { p_greater_than_or_equal, p_less_than_or_equal, bi_sync } from "ppropogator/Propagator/BuiltInProps";
+import { p_greater_than_or_equal, p_less_than_or_equal, bi_sync, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { socket_IO_client_cell } from "ppropogator/Cell/RemoteCell/SocketClientCell";
 import { socket_IO_server_cell } from "ppropogator/Cell/RemoteCell/SocketServerCell";
 import { forward } from "ppropogator/Propagator/HelperProps";
 import { any_unusable_values } from "ppropogator/Cell/CellValue";
 import { construct_env_with_inital_value } from "../env";
 import { make_primitive, make_two_arity_primitive } from "./base";
+import { trace_upstream_reactively } from "../tracer/tracer";
 
 export const two_arity_prims: [string, any][] = [
     ["+", p_add],
@@ -20,7 +22,6 @@ export const two_arity_prims: [string, any][] = [
     [">=", p_greater_than_or_equal],
     ["<=", p_less_than_or_equal],
     ["==", p_equal],
-    ["not", p_not],
 ]
 
 export const p_socket_client = (name: Cell<string>, host: Cell<string>, port: Cell<number>, input: Cell<any>, output: Cell<any>) => {
@@ -90,9 +91,12 @@ export const primitive_env = (id: string = "root") => {
                 // @ts-ignore
                 [name, make_two_arity_primitive(name, constructor)]
         ),
-        ["bi_sync", make_primitive("bi_sync", 1, 1, bi_sync)],
-        ["socket-client", make_primitive("socket-client", 5, 0, p_socket_client)],
-        ["socket-server", make_primitive("socket-server", 4, 0, p_socket_server)],
+        ["<->", make_primitive("bi_sync", 0, 2, bi_sync)],
+        ["->", make_primitive("->", 1, 1, p_sync)],
+        // @ts-ignore
+        ["trace", make_primitive("trace", 1, 1, trace_upstream_reactively)],
+        ["socket.client", make_primitive("socket.client", 5, 0, p_socket_client)],
+        ["socket.server", make_primitive("socket.server", 4, 0, p_socket_server)],
     ];
     return construct_env_with_inital_value(primitives, id);
 }

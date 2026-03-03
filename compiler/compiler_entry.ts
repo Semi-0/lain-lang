@@ -4,7 +4,7 @@ import { parseExpr } from "./parser";
 import { compile } from "./compiler";
 import { trace_generic_procedure } from "generic-handler/GenericProcedure";
 import type { Cell } from "ppropogator";
-import { source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 import { incremental_compile } from "./incremental_compiler";
 // code quality is awful
 
@@ -14,7 +14,7 @@ export const run = (code: string, env: LexicalEnvironment, source: Cell<any> | u
         const expr = parsed.value 
         if (source == undefined) {
             console.log("source is undefined, creating a new source cell")
-            source = source_cell("source")
+            source = source_constant_cell("source")
         }
         if (timestamp == undefined) {
             console.log("timestamp is undefined, setting to 0")

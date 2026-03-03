@@ -4,7 +4,7 @@ import { construct_cell } from "ppropogator"
 import { ce_constant } from "ppropogator/Propagator/BuiltInProps"
 import { define_generic_predicate } from "./compiler_helper"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
-import { source_cell } from "ppropogator/DataTypes/PremisesSource"
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource"
 import { ce_cons } from "ppropogator/DataTypes/CarriedCell"
 import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum"
 import { v4 as uuidv4 } from 'uuid';
@@ -99,7 +99,7 @@ export const normalize_expr = (expr: LainElement) => expr.value
 export const source_constant = (value: any) => {
     const id = uuidv4()
 
-    return source_cell("constant | " + to_string(value), value)
+    return source_constant_cell("constant | " + to_string(value), value)
 }
 
 export const constant_cell_from_expr = compose(expr_value, source_constant)

@@ -9,7 +9,7 @@ import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropog
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
 import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
-import { p_reactive_dispatch, source_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { p_reactive_dispatch, source_constant_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 import { get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
 import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
 import { construct_vector_clock, get_vector_clock_layer, is_reactive_value, is_vector_clock, vector_clock_get_source_direct, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock";

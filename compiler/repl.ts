@@ -8,7 +8,7 @@ import { is_cell } from "ppropogator/Cell/Cell";
 import { renderCellGraphToConsole } from "./graph_renderer";
 import { merge_layered } from "ppropogator/Cell/Merge";
 import { init_system } from "./incremental_compiler";
-import { source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 
 type REPLOptions = {
     prompt?: string;
@@ -25,7 +25,7 @@ const defaultREPLOptions: Required<REPLOptions> = {
 };
 
 
-const source = source_cell("repl");
+const source = source_constant_cell("repl");
 
 /**
  * Creates and starts an interactive REPL session.

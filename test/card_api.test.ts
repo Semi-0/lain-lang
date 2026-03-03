@@ -44,6 +44,7 @@ import {
 } from "../src/grpc/card";
 import { primitive_env } from "../compiler/closure";
 import { init_system } from "../compiler/incremental_compiler";
+import { init_constant_scheduler_flush } from "../compiler/init";
 import { run } from "../compiler/compiler_entry";
 import { construct_cell, update_cell } from "ppropogator/Cell/Cell";
 import { p_sync } from "ppropogator/Propagator/BuiltInProps";
@@ -1018,5 +1019,33 @@ describe("Card API Tests", () => {
             execute_all_tasks_sequential(() => {});
             expect(read_slot_value(right, internal_cell_this)).toBe(1);
         });
+
+        test("9. trace with update_card + build_card: no infinite loop with periodic scheduler", async () => {
+            const env = primitive_env();
+            add_card("trace-api-source");
+            add_card("trace-api-a");
+            add_card("trace-api-b");
+            build_card(env)("trace-api-source");
+            build_card(env)("trace-api-a");
+            build_card(env)("trace-api-b");
+
+            connect_cards("trace-api-source", "trace-api-a", slot_right, slot_left);
+            connect_cards("trace-api-a", "trace-api-b", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            update_card("trace-api-source", 42);
+            execute_all_tasks_sequential(() => {});
+
+            update_card("trace-api-a", "(trace ::left ::right)");
+            build_card(env)("trace-api-a");
+            execute_all_tasks_sequential(() => {});
+
+            const dispose = init_constant_scheduler_flush(5);
+            await new Promise((r) => setTimeout(r, 200));
+            dispose();
+
+            const cardA = runtime_get_card("trace-api-a")!;
+            expect(internal_cell_left(cardA)).toBeDefined();
+        }, 15000);
     });
 });

@@ -102,9 +102,9 @@ export const p_emit_card_internal_updates_to_runtime = (cardId: string) => (
             slot: slot_this,
             value: cell_strongest(internal_content),
         });
-        // console.log("card id", cardId);
-        // console.log("emitted card updates to runtime", cell_strongest(internal_content));
-        // console.log("base value", cell_strongest_base_value(internal_content));
+        console.log("card id", cardId);
+        console.log("emitted card updates to runtime", cell_strongest(internal_content));
+        console.log("base value", cell_strongest_base_value(internal_content));
     },
     "p_emit_card_updates_to_runtime"
 )
