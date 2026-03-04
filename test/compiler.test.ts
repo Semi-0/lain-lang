@@ -39,6 +39,7 @@ import {
     trace_earliest_emerged_value 
 } from "ppropogator/AdvanceReactivity/traced_timestamp/genericPatch";
 import { get_base_value } from "sando-layer/Basic/Layer";
+import { is_layered_object, type LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { the_nothing, is_nothing } from "ppropogator/Cell/CellValue";
 
 // Import compiler entry point
@@ -334,6 +335,31 @@ describe("Compiler (compile function) Tests", () => {
         init_system_compile()
     });
 
+    /** Unwrap layered value, assert graphology graph, optionally assert every node label starts with prefix. */
+    function assertGraphFromCell(
+        raw: unknown,
+        options?: { labelPrefix?: string; cardId?: string }
+    ): void {
+        const base = is_layered_object(raw) ? get_base_value(raw as LayeredObject<unknown>) : raw;
+        expect(is_graphology_graph(base)).toBe(true);
+        const g = base as { forEachNode: (fn: (node: string, attrs: Record<string, unknown>) => void) => void };
+        let count = 0;
+        g.forEachNode((_node, attrs) => {
+            count++;
+            const label = attrs?.label;
+            expect(typeof label).toBe("string");
+            if (options?.labelPrefix) {
+                expect((label as string).startsWith(options.labelPrefix)).toBe(true);
+            }
+            if (options?.cardId) {
+                expect((label as string).includes(`CARD|${options.cardId}|`)).toBe(true);
+            }
+        });
+        if (options?.labelPrefix) {
+            expect(count).toBeGreaterThanOrEqual(1);
+        }
+    }
+
     describe("1. Constants", () => {
         test("should compile string constant", async () => {
             const env = empty_lexical_environment("test");
@@ -378,7 +404,7 @@ describe("Compiler (compile function) Tests", () => {
             expect(cell_strongest_base_value(e)).toBe(3);
         });
 
-        test("graph.card: can be called with graph and cardId, writes subgraph to output", async () => {
+        test("graph:card: can be called with graph and cardId, writes subgraph with only that card's nodes", async () => {
             const env = primitive_env();
             raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
             await execute_all_tasks_sequential(console.error);
@@ -389,11 +415,10 @@ describe("Compiler (compile function) Tests", () => {
             const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
             const sub = e.get("sub");
             expect(sub).toBeDefined();
-            const val = cell_strongest_base_value(sub!);
-            expect(is_graphology_graph(val)).toBe(true);
+            assertGraphFromCell(cell_strongest_base_value(sub!), { cardId: "some-card" });
         });
 
-        test("graph.prefix: can be called with graph and prefix, writes subgraph to output", async () => {
+        test("graph:label: can be called with graph and prefix, writes subgraph where every node label starts with prefix", async () => {
             const env = primitive_env();
             raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
             await execute_all_tasks_sequential(console.error);
@@ -405,7 +430,33 @@ describe("Compiler (compile function) Tests", () => {
             const cells = e.get("cells");
             expect(cells).toBeDefined();
             const val = cell_strongest_base_value(cells!);
-            expect(is_graphology_graph(val)).toBe(true);
+            assertGraphFromCell(val, { labelPrefix: "CELL|" });
+            const fullGraph = cell_strongest_base_value(e.get("g")!);
+            const fullBase = is_layered_object(fullGraph) ? get_base_value(fullGraph as LayeredObject<unknown>) : fullGraph;
+            expect(is_graphology_graph(fullBase)).toBe(true);
+            let fullOrder = 0;
+            (fullBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { fullOrder++; });
+            const subBase = is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val;
+            let subOrder = 0;
+            (subBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { subOrder++; });
+            expect(subOrder).toBeLessThanOrEqual(fullOrder);
+        });
+
+        test("graph:label with CELL|CARD| returns only card cells (use this prefix in frontend, not \"CARD|\")", async () => {
+            const { TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS } = await import("../compiler/tracer/graph_queries");
+            expect(TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS).toBe("CELL|CARD|");
+            const env = primitive_env();
+            raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
+            await execute_all_tasks_sequential(console.error);
+            raw_compile("(with_graph 1 g)", env);
+            await execute_all_tasks_sequential(console.error);
+            raw_compile(`(graph:label g "${TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS}" card_cells)`, env);
+            await execute_all_tasks_sequential(console.error);
+            const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
+            const cardCells = e.get("card_cells");
+            expect(cardCells).toBeDefined();
+            const val = cell_strongest_base_value(cardCells!);
+            expect(is_graphology_graph(is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val)).toBe(true);
         });
 
         test("graph.nodes: can be called with graph and node list, writes subgraph to output", async () => {

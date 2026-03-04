@@ -11,7 +11,7 @@ import { any_unusable_values } from "ppropogator/Cell/CellValue";
 import { construct_env_with_inital_value } from "../env";
 import { make_primitive, make_two_arity_primitive } from "./base";
 import { trace_upstream_periodically, trace_upstream_reactively } from "../tracer/tracer";
-import { p_graph_card, p_graph_label_prefix, p_graph_nodes } from "../tracer/graph_queries";
+import { p_graph_card, p_graph_connected_prefix, p_graph_label_prefix, p_graph_name, p_graph_nodes } from "../tracer/graph_queries";
 
 export const two_arity_prims: [string, any][] = [
     ["+", p_add],
@@ -99,8 +99,11 @@ export const primitive_env = (id: string = "root") => {
         // @ts-ignore
         ["graph:active-trace", make_primitive("graph:active-trace", 1, 1, trace_upstream_periodically)],
         ["graph:card", make_primitive("graph:card", 2, 1, p_graph_card)],
-        ["graph:label", make_primitive("graph:label_prefix", 2, 1, p_graph_label_prefix)],
+        ["graph:prefix", make_primitive("graph:label", 2, 1, p_graph_label_prefix)],
+        // CELL|CARD
+        ["graph:prefix:connected", make_primitive("graph:prefix:connected", 2, 1, p_graph_connected_prefix)],
         ["graph:nodes", make_primitive("graph:nodes", 2, 1, p_graph_nodes)],
+        ["graph:name", make_primitive("graph:name", 2, 1, p_graph_name)],
         ["socket:client", make_primitive("socket:client", 5, 0, p_socket_client)],
         ["socket:server", make_primitive("socket:server", 4, 0, p_socket_server)],
     ];

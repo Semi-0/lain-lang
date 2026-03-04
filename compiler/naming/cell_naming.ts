@@ -78,3 +78,11 @@ export const parse_cell_label = (label: string): { type: string; parts: string[]
   const parts = label.split(SEP);
   return { type: parts[0] ?? "", parts };
 };
+
+/**
+ * In the traced graph, every node label starts with CELL| or PROPAGATOR|.
+ * Card slot cells have label "CELL|CARD|{cardId}|{slot}" (cell_name is CARD|{cardId}|{slot}).
+ * So prefix "CARD|" matches no nodes. Use this constant with graph:label / get_subgraph_by_label_prefix
+ * to get the subgraph of all card slot cells.
+ */
+export const TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS = make_name([CELL_HEADER, CARD_HEADER, ""]);

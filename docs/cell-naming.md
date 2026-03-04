@@ -49,6 +49,8 @@ Import from `lain-lang/compiler/tracer/graph_queries`:
 - **get_subgraph_by_label_prefix(graph, prefix)** — Subgraph of nodes whose label starts with prefix
 - **get_subgraph_by_nodes(graph, nodeIds)** — Induced subgraph for given node IDs (array or Set)
 
+**Important — label prefix for `graph:label`:** In the traced graph, every node label starts with `CELL|` or `PROPAGATOR|` (e.g. `CELL|root`, `CELL|CARD|uuid|::this`). So prefix `"CARD|"` matches **no** nodes. To get all card slot cells, use prefix **`"CELL|CARD|"`**. Constant: `TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS` from `graph_queries`.
+
 Example:
 
 ```ts
@@ -57,6 +59,7 @@ import {
   find_cell_by_id,
   get_subgraph_by_card,
   get_subgraph_by_label_prefix,
+  TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS,
 } from "lain-lang/compiler/tracer/graph_queries";
 import type { DirectedGraph } from "graphology";
 
@@ -67,6 +70,8 @@ const node = find_cell_by_id(graph, "some-cell-id");
 // Get induced subgraph (nodes + edges between them)
 const cardSubgraph = get_subgraph_by_card(graph, "my-card-uuid");
 const cellSubgraph = get_subgraph_by_label_prefix(graph, "CELL|");
+// All card slot cells only (use "CELL|CARD|", not "CARD|"):
+const cardCellsSubgraph = get_subgraph_by_label_prefix(graph, TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS);
 ```
 
 ## Usage

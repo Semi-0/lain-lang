@@ -8,6 +8,7 @@
  * Reference: Propogator/test/advanceReactive.test.ts, card_api.test.ts
  */
 import { describe, test, expect, beforeEach } from "bun:test";
+import DirectedGraph from "graphology";
 import {
   construct_cell,
   cell_strongest_base_value,
@@ -27,6 +28,7 @@ import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueS
 import { trace_upstream_reactively, trace_upstream_periodically } from "./tracer";
 import {
   find_cells_by_card,
+  get_connected_subgraph_by_label_prefix,
   get_subgraph_by_card,
   get_subgraph_by_label_prefix,
   get_subgraph_by_nodes,
@@ -622,6 +624,53 @@ describe("trace_upstream_periodically", () => {
     dispose_propagator(gathererTap);
     await execute_all_tasks_sequential(() => {});
   }, 5000);
+});
+
+describe("graph_queries", () => {
+  test("get_connected_subgraph_by_label_prefix: zero or one match returns induced subgraph only", () => {
+    const g = new DirectedGraph();
+    g.addNode("a", { label: "CELL|a" });
+    g.addNode("b", { label: "OTHER|b" });
+    g.addEdge("a", "b");
+
+    const empty = get_connected_subgraph_by_label_prefix(g, "CELL|x");
+    expect(empty.order).toBe(0);
+
+    const single = get_connected_subgraph_by_label_prefix(g, "CELL|");
+    expect(single.order).toBe(1);
+    expect(single.hasNode("a")).toBe(true);
+    expect(single.hasNode("b")).toBe(false);
+  });
+
+  test("get_connected_subgraph_by_label_prefix: two matched nodes connected by path include intermediate node", () => {
+    const g = new DirectedGraph();
+    g.addNode("cell1", { label: "CELL|one" });
+    g.addNode("prop", { label: "PROPAGATOR|sync" });
+    g.addNode("cell2", { label: "CELL|two" });
+    g.addEdge("cell1", "prop");
+    g.addEdge("prop", "cell2");
+
+    const sub = get_connected_subgraph_by_label_prefix(g, "CELL|");
+    expect(sub.order).toBe(3);
+    expect(sub.hasNode("cell1")).toBe(true);
+    expect(sub.hasNode("cell2")).toBe(true);
+    expect(sub.hasNode("prop")).toBe(true);
+    expect(sub.size).toBe(2);
+  });
+
+  test("get_connected_subgraph_by_label_prefix: two matched nodes disconnected stay as two nodes", () => {
+    const g = new DirectedGraph();
+    g.addNode("cell1", { label: "CELL|one" });
+    g.addNode("cell2", { label: "CELL|two" });
+    g.addNode("other", { label: "OTHER|x" });
+    g.addEdge("cell1", "other");
+    // no edge from other to cell2 -> no path between cell1 and cell2
+    const sub = get_connected_subgraph_by_label_prefix(g, "CELL|");
+    expect(sub.order).toBe(2);
+    expect(sub.hasNode("cell1")).toBe(true);
+    expect(sub.hasNode("cell2")).toBe(true);
+    expect(sub.hasNode("other")).toBe(false);
+  });
 });
 
 // describe("trace_upstream_incremental", () => {

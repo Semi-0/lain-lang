@@ -46,6 +46,7 @@
     "generic-handler": "workspace:*",
     "graphology": "^0.25.4",
     "graphology-operators": "^1.6.1",
+    "graphology-shortest-path": "^2.1.0",
     "gun": "^0.2020.1237",
     "parse-combinator": "^1.0.1",
     "pmatcher": "workspace:*",
