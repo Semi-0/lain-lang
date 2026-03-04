@@ -52,7 +52,7 @@ const dispose_card_internal_network_io = (id: string): boolean => {
 export const runtime_add_card = (id: string): Cell<unknown> => {
     // init card 
     const card = construct_cell("card", id) as Cell<unknown>;
-    p_construct_card_cell(card);
+    p_construct_card_cell(id)(card);
 
     // init card io
     const updater = construct_cell("updater" + id) as Cell<unknown>;

@@ -1,6 +1,7 @@
 import { register_predicate } from "generic-handler/Predicates"
 
 import { expr_value, type LainElement } from "../lain_element"
+import { core_accessor_name, core_env_name } from "../naming"
 import { type Cell, cell_name, compound_propagator, construct_cell } from "ppropogator"
 import { ce_constant, ce_identity, p_sync } from "ppropogator/Propagator/BuiltInProps"
 import { cell_id, cell_strongest_base_value } from "ppropogator/Cell/Cell"
@@ -50,10 +51,10 @@ export const construct_env = (parent: Cell<LexicalEnvironment>, id: string = "ro
     }
 ) 
 
-export const empty_lexical_environment = (id: string) => construct_env(construct_cell("root"), id)
+export const empty_lexical_environment = (id: string) => construct_env(construct_cell(core_env_name("root")), id)
 
 
-export const  construct_env_with_inital_value = (initial: [string, Cell<any>][], id: string) => ce_dict(new Map<string, Cell<any>>([[parent_key, construct_cell("root")], ...initial]), id)
+export const  construct_env_with_inital_value = (initial: [string, Cell<any>][], id: string) => ce_dict(new Map<string, Cell<any>>([[parent_key, construct_cell(core_env_name("root"))], ...initial]), id)
 
 // // this needs abstraction 
 // export const p_extend_env = (
@@ -105,12 +106,12 @@ export const summarize_env: (env: LexicalEnvironment) => string  = (env: Lexical
 export const p_lexical_lookup = (key: string, env: LexicalEnvironment, output: Cell<any>) =>
     compound_propagator([env], [output], () => {
 
-            if (cell_name(env) === "root") {
+            if (cell_name(env) === core_env_name("root")) {
                 return;
             }
 
             // lookup parent
-            const parent_scope_value = construct_cell("parent_cell")
+            const parent_scope_value = construct_cell(core_accessor_name("parent"))
             p_lexical_lookup(key, get_parent_env(env), parent_scope_value)
 
             // current scope
@@ -126,7 +127,7 @@ export const self_reflective_lexical_lookup = (key: string, env: LexicalEnvironm
         const global_env = ce_identity(env)
         // shit all the cell is still mutable!!!
 
-        const lexical_result = construct_cell("lexical_result")
+        const lexical_result = construct_cell(core_accessor_name("lexical_result"))
         p_lexical_lookup(key, env, lexical_result)
 
         p_pioritize_leftmost([lexical_result, global_env], output)
@@ -144,7 +145,7 @@ export const self_reflective_lexical_lookup_safe = (key: string, env: LexicalEnv
         // this is a more safe version because it disable original env
         // from being mutated
 
-        const lexical_result = construct_cell("lexical_result")
+        const lexical_result = construct_cell(core_accessor_name("lexical_result"))
         p_lexical_lookup(key, env, lexical_result)
 
         p_pioritize_leftmost([lexical_result, global_env], output)
@@ -184,7 +185,7 @@ export const cached_lookup_maker = (lookup: (key: string, env: LexicalEnvironmen
 
 
 export const ce_lexical_lookup = (key: string, env: LexicalEnvironment) =>  {
-    const assesor = construct_cell(key + " | " + "accessor")
+    const assesor = construct_cell(core_accessor_name(key))
     self_reflective_lexical_lookup_safe(key, env, assesor)
     return assesor
 }

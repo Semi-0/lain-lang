@@ -1,6 +1,7 @@
 import { compose } from "generic-handler/built_in_generics/generic_combinator"
 import { register_predicate } from "generic-handler/Predicates"
 import { construct_cell } from "ppropogator"
+import { core_constant_value_name } from "./naming"
 import { ce_constant } from "ppropogator/Propagator/BuiltInProps"
 import { define_generic_predicate } from "./compiler_helper"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
@@ -97,9 +98,7 @@ export const normalize_expr = (expr: LainElement) => expr.value
 
 
 export const source_constant = (value: any) => {
-    const id = uuidv4()
-
-    return source_constant_cell("constant | " + to_string(value), value)
+    return source_constant_cell(core_constant_value_name(value), value)
 }
 
 export const constant_cell_from_expr = compose(expr_value, source_constant)

@@ -4,6 +4,7 @@
  */
 import { Cell, cell_id, cell_strongest, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, register_predicate } from "ppropogator";
 import { c_dict_accessor, ce_dict, ce_dict_accessor, p_construct_dict_carrier } from "ppropogator/DataTypes/CarriedCell";
+import { create_card_cell_name } from "../../../compiler/naming";
 import { bi_sync, p_filter_a, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { define, extend_env, is_parent_key, LexicalEnvironment } from "../../../compiler/env";
 import { selective_sync } from "ppropogator/DataTypes/CarriedCell/HigherOrder";
@@ -47,9 +48,9 @@ export const is_native_slot = register_predicate(
 );
 
 
-export const p_construct_card_cell = (output: Cell<unknown>) =>
+export const p_construct_card_cell = (cardId: string) => (output: Cell<unknown>) =>
     p_construct_dict_carrier(
-        new Map(all_slots.map(key => [key, construct_cell(key)])),
+        new Map(all_slots.map(slot => [slot, construct_cell(create_card_cell_name(cardId, slot))])),
         output
     );
 
@@ -207,7 +208,7 @@ export const card_connector_below_above = card_connector_constructor(slot_below,
 
 export const internal_build_card = (env: LexicalEnvironment) => (id: string) => {
     const card = construct_cell("card", id) as Cell<unknown>;
-    p_construct_card_cell(card);
+    p_construct_card_cell(id)(card);
     compile_internal_network(card, env);
     return card;
 };

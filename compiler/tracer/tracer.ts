@@ -1,9 +1,6 @@
 import {
     Cell,
     construct_propagator,
-    is_contradiction,
-    is_disposed,
-    is_nothing,
     Propagator,
     propagator_id,
     propagator_name,
@@ -14,46 +11,21 @@ import {
     cell_id,
     cell_neighbor_set,
     cell_name,
-    cell_strongest_base_value,
     NeighborType,
   } from "ppropogator/Cell/Cell";
   
   import { dispose_propagator, propagator_inputs } from "ppropogator/Propagator/Propagator";
   import { p_tap } from "ppropogator/Propagator/BuiltInProps";
-  import { is_map } from "pmatcher/MatchBuilder";
-  import { is_boolean, is_number, is_string } from "generic-handler/built_in_generics/generic_predicates";
   import { update_source_cell } from "ppropogator/DataTypes/PremisesSource";
   import { DirectedGraph } from "graphology";
-  
+  import { create_cell_label, create_propagator_label, make_name } from "../naming";
+
   export type GraphNode = { id: string; label: string };
   export type GraphLink = { source: string; target: string };
   export type Graph = { nodes: GraphNode[]; links: GraphLink[] };
-  
-  const SEP = "|";
-  const make_name = (parts: string[]) => parts.join(SEP);
+
   const create_tracer_name = (name: string) => make_name([name, "tracer"]);
-  
-  const cell_header = "C:";
-  const propagator_header = "P:";
-  
-  const cell_strongest_representer = (cell: Cell<any>): string => {
-    const base = cell_strongest_base_value(cell);
-    if (is_nothing(base)) return "nothing";
-    if (is_contradiction(base)) return "contradiction";
-    if (is_disposed(base)) return "disposed";
-    if (is_string(base)) return base as string;
-    if (is_number(base)) return String(base as number);
-    if (is_boolean(base)) return String(base as boolean);
-    if (is_map(base)) return "compound data";
-    return "unknown";
-  };
-  
-  const create_cell_representation = (cell: Cell<any>) =>
-    make_name([cell_header, cell_name(cell)]);
-  
-  const create_propagator_representation = (p: Propagator) =>
-    make_name([propagator_header, propagator_name(p)]);
-  
+
   const is_tracer_propagator = (p: Propagator) => propagator_name(p).includes("tracer");
 
   /** Stable graph signature so we only publish when graph actually changed. */
@@ -160,7 +132,7 @@ import {
           }
         }
 
-        g.mergeNode(cid, { label: create_cell_representation(c) });
+        g.mergeNode(cid, { label: create_cell_label(c) });
 
         for (const p of cell_dependents(c)) {
           if (is_tracer_propagator(p)) continue;
@@ -173,14 +145,14 @@ import {
             }
             seenProps.add(pid);
             nodeCount++;
-            g.mergeNode(pid, { label: create_propagator_representation(p) });
+            g.mergeNode(pid, { label: create_propagator_label(p) });
           }
 
           g.mergeEdge(pid, cid);
 
           for (const ic of propagator_inputs(p)) {
             const inId = cell_id(ic);
-            g.mergeNode(inId, { label: create_cell_representation(ic) });
+            g.mergeNode(inId, { label: create_cell_label(ic) });
             g.mergeEdge(inId, pid);
             if (!seenCells.has(inId)) q.push(ic);
           }
@@ -288,7 +260,7 @@ import {
         seenCells.add(cid);
         nodeCount++;
 
-        g.mergeNode(cid, { label: create_cell_representation(c) });
+        g.mergeNode(cid, { label: create_cell_label(c) });
 
         for (const p of cell_dependents(c)) {
           if (is_tracer_propagator(p)) continue;
@@ -300,12 +272,12 @@ import {
             }
             seenProps.add(pid);
             nodeCount++;
-            g.mergeNode(pid, { label: create_propagator_representation(p) });
+            g.mergeNode(pid, { label: create_propagator_label(p) });
           }
           g.mergeEdge(pid, cid);
           for (const ic of propagator_inputs(p)) {
             const inId = cell_id(ic);
-            g.mergeNode(inId, { label: create_cell_representation(ic) });
+            g.mergeNode(inId, { label: create_cell_label(ic) });
             g.mergeEdge(inId, pid);
             if (!seenCells.has(inId)) q.push(ic);
           }
