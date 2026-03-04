@@ -25,6 +25,12 @@ import {
 import { set_global_state, PublicStateCommand, set_merge } from "ppropogator";
 import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet";
 import { trace_upstream_reactively, trace_upstream_periodically } from "./tracer";
+import {
+  find_cells_by_card,
+  get_subgraph_by_card,
+  get_subgraph_by_label_prefix,
+  get_subgraph_by_nodes,
+} from "./graph_queries";
 import { graphology_graph_to_graph_data, is_graphology_graph } from "../../src/grpc/codec/session_encode";
 import { get_base_value } from "sando-layer/Basic/Layer";
 import { is_layered_object, type LayeredObject } from "sando-layer/Basic/LayeredObject";
@@ -85,6 +91,33 @@ describe("trace_upstream_reactively", () => {
     const linkToRoot = graph.links.find((l) => l.target === cell_id(root));
     expect(linkToRoot).toBeDefined();
     expect(nodeIds).toContain(linkToRoot!.source);
+  });
+
+  test("graphology subgraph: get_subgraph_by_label_prefix and get_subgraph_by_nodes", async () => {
+    const input = source_constant_cell("inputSub");
+    const root = construct_cell("rootSub");
+    const gatherer = construct_cell("gathererSub");
+
+    p_sync(input, root);
+    trace_upstream_reactively(root, gatherer);
+    update_source_cell(input, 1);
+    await execute_all_tasks_sequential(() => {});
+
+    const g = cell_strongest_base_value(gatherer);
+    expect(is_graphology_graph(g)).toBe(true);
+
+    const cellSub = get_subgraph_by_label_prefix(g, "CELL|");
+    let cellCount = 0;
+    cellSub.forEachNode(() => {
+      cellCount++;
+    });
+    expect(cellCount).toBeGreaterThanOrEqual(2);
+    expect(cellSub.hasNode(cell_id(root))).toBe(true);
+    expect(cellSub.hasNode(cell_id(input))).toBe(true);
+
+    const nodeSub = get_subgraph_by_nodes(g, [cell_id(root), cell_id(input)]);
+    expect(nodeSub.order).toBe(2);
+    expect(nodeSub.size).toBe(0); // no edge between input and root directly (propagator is in between)
   });
 
   test("reactively updates gatherer when root value changes", async () => {
@@ -379,6 +412,80 @@ describe("trace_upstream_reactively", () => {
     const leftCell = internal_cell_left(cardA);
     expect(leftCell).toBeDefined();
     expect(internal_cell_this(runtime_get_card("trace-source")!)).toBeDefined();
+  }, 15000);
+
+  test.only("card API + graph queries: find cells and propagators related to a card", async () => {
+    const { init_system } = await import("../incremental_compiler");
+    const {
+      add_card,
+      build_card,
+      runtime_get_card,
+      connect_cards,
+      update_card,
+      internal_cell_this,
+      slot_right,
+      slot_left,
+    } = await import("../../src/grpc/card");
+
+    init_system();
+    set_global_state(PublicStateCommand.CLEAN_UP);
+    internal_clear_source_cells();
+    set_merge(merge_temporary_value_set);
+
+    const env = (await import("../closure")).primitive_env();
+
+    add_card("query-source");
+    add_card("query-card-a");
+    add_card("query-card-b");
+    build_card(env)("query-source");
+    build_card(env)("query-card-a");
+    build_card(env)("query-card-b");
+
+    connect_cards("query-source", "query-card-a", slot_right, slot_left);
+    connect_cards("query-card-a", "query-card-b", slot_right, slot_left);
+    await execute_all_tasks_sequential(() => {});
+
+    update_card("query-source", 100);
+    await execute_all_tasks_sequential(() => {});
+
+    const cardA = runtime_get_card("query-card-a")!;
+    const cardACell = internal_cell_this(cardA);
+    expect(cardACell).toBeDefined();
+
+    const gatherer = construct_cell("gathererQueryCard");
+    trace_upstream_reactively(cardACell!, gatherer);
+    await execute_all_tasks_sequential(() => {});
+
+    const g = cell_strongest_base_value(gatherer);
+    expect(is_graphology_graph(g)).toBe(true);
+
+    const graph = g as import("graphology").DirectedGraph;
+
+    // find_cells_by_card: cells whose label contains CARD|{cardId}|
+    const cardACells = find_cells_by_card(graph, "query-card-a");
+    const sourceCells = find_cells_by_card(graph, "query-source");
+
+
+
+    expect(cardACells.length).toBeGreaterThanOrEqual(1);
+    expect(sourceCells.length).toBeGreaterThanOrEqual(1);
+    cardACells.forEach((id) => {
+      const label = graph.getNodeAttribute(id, "label");
+      expect(typeof label === "string" && label.includes("CARD|query-card-a|")).toBe(true);
+    });
+
+    // get_subgraph_by_card: induced subgraph of card cells
+    const cardASub = get_subgraph_by_card(graph, "query-card-a");
+    console.log(get_subgraph_by_card(graph, "CARD"));
+    expect(cardASub.order).toBe(cardACells.length);
+    cardACells.forEach((id) => expect(cardASub.hasNode(id)).toBe(true));
+
+    // get_subgraph_by_label_prefix: cells only vs propagators
+    const cellSub = get_subgraph_by_label_prefix(graph, "CELL|");
+    const propSub = get_subgraph_by_label_prefix(graph, "PROPAGATOR|");
+    expect(cellSub.order + propSub.order).toBeGreaterThanOrEqual(graph.order);
+    expect(cellSub.order).toBeGreaterThanOrEqual(2);
+    expect(propSub.order).toBeGreaterThanOrEqual(1);
   }, 15000);
 
   test("REPRO: tracer output feeds back to input - maxRebuilds prevents infinite loop", async () => {

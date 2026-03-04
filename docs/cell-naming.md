@@ -37,19 +37,36 @@ Example: `CARD|550e8400-e29b-41d4-a716-446655440000|::this`
 
 Import from `lain-lang/compiler/tracer/graph_queries`:
 
+**Node lookup (returns IDs or attributes):**
+
 - **find_cells_by_card(graph, cardId)** — Node IDs whose label contains `CARD|{cardId}|`
 - **find_cell_by_id(graph, id)** — Node attributes by id, or null
 - **find_cells_by_label_prefix(graph, prefix)** — Node IDs whose label starts with prefix
 
+**Induced subgraphs** (uses `graphology-operators/subgraph`; returns a new DirectedGraph):
+
+- **get_subgraph_by_card(graph, cardId)** — Subgraph of nodes whose label includes `CARD|{cardId}|`
+- **get_subgraph_by_label_prefix(graph, prefix)** — Subgraph of nodes whose label starts with prefix
+- **get_subgraph_by_nodes(graph, nodeIds)** — Induced subgraph for given node IDs (array or Set)
+
 Example:
 
 ```ts
-import { find_cells_by_card, find_cell_by_id } from "lain-lang/compiler/tracer/graph_queries";
+import {
+  find_cells_by_card,
+  find_cell_by_id,
+  get_subgraph_by_card,
+  get_subgraph_by_label_prefix,
+} from "lain-lang/compiler/tracer/graph_queries";
 import type { DirectedGraph } from "graphology";
 
 const graph: DirectedGraph = /* from tracer gatherer */;
 const cardCellIds = find_cells_by_card(graph, "my-card-uuid");
 const node = find_cell_by_id(graph, "some-cell-id");
+
+// Get induced subgraph (nodes + edges between them)
+const cardSubgraph = get_subgraph_by_card(graph, "my-card-uuid");
+const cellSubgraph = get_subgraph_by_label_prefix(graph, "CELL|");
 ```
 
 ## Usage
