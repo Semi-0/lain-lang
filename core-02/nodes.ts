@@ -20,6 +20,22 @@ export function create_node(id: string): GraphNode {
     return node;
 }
 
+export const connect_nodes_inbound_outbound = (nodeA: GraphNode, nodeB: GraphNode) => {
+    nodeA.outbounds.push(nodeB);
+    nodeB.inbounds.push(nodeA);
+}
+
+export const connect_nodes_both_directions = (nodeA: GraphNode, nodeB: GraphNode) => {
+    connect_nodes_inbound_outbound(nodeA, nodeB);
+    connect_nodes_inbound_outbound(nodeB, nodeA);
+}
+
+export const disconnect_nodes = (nodeA: GraphNode, nodeB: GraphNode) => {
+    nodeA.outbounds = nodeA.outbounds.filter(n => n !== nodeB);
+    nodeA.inbounds = nodeA.inbounds.filter(n => n !== nodeB);
+    nodeB.inbounds = nodeB.inbounds.filter(n => n !== nodeA);
+    nodeB.outbounds = nodeB.outbounds.filter(n => n !== nodeA);
+}
 
 
 export const f_map = (f: (v: any) => any) => (v: any)=> {

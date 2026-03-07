@@ -1,10 +1,22 @@
-import { strongest_value, the_nothing } from "ppropogator";
-import { create_node, node_id } from "./nodes";
-import { pipe } from "effect";
-import { GraphNode } from "./nodes";
-import { cell_merge } from "ppropogator/Cell/Merge";
-import { is_contradiction } from "ppropogator/Cell/CellValue";
-import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic";
+import { CellValue, is_contradiction, the_nothing } from "ppropogator/Cell/CellValue"
+import { construct_node } from "../MiniReactor/MrPrimitive"
+import { combine_latest, map, subscribe, tap } from "../MiniReactor/MrCombinators"
+import { cell_merge } from "ppropogator/Cell/Merge"
+import { pipe } from "effect"
+import { Node } from "../MiniReactor/MrType"
+import { strongest_value } from "ppropogator"
+import { v4 as uuidv4 } from 'uuid';
+import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic"
+
+
+
+// cells
+interface CellInterface{
+    id: string,
+    name: string,
+    updater: Node<CellValue<any>>,
+    strongest: Node<CellValue<any>>,
+}
 
 interface CellConstruct{
     name: string,
@@ -12,7 +24,7 @@ interface CellConstruct{
     strongest: any,
 }
 
-export const make_cell_construct = (name: string, content: any, strongest: any) => {
+const make_cell_construct = (name: string, content: any, strongest: any) => {
     return {
         name,
         content,
@@ -20,113 +32,128 @@ export const make_cell_construct = (name: string, content: any, strongest: any) 
     }
 }
 
-const cell_store = new Map<string, CellConstruct>();
 
-const set_cell = (node_id: number, cell: CellConstruct) => {
-    cell_store.set(node_id, cell);
-}
-
-const cell_name = (node_id: number) => (cell_store.get(node_id)?.name)
-const cell_content = (node_id: number) => (cell_store.get(node_id)?.content)
-const cell_strongest = (node_id: number) => (cell_store.get(node_id)?.strongest)
-
-const set_cell_content = (node_id: number, content: any) => {
-    const original_cell = get_cell(node);
-    if (original_cell !== undefined) {
-        original_cell.content = content;
-        set_cell(node, original_cell);
-    }
-    else {
-        throw new Error("Cell not found: " + node_id(node));
-    }
-}
-
-const set_cell_strongest = (node: GraphNode, strongest: any) => {
-    const original_cell = get_cell(node);
-    if (original_cell !== undefined) {
-        original_cell.strongest = strongest;
-        set_cell(node, original_cell);
-    }
-    else {
-        throw new Error("Cell not found: " + node_id(node));
-    }
-}
-
-
-
-const get_cell = (node: GraphNode): CellConstruct => {
-        const cell = cell_store.get(node_id(node));
-    if (cell !== undefined) {
-        return cell;
-    }
-    else {
-        throw new Error("Cell not found: " + node_id(node));
-    }
-}
-
-
-var handle_cell_contradiction = (node: GraphNode) => {
-    pipe(
-        node,
-        get_cell,
-        (cell: CellConstruct) => {
-            console.error("Cell contradiction: " + cell_name(node));
-        }
-    )
-}
-
-const create_cell = (name: string): GraphNode => {
-    const node = create_node(name);
-    const cell = {
+const make_cell_interface = (name: string, updater: Node<CellValue<any>>, strongest: Node<CellValue<any>>) => {
+    return {
         name,
-        content: the_nothing,
-        strongest: the_nothing
+        updater,
+        strongest,
     }
-    cell_store.set(name, cell);
-    return node;
 }
 
-const cell_update_constructor =  (alert_propagators: (node: GraphNode) => void) =>
-     (node: GraphNode, update: (value: any) => void) => {
-    pipe(
-        node,
-        cell_content,
-        (content: any) => {
-            return cell_merge(content, update)
-        },
-        (new_content: any) => {
-            set_cell_content(node, new_content);
-            return new_content;
-        },
-        (new_content: any) => {
-            const new_strongest = strongest_value(new_content);
-            const old_strongest = cell_strongest(node);
 
+const cell_store = new Map<string, CellConstruct>()
+
+const set_cell = (node_id: string, cell: CellConstruct) => {
+    cell_store.set(node_id, cell)
+}
+
+
+const set_cell_content = (node_id: string, content: any) => {
+    const cell = cell_store.get(node_id)
+    if (cell) {
+        cell.content = content
+        set_cell(node_id, cell)
+    }
+    else {
+        throw new Error("Cell not found: " + node_id)
+    }
+}
+
+const handle_cell_contradiction = (node_id: string) => {
+    const cell = cell_store.get(node_id)
+    if (cell) {
+        console.error("Cell contradiction: " + cell.name)
+    }
+    else {
+        throw new Error("Cell not found: " + node_id)
+    }
+
+}
+
+const set_cell_strongest = (node_id: string, strongest: any) => {
+    const cell = cell_store.get(node_id)
+    if (cell) {
+        cell.strongest = strongest
+        set_cell(node_id, cell)
+    }
+    else {
+        throw new Error("Cell not found: " + node_id)
+    }
+}
+
+export const construct_cell = (name: string) => {
+    const updater = construct_node()
+    const id = uuidv4()
+    const strongest = construct_node()
+    const cell_construct = make_cell_construct(name, the_nothing, the_nothing)
+    set_cell(id, cell_construct)
+
+    const content_node = pipe(updater,
+        map((updates: any) => {
+            const old_content = cell_content(id)
+            const new_content = cell_merge(old_content, updates)
+            return new_content
+        }),
+        tap((new_content: any) => {
+            set_cell_content(id, new_content)
+        }),
+    )
+
+    const strongest_node = pipe(content_node,
+        map((content: any) => {
+            const new_strongest = strongest_value(content)
+            return new_strongest
+        }),
+        map((new_strongest: any) => {
+            const old_strongest = cell_strongest(id)
             if (is_equal(new_strongest, old_strongest)) {
                 // do nothing
             }
             else if (is_contradiction(new_strongest)) {
-                set_cell_strongest(node, new_strongest);
-                handle_cell_contradiction(node);
-                alert_propagators(node);
+                set_cell_strongest(id, new_strongest)
+                return new_strongest
             }
             else {
-                set_cell_strongest(node, new_strongest);
-                set_cell_content(node, new_content);
-                alert_propagators(node);
+                set_cell_strongest(id, new_strongest)
+                return new_strongest
             }
-        }
+        }),
+       
     )
+
+    pipe(strongest_node,
+        subscribe((new_strongest: any) => {
+            if (is_contradiction(new_strongest)) {
+                handle_cell_contradiction(id)
+            }
+        })
+    )
+
+    return updater
 }
 
-export {
-    create_cell,
-    cell_name,
-    cell_content,
-    cell_strongest,
-    set_cell_content,
-    set_cell_strongest,
-    cell_update_constructor,
-    handle_cell_contradiction,
+export const cell_name = (node_id: string) => {
+    return cell_store.get(node_id)?.name
 }
-export type { CellConstruct }
+
+export const cell_content = (node_id: string) => {
+    return cell_store.get(node_id)?.content
+}
+
+export const cell_strongest = (node_id: string) => {
+    return cell_store.get(node_id)?.strongest
+}
+
+
+// const propagators 
+
+// consider propagator should be hot-reloadable
+
+// const construct_propagator = (name: string, inputs: Node<any>[], outputs: Node<any>[], internal_network: CellInterface) => {
+
+//     const input = combine_latest(...inputs)
+
+//     const internal_network_input = internal_network.get("network_")
+
+// }

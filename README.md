@@ -193,3 +193,10 @@ generic interpreters, and incremental evaluation. Lain-lang does not
 reuse SDF code directly, but reinterprets and extends these ideas in a
 TypeScript-based, distributed, and live-coding-oriented setting, with
 substantial architectural and semantic differences.
+
+
+
+Copyright (C) 2024–2026 semi-0 (Pandi Lin)
+
+Licensed under the GNU General Public License v3.0.
+See the LICENSE file for details.
