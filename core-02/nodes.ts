@@ -4,69 +4,65 @@ import { the_nothing } from 'ppropogator';
 import { is_unusable_value, the_nothing_type } from 'ppropogator/Cell/CellValue';
 
 export interface GraphNode{
-    id: string
     inbounds: GraphNode[],
     outbounds: GraphNode[],
+}
+
+const node_store = new Map<string, GraphNode>();
+
+const set_node = (id: string, node: GraphNode) => {
+    node_store.set(id, node);
+}
+
+const get_node = (id: string) => {
+   return node_store.get(id);
 }
 
 
 export function create_node(id: string): GraphNode {
     const node = {
-        id,
         inbounds: [],
         outbounds: [],
     }
 
+    set_node(id, node);
+
     return node;
 }
 
-export const connect_nodes_inbound_outbound = (nodeA: GraphNode, nodeB: GraphNode) => {
-    nodeA.outbounds.push(nodeB);
-    nodeB.inbounds.push(nodeA);
+export const connect_nodes_inbound_outbound = (nodeA: string, nodeB: string) => {
+    const nodeA_node = get_node(nodeA);
+    const nodeB_node = get_node(nodeB);
+    if (nodeA_node && nodeB_node) {
+        nodeA_node.outbounds.push(nodeB_node);
+        nodeB_node.inbounds.push(nodeA_node);
+    }
+    else {
+        throw new Error(`Node ${nodeA} or ${nodeB} not found`);
+    }
 }
 
-export const connect_nodes_both_directions = (nodeA: GraphNode, nodeB: GraphNode) => {
+export const connect_nodes_both_directions = (nodeA: string, nodeB: string) => {
     connect_nodes_inbound_outbound(nodeA, nodeB);
     connect_nodes_inbound_outbound(nodeB, nodeA);
 }
 
-export const disconnect_nodes = (nodeA: GraphNode, nodeB: GraphNode) => {
-    nodeA.outbounds = nodeA.outbounds.filter(n => n !== nodeB);
-    nodeA.inbounds = nodeA.inbounds.filter(n => n !== nodeB);
-    nodeB.inbounds = nodeB.inbounds.filter(n => n !== nodeA);
-    nodeB.outbounds = nodeB.outbounds.filter(n => n !== nodeA);
-}
-
-
-export const f_map = (f: (v: any) => any) => (v: any)=> {
-    if (is_unusable_value(v)) {
-        return v
+export const disconnect_nodes = (nodeA: string, nodeB: string) => {
+    const nodeA_node = get_node(nodeA);
+    const nodeB_node = get_node(nodeB);
+    if (nodeA_node && nodeB_node) {
+        nodeA_node.outbounds = nodeA_node.outbounds.filter(n => n !== nodeB_node);
+        nodeA_node.inbounds = nodeA_node.inbounds.filter(n => n !== nodeB_node);
+        nodeB_node.inbounds = nodeB_node.inbounds.filter(n => n !== nodeA_node);
+        nodeB_node.outbounds = nodeB_node.outbounds.filter(n => n !== nodeA_node);
     }
     else {
-        return f(v)
+        throw new Error(`Node ${nodeA} or ${nodeB} not found`);
     }
 }
 
 
-export function add_inbound_edge(nodeA: GraphNode, nodeB: GraphNode) {
-    nodeA.inbounds.push(nodeB);
-    nodeB.outbounds.push(nodeA);
-    
-}
 
-export function add_outbound_edge(nodeA: GraphNode, nodeB: GraphNode) {
-    nodeA.outbounds.push(nodeB);
-    nodeB.inbounds.push(nodeA);
-}
 
-export function remove_inbound_edge(node: GraphNode, inbound: GraphNode) {
-    node.inbounds = node.inbounds.filter(n => n !== inbound);
-}
-
-export function remove_outbound_edge(node: GraphNode, outbound: GraphNode) {
-    node.outbounds = node.outbounds.filter(n => n !== outbound);
-}
-
-export const node_outbounds = (node: GraphNode) => (node.outbounds)
-export const node_inbounds = (node: GraphNode) => (node.inbounds)
-export const node_id = (node: GraphNode) => (node.id)
+export const node_outbounds = (id: string) => (get_node(id)?.outbounds ?? [])
+export const node_inbounds = (id: string) => (get_node(id)?.inbounds ?? [])

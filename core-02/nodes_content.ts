@@ -1,31 +1,63 @@
-import { strongest_value, the_nothing } from "ppropogator";
-import { create_node, node_id } from "./nodes";
+import { register_predicate, strongest_value, the_nothing } from "ppropogator";
+import { create_node } from "./nodes";
 import { pipe } from "effect";
 import { GraphNode } from "./nodes";
 import { cell_merge } from "ppropogator/Cell/Merge";
 import { is_contradiction } from "ppropogator/Cell/CellValue";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic";
 
-interface CellConstruct{
+
+
+type NodeContent = CellConstruct | PropagatorConstruct;
+
+interface CellConstruct {
+    type: "cell",
     name: string,
     content: any,
     strongest: any,
 }
 
-const cell_store = new Map<string, CellConstruct>()
-
-const depot_cell_construct = (node_id: string, content: any, strongest: any) => {
-    cell_store.set(node_id, {
-        name: node_id,
-        content,
-        strongest,
-    });
+interface PropagatorConstruct {
+    type: "propagator",
+    name: string,
+    content: any,
 }
 
-const get_cell_construct = (node_id: string) => {
-    const cell = cell_store.get(node_id);
-    if (cell !== undefined) {
-        return cell;
+const node_content_store = new Map<string, NodeContent>()
+
+const set_node_content = (id: string, node_content: NodeContent) => {
+    node_content_store.set(id, node_content);
+}
+
+const get_node_content = (id: string) => {
+    return node_content_store.get(id);
+}
+
+const is_cell_construct = (id: string) => register_predicate("node_is_cell", (node_content: NodeContent) => {
+    return node_content.type === "cell";
+})
+
+const is_propagator_construct = (id: string) => register_predicate("node_is_propagator", (node_content: NodeContent) => {
+    return node_content.type === "propagator";
+})
+    
+
+
+const create_cell_construct = (node_id: string, name: string, content: any, strongest: any) => {
+    const cell_construct: CellConstruct = {
+        name,
+        type: "cell",
+        content,
+        strongest,
+    }
+    set_node_content(node_id, cell_construct);
+    return cell_construct;
+}
+
+export const get_cell_construct = (node_id: string) => {
+    const maybe_cell = get_node_content(node_id);
+    if (maybe_cell !== undefined && is_cell_construct(node_id)) {
+        return maybe_cell as CellConstruct;
     }
     else {
         throw new Error("Cell not found: " + node_id);
@@ -33,20 +65,16 @@ const get_cell_construct = (node_id: string) => {
 }
 
 
-export const make_cell_construct = (name: string, content: any, strongest: any) => {
-    const cell_construct = {
-        name,
-        content,
-        strongest,
+export const get_propagator_construct = (node_id: string) => {
+    const maybe_propagator = get_node_content(node_id);
+    if (maybe_propagator !== undefined && is_propagator_construct(node_id)) {
+        return maybe_propagator as PropagatorConstruct;
     }
-    depot_cell_construct(name, content, strongest);
-    return cell_construct;
+    else {
+        throw new Error("Propagator not found: " + node_id);
+    }
 }
 
-
-const set_cell = (node_id: string, cell: CellConstruct) => {
-    depot_cell_construct(node_id, cell.content, cell.strongest);
-}
 
 
 const cell_name = (node_id: string) => (get_cell_construct(node_id)?.name)
@@ -59,7 +87,7 @@ const cell_strongest = (node_id: string) => (get_cell_construct(node_id)?.strong
 const set_cell_content = (node_id: string, content: any) => {
     const original_cell = get_cell_construct(node_id);
     if (original_cell !== undefined) {
-        depot_cell_construct(node_id, content, original_cell.strongest);
+        create_cell_construct(node_id, original_cell.name, content, original_cell.strongest);
     }
     else {
         throw new Error("Cell not found: " + node_id);
@@ -69,7 +97,7 @@ const set_cell_content = (node_id: string, content: any) => {
 const set_cell_strongest = (node_id: string, strongest: any) => {
     const original_cell = get_cell_construct(node_id);
     if (original_cell !== undefined) {
-        depot_cell_construct(node_id, original_cell.content, strongest);
+        create_cell_construct(node_id, original_cell.name, original_cell.content, strongest);
     }
     else {
         throw new Error("Cell not found: " + node_id);
