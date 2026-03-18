@@ -16,6 +16,8 @@ import {
     cell_id,
     cell_strongest_base_value,
     is_cell,
+    PublicStateCommand,
+    set_global_state,
     type Cell,
 } from "ppropogator";
 import { execute_all_tasks_sequential } from "ppropogator/Shared/Scheduler/Scheduler";
@@ -483,25 +485,25 @@ describe("Card API Tests", () => {
 
         test("card calls network defined in another card: add1 via update_card resolves", async () => {
             const env = primitive_env();
-            add_card("def-card");
-            add_card("inc-above");
-            add_card("inc-center");
-            add_card("inc-right");
-            build_card(env)("def-card");
-            build_card(env)("inc-above");
-            build_card(env)("inc-center");
-            build_card(env)("inc-right");
-            const cardRight = runtime_get_card("inc-right")!;
+            add_card("def-card-1");
+            add_card("inc-above-1");
+            add_card("inc-center-1");
+            add_card("inc-right-1");
+ 
+            const cardRight = runtime_get_card("inc-right-1")!;
 
-            update_card("def-card", "(network add1 (>:: x) (::> y) (+ x 1 y))");
+            update_card("def-card-1", "(network +1 (>:: x) (::> y) (+ x 1 y))");
             execute_all_tasks_sequential(() => {});
 
-            update_card("inc-center", "(add1 ::above ::right)");
-            connect_cards("inc-above", "inc-center", slot_below, slot_above);
-            connect_cards("inc-center", "inc-right", slot_right, slot_left);
+            update_card("inc-center-1", "(+1 ::above ::right)");
+            build_card(env)("inc-center-1");
+
+            build_card(env)("def-card-1");
+            connect_cards("inc-above-1", "inc-center-1", slot_below, slot_above);
+            connect_cards("inc-center-1", "inc-right-1", slot_right, slot_left);
             execute_all_tasks_sequential(() => {});
 
-            update_card("inc-above", 5);
+            update_card("inc-above-1", 5);
             execute_all_tasks_sequential(() => {});
 
             const rightValue = read_slot_value(cardRight, internal_cell_this);
