@@ -18,6 +18,7 @@ Precept: Never assume a design will be correct on the first execution. Architect
 Precept: Code should be "plain" and "obvious," moving away from "clever" features toward exhaustive, tree-like logic.
 * The Shape of Code: Elegant code looks like neatly nested boxes. Logic should follow a tree structure, mirroring the flow and branching of information.
 * Exhaustive if-else: Avoid "dropping through" logic. Every if should ideally have an else. This forces the brain (and the compiler) to account for every possibility, preventing corner-case leaks.
+* Prefer explicit if / else if / else branches over shorthand patterns (e.g. optional chaining for control flow like `x?.(...)`, or ternaries where a multi-line if-else would be clearer). Write the branches out so each case is visible.
 * Atomic Optionality: When handling null or Optional, use "atomic operations" where checking and accessing are one step (e.g., Swift's if let or Java's ifPresent). Never separate the check from the access.
 * No "Optical Illusions": Always use curly braces {}. Never rely on operator precedence; use parentheses () to make the evaluation order explicit.
 * Avoid Control-Flow Noise: Eliminate continue and break. These are "negative" descriptions (what not to do). Instead, use "positive" descriptions by inverting conditions or extracting logic into return-early functions.

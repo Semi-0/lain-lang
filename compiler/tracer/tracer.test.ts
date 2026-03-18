@@ -416,7 +416,7 @@ describe("trace_upstream_reactively", () => {
     expect(internal_cell_this(runtime_get_card("trace-source")!)).toBeDefined();
   }, 15000);
 
-  test.only("card API + graph queries: find cells and propagators related to a card", async () => {
+  test("card API + graph queries: find cells and propagators related to a card", async () => {
     const { init_system } = await import("../incremental_compiler");
     const {
       add_card,
