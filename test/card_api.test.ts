@@ -15,6 +15,7 @@ import { expect, test, beforeEach, describe } from "bun:test";
 import {
     cell_id,
     cell_strongest_base_value,
+    is_contradiction,
     is_cell,
     PublicStateCommand,
     set_global_state,
@@ -939,6 +940,7 @@ describe("Card API Tests", () => {
         });
 
         test("7b. rebuild center code switches from +1 to +2", async () => {
+
             const env = primitive_env();
             add_card("rebuild-code-above");
             add_card("rebuild-code-center");
@@ -957,7 +959,9 @@ describe("Card API Tests", () => {
 
             update_card("rebuild-code-center", "(+ ::above 2 ::right)");
             build_card(env)("rebuild-code-center");
-            execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(console.error);
+            const center = runtime_get_card("rebuild-code-center")!;
+            expect(is_contradiction(read_slot_value(center, internal_cell_right))).toBe(false);
 
             update_card("rebuild-code-above", 6);
             execute_all_tasks_sequential(() => {});

@@ -3,14 +3,14 @@
  * Side-effect layer that realizes structural graph changes.
  */
 import { Either } from "effect";
-import { Cell, cell_id, construct_cell, get_base_value, inspect_content, inspect_strongest } from "ppropogator";
+import { Cell, cell_id, construct_cell, get_base_value, inspect_content, inspect_strongest, is_contradiction, is_disposed, is_nothing } from "ppropogator";
 import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
-import { card_connector_constructor_cell, internal_cell_getter, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
+import { card_connector_constructor_cell, internal_cell_above, internal_cell_below, internal_cell_getter, internal_cell_left, internal_cell_right, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
 import { p_reactive_dispatch, source_constant_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
-import { get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
+import { execute_all_tasks_sequential, get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
 import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
 import { construct_vector_clock, get_vector_clock_layer, is_reactive_value, is_vector_clock, vector_clock_get_source_direct, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock";
 import { type LayeredObject } from "sando-layer/Basic/LayeredObject";
@@ -50,6 +50,29 @@ const dispose_card_internal_network_io = (id: string): boolean => {
     return true;
 };
 
+const refresh_card_neighbor_clocks = (id: string, card: Cell<unknown>): void => {
+    const neighbor_slots = [
+        { slot: "left", cell: internal_cell_left(card) },
+        { slot: "right", cell: internal_cell_right(card) },
+        { slot: "above", cell: internal_cell_above(card) },
+        { slot: "below", cell: internal_cell_below(card) },
+    ];
+
+    for (const { slot, cell } of neighbor_slots) {
+        const strongest = cell_strongest(cell);
+        if (
+            strongest == null ||
+            is_nothing(strongest) ||
+            is_contradiction(strongest) ||
+            is_disposed(strongest)
+        ) {
+            continue;
+        }
+
+        update_specialized_reactive_value(cell, `${id}:${slot}`, get_base_value(strongest));
+    }
+};
+
 export const runtime_add_card = (id: string): Cell<unknown> => {
     // init card 
     const card = construct_cell("card", id) as Cell<unknown>;
@@ -60,10 +83,6 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     const emitter = construct_cell("emitter" + id) as Cell<unknown>;
     const internal_this = internal_cell_this(card);
 
-    // inspect_strongest(console.log)(updater);
-    // inspect_strongest(console.log)(internal_this);
-    // inspect_content(console.log)(internal_this);
-    // inspect_content(console.log)(updater);
 
     no_echo_card_io(internal_this, updater, emitter);
   
@@ -93,13 +112,19 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
         return undefined as unknown as Cell<unknown>;
     }
 
-    // dispose old network is not working 
-    // that's okay 
-    // we will deal with this later
+    // Rebuilds need the latest ::this value before compiling, and disposal is deferred
+    // until the scheduler cleanup phase. Flush both edges explicitly around the swap.
+    execute_all_tasks_sequential(console.error);
+    
+
     const has_old_network = dispose_card_internal_network_io(id);
     if (has_old_network) {
+        execute_all_tasks_sequential(console.error);
         trace_card_runtime_io("build_card_dispose_old_internal_network", { id });
     }
+
+    refresh_card_neighbor_clocks(id, card);
+    execute_all_tasks_sequential(console.error);
 
     const internal_network = compile_internal_network(card, env);
     internal_network_storage.set(id, internal_network);
