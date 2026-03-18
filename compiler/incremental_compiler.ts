@@ -18,9 +18,10 @@ import { cell_id, summarize_cells, update_cell } from "ppropogator/Cell/Cell"
 import { is_map } from "ppropogator/Helper/Helper"
 import { set_scheduler } from "ppropogator/Shared/Scheduler/Scheduler"
 import { reactive_update } from "ppropogator/Helper/UI"
-import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
+import { install_temporary_value_set_handlers, merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
 import { incremental_apply_closure } from "./closure"
 import { construct_closure } from "./closure"
+import { init_system as init_compiler_system } from "./compiler"
 // TODO: CE ZIP
 // CE FOREACH
 
@@ -38,6 +39,8 @@ import { construct_closure } from "./closure"
  * and trigger automatic re-compilation and hot-swapping of the affected
  * parts of the execution graph.
  */
+
+export const init_system = init_compiler_system
 
 export const incremental_apply_propagator = (operator: Cell<ClosureTemplate | ((...args: Cell<any>[]) => Propagator)>, operands_expr: LainElement[], env: LexicalEnvironment, source: Cell<any>, timestamp: number) =>  {
         const closure = ce_switch(ce_is_closure(operator), operator)
@@ -58,14 +61,6 @@ import { construct_vector_clock, vector_clock_layer } from "ppropogator/AdvanceR
 import { p_reactive_dispatch, source_has_neighbor, update_source_cell } from "ppropogator/DataTypes/PremisesSource"
 
 
-
-export const init_system = () => {
-    set_global_state(PublicStateCommand.CLEAN_UP);
-    // install_merge_closure_incremental(merge_temporary_value_set)
-    set_merge(merge_temporary_value_set);
-    set_scheduler(simple_scheduler());
-    pretentious_welcoming_message()
-}
 
 // right now it becomes problematic because of the scoped patch 
 // and value store in scope

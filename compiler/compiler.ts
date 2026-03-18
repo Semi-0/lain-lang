@@ -18,7 +18,7 @@ import { cell_id, summarize_cells, update_cell } from "ppropogator/Cell/Cell"
 import { is_map } from "ppropogator/Helper/Helper"
 import { set_scheduler } from "ppropogator/Shared/Scheduler/Scheduler"
 import { reactive_update } from "ppropogator/Helper/UI"
-import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
+import { install_temporary_value_set_handlers, merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
 import { incremental_apply_closure } from "./closure"
 // TODO: CE ZIP
 // CE FOREACH
@@ -60,7 +60,7 @@ import { construct_vector_clock, vector_clock_layer } from "ppropogator/AdvanceR
 
 export const init_system = () => {
     set_global_state(PublicStateCommand.CLEAN_UP);
-    set_merge(merge_temporary_value_set);
+    install_temporary_value_set_handlers();
     set_scheduler(simple_scheduler());
     
     pretentious_welcoming_message()

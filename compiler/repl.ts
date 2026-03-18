@@ -7,7 +7,7 @@ import { is_string } from "generic-handler/built_in_generics/generic_predicates"
 import { is_cell } from "ppropogator/Cell/Cell";
 import { renderCellGraphToConsole } from "./graph_renderer";
 import { merge_layered } from "ppropogator/Cell/Merge";
-import { init_system } from "./incremental_compiler";
+import { init_system } from "./compiler";
 import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 
 type REPLOptions = {

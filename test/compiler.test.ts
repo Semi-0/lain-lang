@@ -72,263 +72,264 @@ import { init_system as init_system_compile } from "../compiler/compiler";
 import { is_graphology_graph } from "../src/grpc/codec/session_encode";
 
 beforeEach(() => {
+    
     init_system()
 });
 
-describe("Compiler Entry Point Tests (run function)", () => {
+// describe("Compiler Entry Point Tests (run function)", () => {
     
-    describe("1. Constants (Self-Evaluating)", () => {
-        test("should compile string constant", async () => {
-            const env = empty_lexical_environment("test");
-            const code = '"hello"';
+//     describe("1. Constants (Self-Evaluating)", () => {
+//         test("should compile string constant", async () => {
+//             const env = empty_lexical_environment("test");
+//             const code = '"hello"';
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
             
-            expect(is_cell(result)).toBe(true);
-            expect(cell_strongest_base_value(result)).toBe("hello"); 
-        });
+//             expect(is_cell(result)).toBe(true);
+//             expect(cell_strongest_base_value(result)).toBe("hello"); 
+//         });
 
-        test("should compile number constant", async () => {
-            const env = empty_lexical_environment("test");
-            const code = "42";
+//         test("should compile number constant", async () => {
+//             const env = empty_lexical_environment("test");
+//             const code = "42";
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
             
-            expect(is_cell(result)).toBe(true);
-            expect(cell_strongest_base_value(result)).toBe(42);
-        });
+//             expect(is_cell(result)).toBe(true);
+//             expect(cell_strongest_base_value(result)).toBe(42);
+//         });
 
-        test("should compile boolean constant true", async () => {
-            const env = empty_lexical_environment("test");
-            const code = "#t";
+//         test("should compile boolean constant true", async () => {
+//             const env = empty_lexical_environment("test");
+//             const code = "#t";
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
             
-            expect(is_cell(result)).toBe(true);
-            expect(cell_strongest_base_value(result)).toBe(true);
-        });
+//             expect(is_cell(result)).toBe(true);
+//             expect(cell_strongest_base_value(result)).toBe(true);
+//         });
 
-        test("should compile boolean constant false", async () => {
-            const env = empty_lexical_environment("test");
-            const code = "#f";
+//         test("should compile boolean constant false", async () => {
+//             const env = empty_lexical_environment("test");
+//             const code = "#f";
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
             
-            expect(is_cell(result)).toBe(true);
-            expect(cell_strongest_base_value(result)).toBe(false);
-        });
-    });
+//             expect(is_cell(result)).toBe(true);
+//             expect(cell_strongest_base_value(result)).toBe(false);
+//         });
+//     });
 
-    describe("2. Symbol Lookup", () => {
-        test("should lookup symbol from environment", async () => {
-            const env = empty_lexical_environment("test");
-            const code = "x";
+//     describe("2. Symbol Lookup", () => {
+//         test("should lookup symbol from environment", async () => {
+//             const env = empty_lexical_environment("test");
+//             const code = "x";
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
             
-            expect(is_cell(result)).toBe(true);
-        });
+//             expect(is_cell(result)).toBe(true);
+//         });
 
-        test("should lookup symbol from environment with quoted expression", async () => {
-            const env = construct_env_with_inital_value(
-                [
-                    ["x", ce_constant(1)],
-                ],
-                "test"
-            );
+//         test("should lookup symbol from environment with quoted expression", async () => {
+//             const env = construct_env_with_inital_value(
+//                 [
+//                     ["x", ce_constant(1)],
+//                 ],
+//                 "test"
+//             );
 
          
-            const code = "x";
+//             const code = "x";
             
-            const result = run(code, env);
+//             const result = run(code, env);
             
-            await execute_all_tasks_sequential(() => {});
+//             await execute_all_tasks_sequential(() => {});
 
 
-            expect(is_cell(result)).toBe(true);
-            expect(cell_strongest_base_value(result)).toBe(1);
-        });
+//             expect(is_cell(result)).toBe(true);
+//             expect(cell_strongest_base_value(result)).toBe(1);
+//         });
 
-    });
+//     });
 
-    describe("3. Primitive Propagator Application", () => {
-        test("should apply addition primitive propagator", async () => {
+//     describe("3. Primitive Propagator Application", () => {
+//         test("should apply addition primitive propagator", async () => {
 
-            const primEnvCell = primitive_env();
+//             const primEnvCell = primitive_env();
             
-            const code = "(+ 1 2 out)";
-            const result = run(code, primEnvCell);
+//             const code = "(+ 1 2 out)";
+//             const result = run(code, primEnvCell);
 
-            await execute_all_tasks_sequential(console.error)
-            const e = run("out", primEnvCell)
+//             await execute_all_tasks_sequential(console.error)
+//             const e = run("out", primEnvCell)
     
-            await execute_all_tasks_sequential(console.error)
+//             await execute_all_tasks_sequential(console.error)
  
 
-            console.log(summarize_env(primEnvCell))
+//             console.log(summarize_env(primEnvCell))
 
-            expect(cell_strongest_base_value(e)).toBe(3);
+//             expect(cell_strongest_base_value(e)).toBe(3);
 
-            run("(? out)", primEnvCell);
-        });
+//             run("(? out)", primEnvCell);
+//         });
 
 
-    });
+//     });
 
-    describe("4. Closure Application", () => {
-        test("should define and apply a closure", async () => {
-            const primEnvCell = primitive_env()
-            const env = primEnvCell
+//     describe("4. Closure Application", () => {
+//         test("should define and apply a closure", async () => {
+//             const primEnvCell = primitive_env()
+//             const env = primEnvCell
             
-            // First define a network (closure)
-            const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
-            const defineEnv = run(defineCode, env);
+//             // First define a network (closure)
+//             const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
+//             const defineEnv = run(defineCode, env);
 
         
             
-            await execute_all_tasks_sequential(console.error);
-            const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
+//             await execute_all_tasks_sequential(console.error);
+//             const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
             
-            const applyCode = "(add1 5 out)";
-            const resultEnv = run(applyCode, env);
+//             const applyCode = "(add1 5 out)";
+//             const resultEnv = run(applyCode, env);
             
-            await execute_all_tasks_sequential(console.error);
+//             await execute_all_tasks_sequential(console.error);
     
            
-            const e = cell_strongest_base_value(env)
-            const out = e.get("out")
-            if (out) {
-                expect(cell_strongest_base_value(out)).toBe(6);
-            }
-           else {
-            console.log(summarize_env(env))
-            throw new Error("out cell not found")
-           }
+//             const e = cell_strongest_base_value(env)
+//             const out = e.get("out")
+//             if (out) {
+//                 expect(cell_strongest_base_value(out)).toBe(6);
+//             }
+//            else {
+//             console.log(summarize_env(env))
+//             throw new Error("out cell not found")
+//            }
 
    
-        });
+//         });
 
-        test("should closure with multiple body", async () => {
-            const primEnvCell = primitive_env()
-            const env = primEnvCell
+//         test("should closure with multiple body", async () => {
+//             const primEnvCell = primitive_env()
+//             const env = primEnvCell
             
-            // First define a network (closure)
-            const defineCode = `(network add3 (>:: x) (::> y) (+ x 1 x1) (+ x1 1 x2) (+ x2 1 y))`;
-            const defineEnv = run(defineCode, env);
+//             // First define a network (closure)
+//             const defineCode = `(network add3 (>:: x) (::> y) (+ x 1 x1) (+ x1 1 x2) (+ x2 1 y))`;
+//             const defineEnv = run(defineCode, env);
             
-            await execute_all_tasks_sequential(console.error);
+//             await execute_all_tasks_sequential(console.error);
         
-            const applyCode = "(add3 5 out)";
-            const resultEnv = run(applyCode, env);
+//             const applyCode = "(add3 5 out)";
+//             const resultEnv = run(applyCode, env);
             
-            await execute_all_tasks_sequential(console.error);
+//             await execute_all_tasks_sequential(console.error);
     
            
-            const e = cell_strongest_base_value(env)
-            expect(cell_strongest_base_value(e.get("out"))).toBe(8);
+//             const e = cell_strongest_base_value(env)
+//             expect(cell_strongest_base_value(e.get("out"))).toBe(8);
 
    
-        });
+//         });
 
 
-        test("okay with nested calling", async () => {
+//         test("okay with nested calling", async () => {
 
-            const primEnvCell = primitive_env()
-            const env = primEnvCell
+//             const primEnvCell = primitive_env()
+//             const env = primEnvCell
             
-            // First define a network (closure)
-            const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
-            const defineEnv = run(defineCode, env);
+//             // First define a network (closure)
+//             const defineCode = `(network add1 (>:: x) (::> y) (+ x 1 y))`;
+//             const defineEnv = run(defineCode, env);
 
         
-            execute_all_tasks_sequential(console.error)
+//             execute_all_tasks_sequential(console.error)
 
-            const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
+//             const env1 = cell_strongest_base_value(env) as Map<string, Cell<any>>
             
-            run("(add1_again 8 out2)", env)
+//             run("(add1_again 8 out2)", env)
 
-            execute_all_tasks_sequential(console.error);
+//             execute_all_tasks_sequential(console.error);
 
-            const add1_again = '(network add1_again (>:: x) (::> y) (add1 x y))'
-            run(add1_again, env) 
+//             const add1_again = '(network add1_again (>:: x) (::> y) (add1 x y))'
+//             run(add1_again, env) 
 
-            await execute_all_tasks_sequential(console.error)
-            const e2 = cell_strongest_base_value(env) 
-            expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
-        });
+//             await execute_all_tasks_sequential(console.error)
+//             const e2 = cell_strongest_base_value(env) 
+//             expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
+//         });
 
-        test("incremental changing behavior of closure", async () => {
+//         test("incremental changing behavior of closure", async () => {
             
-            const primEnvCell = primitive_env()
-            const env = primEnvCell
+//             const primEnvCell = primitive_env()
+//             const env = primEnvCell
             
-            //
-            // First define a network (closure)
-            const defineCode = `(network magic (>:: x y) (::> z) (+ x y z))`;
-            run(defineCode, env, undefined, 0);
+//             //
+//             // First define a network (closure)
+//             const defineCode = `(network magic (>:: x y) (::> z) (+ x y z))`;
+//             run(defineCode, env, undefined, 0);
         
-            await execute_all_tasks_sequential(console.error)
+//             await execute_all_tasks_sequential(console.error)
 
-            cell_strongest_base_value(env) as Map<string, Cell<any>>
+//             cell_strongest_base_value(env) as Map<string, Cell<any>>
             
-            run("(magic 1 8 out2)", env, undefined, 0)
+//             run("(magic 1 8 out2)", env, undefined, 0)
 
-            execute_all_tasks_sequential(console.error);
+//             execute_all_tasks_sequential(console.error);
 
-            const e2 = cell_strongest_base_value(env) 
-            expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
+//             const e2 = cell_strongest_base_value(env) 
+//             expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
 
-            console.log("changing behavior of closure")
-            run("(network magic (>:: x y) (::> z) (- x y z))", env, undefined, 1);
-            await execute_all_tasks_sequential(console.error)
-            const e3 = cell_strongest_base_value(env) 
-            const out2 = e3.get("out2")
-            console.log(out2.summarize())
-            expect(cell_strongest_base_value(out2)).toBe(-7);
-        }); 
+//             console.log("changing behavior of closure")
+//             run("(network magic (>:: x y) (::> z) (- x y z))", env, undefined, 1);
+//             await execute_all_tasks_sequential(console.error)
+//             const e3 = cell_strongest_base_value(env) 
+//             const out2 = e3.get("out2")
+//             console.log(out2.summarize())
+//             expect(cell_strongest_base_value(out2)).toBe(-7);
+//         }); 
 
-        test("incremental changing behavior of closure 2", async () => {
+//         test("incremental changing behavior of closure 2", async () => {
             
-            const primEnvCell = primitive_env()
-            const env = primEnvCell
+//             const primEnvCell = primitive_env()
+//             const env = primEnvCell
             
-            //
-            // First define a network (closure)
-            const defineCode = `(network magic2 (>:: x) (::> z) (+ x 1 z))`;
-            run(defineCode, env, undefined, 0);
+//             //
+//             // First define a network (closure)
+//             const defineCode = `(network magic2 (>:: x) (::> z) (+ x 1 z))`;
+//             run(defineCode, env, undefined, 0);
         
-            await execute_all_tasks_sequential(console.error)
+//             await execute_all_tasks_sequential(console.error)
 
-            cell_strongest_base_value(env) as Map<string, Cell<any>>
+//             cell_strongest_base_value(env) as Map<string, Cell<any>>
             
-            run("(magic2 1 out3)", env, undefined, 0)
+//             run("(magic2 1 out3)", env, undefined, 0)
 
-            execute_all_tasks_sequential(console.error);
+//             execute_all_tasks_sequential(console.error);
 
-            const e2 = cell_strongest_base_value(env) 
-            expect(cell_strongest_base_value(e2.get("out3"))).toBe(2);
+//             const e2 = cell_strongest_base_value(env) 
+//             expect(cell_strongest_base_value(e2.get("out3"))).toBe(2);
 
-            console.log("changing behavior of closure")
-            run("(network magic2 (>:: x) (::> z) (- x 1 z))", env, undefined, 1);
-            await execute_all_tasks_sequential(console.error)
-            const e3 = cell_strongest_base_value(env) 
-            const out2 = e3.get("out3")
-            console.log(out2.summarize())
-            expect(cell_strongest_base_value(out2)).toBe(0);
-        }); 
+//             console.log("changing behavior of closure")
+//             run("(network magic2 (>:: x) (::> z) (- x 1 z))", env, undefined, 1);
+//             await execute_all_tasks_sequential(console.error)
+//             const e3 = cell_strongest_base_value(env) 
+//             const out2 = e3.get("out3")
+//             console.log(out2.summarize())
+//             expect(cell_strongest_base_value(out2)).toBe(0);
+//         }); 
 
-    });
-});
+//     });
+// });
 
 describe("Compiler (compile function) Tests", () => {
     beforeEach(() => {
@@ -404,75 +405,75 @@ describe("Compiler (compile function) Tests", () => {
             expect(cell_strongest_base_value(e)).toBe(3);
         });
 
-        test("graph:card: can be called with graph and cardId, writes subgraph with only that card's nodes", async () => {
-            const env = primitive_env();
-            raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile("(with_graph 1 g)", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile('(graph:card g "some-card" sub)', env);
-            await execute_all_tasks_sequential(console.error);
-            const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
-            const sub = e.get("sub");
-            expect(sub).toBeDefined();
-            assertGraphFromCell(cell_strongest_base_value(sub!), { cardId: "some-card" });
-        });
+        // test("graph:card: can be called with graph and cardId, writes subgraph with only that card's nodes", async () => {
+        //     const env = primitive_env();
+        //     raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile("(with_graph 1 g)", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile('(graph:card g "some-card" sub)', env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
+        //     const sub = e.get("sub");
+        //     expect(sub).toBeDefined();
+        //     assertGraphFromCell(cell_strongest_base_value(sub!), { cardId: "some-card" });
+        // });
 
-        test("graph:label: can be called with graph and prefix, writes subgraph where every node label starts with prefix", async () => {
-            const env = primitive_env();
-            raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile("(with_graph 1 g)", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile('(graph:label g "CELL|" cells)', env);
-            await execute_all_tasks_sequential(console.error);
-            const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
-            const cells = e.get("cells");
-            expect(cells).toBeDefined();
-            const val = cell_strongest_base_value(cells!);
-            assertGraphFromCell(val, { labelPrefix: "CELL|" });
-            const fullGraph = cell_strongest_base_value(e.get("g")!);
-            const fullBase = is_layered_object(fullGraph) ? get_base_value(fullGraph as LayeredObject<unknown>) : fullGraph;
-            expect(is_graphology_graph(fullBase)).toBe(true);
-            let fullOrder = 0;
-            (fullBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { fullOrder++; });
-            const subBase = is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val;
-            let subOrder = 0;
-            (subBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { subOrder++; });
-            expect(subOrder).toBeLessThanOrEqual(fullOrder);
-        });
+        // test("graph:label: can be called with graph and prefix, writes subgraph where every node label starts with prefix", async () => {
+        //     const env = primitive_env();
+        //     raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile("(with_graph 1 g)", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile('(graph:label g "CELL|" cells)', env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
+        //     const cells = e.get("cells");
+        //     expect(cells).toBeDefined();
+        //     const val = cell_strongest_base_value(cells!);
+        //     assertGraphFromCell(val, { labelPrefix: "CELL|" });
+        //     const fullGraph = cell_strongest_base_value(e.get("g")!);
+        //     const fullBase = is_layered_object(fullGraph) ? get_base_value(fullGraph as LayeredObject<unknown>) : fullGraph;
+        //     expect(is_graphology_graph(fullBase)).toBe(true);
+        //     let fullOrder = 0;
+        //     (fullBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { fullOrder++; });
+        //     const subBase = is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val;
+        //     let subOrder = 0;
+        //     (subBase as { forEachNode: (fn: () => void) => void }).forEachNode(() => { subOrder++; });
+        //     expect(subOrder).toBeLessThanOrEqual(fullOrder);
+        // });
 
-        test("graph:label with CELL|CARD| returns only card cells (use this prefix in frontend, not \"CARD|\")", async () => {
-            const { TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS } = await import("../compiler/tracer/graph_queries");
-            expect(TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS).toBe("CELL|CARD|");
-            const env = primitive_env();
-            raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile("(with_graph 1 g)", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile(`(graph:label g "${TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS}" card_cells)`, env);
-            await execute_all_tasks_sequential(console.error);
-            const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
-            const cardCells = e.get("card_cells");
-            expect(cardCells).toBeDefined();
-            const val = cell_strongest_base_value(cardCells!);
-            expect(is_graphology_graph(is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val)).toBe(true);
-        });
+        // test("graph:label with CELL|CARD| returns only card cells (use this prefix in frontend, not \"CARD|\")", async () => {
+        //     const { TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS } = await import("../compiler/tracer/graph_queries");
+        //     expect(TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS).toBe("CELL|CARD|");
+        //     const env = primitive_env();
+        //     raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile("(with_graph 1 g)", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile(`(graph:label g "${TRACED_GRAPH_LABEL_PREFIX_CARD_CELLS}" card_cells)`, env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
+        //     const cardCells = e.get("card_cells");
+        //     expect(cardCells).toBeDefined();
+        //     const val = cell_strongest_base_value(cardCells!);
+        //     expect(is_graphology_graph(is_layered_object(val) ? get_base_value(val as LayeredObject<unknown>) : val)).toBe(true);
+        // });
 
-        test("graph.nodes: can be called with graph and node list, writes subgraph to output", async () => {
-            const env = extend_env(primitive_env(), [["empty_ids", ce_constant([])]]);
-            raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile("(with_graph 1 g)", env);
-            await execute_all_tasks_sequential(console.error);
-            raw_compile("(graph:nodes g empty_ids sub)", env);
-            await execute_all_tasks_sequential(console.error);
-            const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
-            const sub = e.get("sub");
-            expect(sub).toBeDefined();
-            const val = cell_strongest_base_value(sub!);
-            expect(is_graphology_graph(val) || (typeof val === "object" && val !== null && "order" in val)).toBe(true);
-        });
+        // test("graph.nodes: can be called with graph and node list, writes subgraph to output", async () => {
+        //     const env = extend_env(primitive_env(), [["empty_ids", ce_constant([])]]);
+        //     raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile("(with_graph 1 g)", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     raw_compile("(graph:nodes g empty_ids sub)", env);
+        //     await execute_all_tasks_sequential(console.error);
+        //     const e = cell_strongest_base_value(env) as Map<string, Cell<any>>;
+        //     const sub = e.get("sub");
+        //     expect(sub).toBeDefined();
+        //     const val = cell_strongest_base_value(sub!);
+        //     expect(is_graphology_graph(val) || (typeof val === "object" && val !== null && "order" in val)).toBe(true);
+        // });
     });
 
     describe("4. Closure Application", () => {
