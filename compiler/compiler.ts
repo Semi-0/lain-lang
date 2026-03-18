@@ -56,12 +56,14 @@ import { pretentious_welcoming_message } from "./terminal_utils";
 import { any_unusable_values } from "ppropogator/Cell/CellValue"
 import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum"
 import { construct_vector_clock, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock"
+import { init_specialized_reactive_runtime } from "../src/grpc/better_runtime"
 
 
 export const init_system = () => {
     set_global_state(PublicStateCommand.CLEAN_UP);
     install_temporary_value_set_handlers();
     set_scheduler(simple_scheduler());
+    init_specialized_reactive_runtime();
     
     pretentious_welcoming_message()
 }

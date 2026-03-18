@@ -3,7 +3,7 @@
  * Side-effect layer that realizes structural graph changes.
  */
 import { Either } from "effect";
-import { Cell, cell_id, construct_cell, get_base_value, inspect_strongest } from "ppropogator";
+import { Cell, cell_id, construct_cell, get_base_value, inspect_content, inspect_strongest } from "ppropogator";
 import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
@@ -16,6 +16,7 @@ import { construct_vector_clock, get_vector_clock_layer, is_reactive_value, is_v
 import { type LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { compound_tell } from "ppropogator/Helper/UI";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic.js";
+import { update_specialized_reactive_value } from "../better_runtime.js";
 
 const connector_key_separator = "!!*!!";
 const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
@@ -59,8 +60,10 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
     const emitter = construct_cell("emitter" + id) as Cell<unknown>;
     const internal_this = internal_cell_this(card);
 
-    inspect_strongest(console.log)(internal_this);
-    inspect_strongest(console.log)(updater);
+    // inspect_strongest(console.log)(updater);
+    // inspect_strongest(console.log)(internal_this);
+    // inspect_content(console.log)(internal_this);
+    // inspect_content(console.log)(updater);
 
     no_echo_card_io(internal_this, updater, emitter);
   
@@ -125,19 +128,19 @@ export const runtime_update_card = (id: string, current: unknown): { updated: bo
     }
 
     const previous = cell_strongest(internal_this) as LayeredObject<any>;
-    // console.log(updater.summarize())
-    // console.log(get_base_value(previous), get_base_value(current));
+   
     if (is_equal(get_base_value(previous), get_base_value(current))) {
         return { updated: false };
     }
+    else{
+    // else {
+    //     update_source_cell(updater, current)
+    // }
+        update_specialized_reactive_value(updater, id, current)
 
-    else {
-        update_source_cell(updater, current)
+        trace_card_runtime_io("update_card", { id, value: current });
+        return { updated: true };
     }
-
-
-    trace_card_runtime_io("update_card", { id, value: current });
-    return { updated: true };
 };
 
 export const runtime_remove_card = (id: string): void => {

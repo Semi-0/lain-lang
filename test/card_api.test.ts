@@ -51,6 +51,7 @@ import { run } from "../compiler/compiler_entry";
 import { construct_cell, update_cell } from "ppropogator/Cell/Cell";
 import { p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { update_source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { init_specialized_reactive_runtime } from "../src/grpc/better_runtime";
 
 beforeEach(() => {
     init_system();
@@ -1049,5 +1050,66 @@ describe("Card API Tests", () => {
             const cardA = runtime_get_card("trace-api-a")!;
             expect(internal_cell_left(cardA)).toBeDefined();
         }, 15000);
+
+
+        test.only("10. contradiction do resolved when we update the cell in the middle", async () => {
+            const env = primitive_env();
+            const sourceA = add_card("source-a")
+            const midA = add_card("mid-a")
+            const sourceB = add_card("source-b")
+            const midB = add_card("mid-b")
+
+            const final = add_card("final")
+
+            connect_cards(sourceA, midA, slot_right, slot_left)
+            connect_cards(midA, sourceB, slot_right, slot_left)
+            connect_cards(sourceB, midB, slot_right, slot_left)
+            connect_cards(midB, final, slot_right, slot_left)
+
+            execute_all_tasks_sequential(console.error); 
+
+            const add_func = "(+ ::left 1 ::right)"
+
+            update_card(midA, add_func)
+            build_card(env)(midA)
+            update_card(midB, add_func)
+            build_card(env)(midB)
+
+            execute_all_tasks_sequential(console.error); 
+
+            update_card(sourceA, 1)
+            execute_all_tasks_sequential(console.error)
+
+            const final_value = read_slot_value(
+                runtime_get_card(final)!, 
+                internal_cell_this
+            )
+
+            expect(final_value).toBe(3)
+
+
+            update_card(sourceB, 3)
+
+            execute_all_tasks_sequential(console.error)
+
+            
+            const final_value_2 = read_slot_value(
+                runtime_get_card(final)!, 
+                internal_cell_this
+            )
+         
+
+            expect(final_value_2).toBe(4)
+
+            update_card(sourceA, 3)
+            execute_all_tasks_sequential(console.error)
+
+            const final_value_3 = read_slot_value(
+                runtime_get_card(final)!, 
+                internal_cell_this
+            )
+
+            expect(final_value_3).toBe(5)
+        })
     });
 });
