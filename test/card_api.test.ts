@@ -1052,7 +1052,7 @@ describe("Card API Tests", () => {
         }, 15000);
 
 
-        test.only("10. contradiction do resolved when we update the cell in the middle", async () => {
+        test("10. contradiction do resolved when we update the cell in the middle", async () => {
             const env = primitive_env();
             const sourceA = add_card("source-a")
             const midA = add_card("mid-a")
