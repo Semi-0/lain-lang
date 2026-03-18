@@ -968,6 +968,42 @@ describe("Card API Tests", () => {
             expect(read_slot_value(right, internal_cell_this)).toBe(8);
         });
 
+        test("7c. rebuilding a card-defined network updates existing card applications", async () => {
+            const env = primitive_env();
+            add_card("network-def");
+            add_card("network-input");
+            add_card("network-apply");
+            add_card("network-sink");
+
+            const sink = runtime_get_card("network-sink")!;
+            const apply = runtime_get_card("network-apply")!;
+
+            update_card("network-def", "(network add_card_inc (>:: x) (::> y) (+ x 1 y))");
+            build_card(env)("network-def");
+
+            update_card("network-apply", "(add_card_inc ::left ::right)");
+            build_card(env)("network-apply");
+
+            connect_cards("network-input", "network-apply", slot_right, slot_left);
+            connect_cards("network-apply", "network-sink", slot_right, slot_left);
+            execute_all_tasks_sequential(console.error);
+
+            update_card("network-input", 5);
+            execute_all_tasks_sequential(console.error);
+            expect(read_slot_value(sink, internal_cell_this)).toBe(6);
+
+            update_card("network-def", "(network add_card_inc (>:: x) (::> y) (+ x 2 y))");
+            build_card(env)("network-def");
+            execute_all_tasks_sequential(console.error);
+
+            expect(is_contradiction(read_slot_value(apply, internal_cell_right))).toBe(false);
+            expect(read_slot_value(sink, internal_cell_this)).toBe(7);
+
+            update_card("network-input", 6);
+            execute_all_tasks_sequential(console.error);
+            expect(read_slot_value(sink, internal_cell_this)).toBe(8);
+        });
+
         test("8a. runtime_update_card with add_card: reactive update via update_source_cell (advanceReactive pattern)", async () => {
             // add only; no build
             add_card("rt-update-a");

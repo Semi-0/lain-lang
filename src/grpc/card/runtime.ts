@@ -29,6 +29,8 @@ const internal_network_storage = new Map<string, Propagator>();
 const card_storage = new Map<string, Cell<unknown>>();
 const updater_storage = new Map<string, Cell<unknown>>();
 const this_cell_storage = new Map<string, Cell<unknown>>();
+const compile_source_storage = new Map<string, Cell<unknown>>();
+const compile_timestamp_storage = new Map<string, number>();
 
 // const source = source_cell("user_inputs")
 
@@ -48,6 +50,17 @@ const dispose_card_internal_network_io = (id: string): boolean => {
     dispose_propagator(internal_network);
     internal_network_storage.delete(id);
     return true;
+};
+
+const get_or_create_card_compile_source = (id: string): Cell<unknown> => {
+    const existing = compile_source_storage.get(id);
+    if (existing != null) {
+        return existing;
+    }
+
+    const source = source_constant_cell(`card-compile:${id}`);
+    compile_source_storage.set(id, source);
+    return source;
 };
 
 const refresh_card_neighbor_clocks = (id: string, card: Cell<unknown>): void => {
@@ -70,6 +83,12 @@ const refresh_card_neighbor_clocks = (id: string, card: Cell<unknown>): void => 
         }
 
         update_specialized_reactive_value(cell, `${id}:${slot}`, get_base_value(strongest));
+    }
+};
+
+const refresh_all_card_neighbor_clocks = (): void => {
+    for (const [id, card] of card_storage.entries()) {
+        refresh_card_neighbor_clocks(id, card);
     }
 };
 
@@ -126,8 +145,14 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
     refresh_card_neighbor_clocks(id, card);
     execute_all_tasks_sequential(console.error);
 
-    const internal_network = compile_internal_network(card, env);
+    const source_cell = get_or_create_card_compile_source(id);
+    const timestamp = compile_timestamp_storage.get(id) ?? 0;
+    const internal_network = compile_internal_network(card, env, source_cell, timestamp);
     internal_network_storage.set(id, internal_network);
+    compile_timestamp_storage.set(id, timestamp + 1);
+
+    refresh_all_card_neighbor_clocks();
+    execute_all_tasks_sequential(console.error);
 
     trace_card_runtime_io("build_card", { id });
     return card;
@@ -178,6 +203,8 @@ export const runtime_remove_card = (id: string): void => {
     dispose_card_internal_network_io(id);
     dispose_cell(card);
     card_storage.delete(id);
+    compile_source_storage.delete(id);
+    compile_timestamp_storage.delete(id);
     // source_this_cell_storage.delete(id);
     trace_card_runtime_io("remove_card", { id });
 };

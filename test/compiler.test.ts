@@ -64,6 +64,7 @@ import { describe_propagator_frame } from "ppropogator/Shared/Scheduler/RuntimeF
 import { trace_cell } from "ppropogator/Shared/GraphTraversal";
 import { propagator_id } from "ppropogator/Propagator/Propagator";
 import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet";
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 import { parse, State } from "parse-combinator";
 import { parseExpr } from "../compiler/parser";
 import { define } from "../compiler/env";
@@ -477,6 +478,48 @@ describe("Compiler (compile function) Tests", () => {
     });
 
     describe("4. Closure Application", () => {
+        test("incremental compiler defines and applies a closure with a stable source", async () => {
+            const env = primitive_env();
+            const definitionSource = source_constant_cell("compiler-test:add1");
+            const applicationSource = source_constant_cell("compiler-test:add1:application");
+
+            run(`(network add1_inc (>:: x) (::> y) (+ x 1 y))`, env, definitionSource, 0);
+            await execute_all_tasks_sequential(console.error);
+
+            run("(add1_inc 5 out_inc)", env, applicationSource, 0);
+            await execute_all_tasks_sequential(console.error);
+
+            const e = cell_strongest_base_value(env);
+            const out = e.get("out_inc");
+            expect(out).toBeDefined();
+            expect(cell_strongest_base_value(out)).toBe(6);
+        });
+
+        test("incremental compiler reloads a network definition for existing applications", async () => {
+            const env = primitive_env();
+            const definitionSource = source_constant_cell("compiler-test:magic2");
+            const applicationSource = source_constant_cell("compiler-test:magic2:application");
+
+            run(`(network magic2_inc (>:: x) (::> z) (+ x 1 z))`, env, definitionSource, 0);
+            await execute_all_tasks_sequential(console.error);
+
+            run("(magic2_inc 1 out_reload)", env, applicationSource, 0);
+            await execute_all_tasks_sequential(console.error);
+
+            let e = cell_strongest_base_value(env);
+            let out = e.get("out_reload");
+            expect(out).toBeDefined();
+            expect(cell_strongest_base_value(out)).toBe(2);
+
+            run(`(network magic2_inc (>:: x) (::> z) (- x 1 z))`, env, definitionSource, 1);
+            await execute_all_tasks_sequential(console.error);
+
+            e = cell_strongest_base_value(env);
+            out = e.get("out_reload");
+            expect(out).toBeDefined();
+            expect(cell_strongest_base_value(out)).toBe(0);
+        });
+
         test("should define and apply a closure", async () => {
             const env = primitive_env();
             raw_compile(`(network add1 (>:: x) (::> y) (+ x 1 y))`, env);

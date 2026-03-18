@@ -8,7 +8,7 @@ import { create_card_cell_name } from "../../../compiler/naming";
 import { bi_sync, p_filter_a, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { define, extend_env, is_parent_key, LexicalEnvironment } from "../../../compiler/env";
 import { selective_sync } from "ppropogator/DataTypes/CarriedCell/HigherOrder";
-import { raw_compile } from "../../../compiler/compiler_entry";
+import { run } from "../../../compiler/compiler_entry";
 import { emit_runtime_card_output_io } from "../bridge/card_runtime_events";
 import { p_connect_to_source, p_sync_back_without_source } from "ppropogator/DataTypes/PremisesSource";
 export interface CardDescription {
@@ -112,7 +112,9 @@ export const p_emit_card_internal_updates_to_runtime = (cardId: string) => (
 
 export const compile_card_internal_code = (
     card_slot_this: Cell<unknown>,
-    local_env: LexicalEnvironment
+    local_env: LexicalEnvironment,
+    source_cell: Cell<unknown>,
+    timestamp: number,
 ) =>
     compound_propagator(
         [card_slot_this, local_env],
@@ -125,7 +127,7 @@ export const compile_card_internal_code = (
                 console.log("card_slot_this", card_slot_this.summarize());
                 return;
             }
-            raw_compile(code, local_env);
+            run(code, local_env, source_cell, timestamp);
         },
         "compile_card_internal_code"
     );
@@ -148,7 +150,9 @@ export const get_local_env = (env: LexicalEnvironment, card: Cell<unknown>) => {
 
 export const compile_internal_network = (
     card: Cell<unknown>,
-    env: LexicalEnvironment
+    env: LexicalEnvironment,
+    source_cell: Cell<unknown>,
+    timestamp: number,
 ) =>
     compound_propagator(
         [],
@@ -157,7 +161,7 @@ export const compile_internal_network = (
             console.log("unfolding card internal network");
             const this_cell = internal_cell_this(card);
             const local_env = get_local_env(env, card);
-            compile_card_internal_code(this_cell, local_env);
+            compile_card_internal_code(this_cell, local_env, source_cell, timestamp);
         },
         "unfold_card_internal_network"
     );
@@ -209,6 +213,6 @@ export const card_connector_below_above = card_connector_constructor(slot_below,
 export const internal_build_card = (env: LexicalEnvironment) => (id: string) => {
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(id)(card);
-    compile_internal_network(card, env);
+    compile_internal_network(card, env, construct_cell(`internal-build-source:${id}`), 0);
     return card;
 };

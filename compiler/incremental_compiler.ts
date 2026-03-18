@@ -40,7 +40,10 @@ import { init_system as init_compiler_system } from "./compiler"
  * parts of the execution graph.
  */
 
-export const init_system = init_compiler_system
+export const init_system = () => {
+    init_compiler_system();
+    install_merge_closure_incremental(generic_merge);
+}
 
 export const incremental_apply_propagator = (operator: Cell<ClosureTemplate | ((...args: Cell<any>[]) => Propagator)>, operands_expr: LainElement[], env: LexicalEnvironment, source: Cell<any>, timestamp: number) =>  {
         const closure = ce_switch(ce_is_closure(operator), operator)
@@ -59,6 +62,7 @@ import { pretentious_welcoming_message } from "./terminal_utils";
 import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum"
 import { construct_vector_clock, vector_clock_layer } from "ppropogator/AdvanceReactivity/vector_clock"
 import { p_reactive_dispatch, source_has_neighbor, update_source_cell } from "ppropogator/DataTypes/PremisesSource"
+import { generic_merge } from "ppropogator/Cell/Merge"
 
 
 
@@ -128,7 +132,7 @@ define_generic_expr_handler(incremental_compile,
             return output
        }
        else {
-            return incremental_compile(expr)(env)
+            return incremental_compile(expr)(env, source_cell, timestamp)
        }
     }
 })
@@ -185,7 +189,7 @@ define_generic_expr_handler(incremental_compile, [[s_constant("network"), [P.ele
 define_generic_expr_handler(incremental_compile, [[s_constant("?"), [P.element, "A"]]], 
     (expr: string[], val: (key: string) => any) => {
     return (env: LexicalEnvironment, source_cell: Cell<any>, timestamp: number) => {
-       const a = incremental_compile(val("A"))(env)
+       const a = incremental_compile(val("A"))(env, source_cell, timestamp)
        execute_all_tasks_sequential(() => {});
        return a.summarize()
     }
@@ -247,4 +251,3 @@ define_generic_expr_handler(incremental_compile, [[s_constant(">::"), [P.element
         }
     }
 })
-

@@ -1,6 +1,7 @@
 import { 
     type Cell, cell_strongest, 
     compound_propagator, construct_cell, 
+    construct_propagator,
     function_to_primitive_propagator, 
     get_base_value, 
     match_args, 
@@ -14,7 +15,13 @@ import { expr_value, type LainElement } from "../lain_element";
 import { type ClosureTemplate } from "./base";
 // Import type using the type alias to work around Vite module resolution
 import type { LayeredObjectType as LayeredObject } from "sando-layer/Basic/LayeredObject";
-import { is_reactive_value } from "ppropogator/AdvanceReactivity/vector_clock";
+import {
+    construct_vector_clock,
+    get_vector_clock_layer,
+    is_reactive_value,
+    merge_vector_clocks,
+    vector_clock_layer,
+} from "ppropogator/AdvanceReactivity/vector_clock";
 import { construct_simple_generic_procedure, define_generic_procedure_handler } from "generic-handler/GenericProcedure";
 import { is_contradiction, is_nothing, merge_into_contradiction } from "ppropogator/Cell/CellValue";
 import { compose } from "generic-handler/built_in_generics/generic_combinator";
@@ -25,6 +32,12 @@ import { construct_better_set, is_better_set } from "generic-handler/built_in_ge
 import { add_item } from "generic-handler/built_in_generics/generic_collection";
 import { make_layered_procedure } from "sando-layer/Basic/LayeredProcedure";
 import { layered_pass_dependences } from "ppropogator/Propagator/BuiltInProps";
+import { is_unusable_value } from "ppropogator/Cell/CellValue";
+import { update_cell, cell_strongest_base_value } from "ppropogator/Cell/Cell";
+import { dispose_propagator } from "ppropogator/Propagator/Propagator";
+import { construct_layered_datum } from "sando-layer/Basic/LayeredDatum";
+import { get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
+import { p_connect_to_source } from "ppropogator/DataTypes/PremisesSource";
 
 export interface InternalUnfoldedClosure  {
     unfolded_network: Propagator,
@@ -116,6 +129,7 @@ const eff_dispose_unfolded_closure = (unfolded_closure: InternalUnfoldedClosure)
         remove_hash_from_store((unfolded_closure as UnfoldedClosure).apply_closure_template)
     }
     unfolded_closure.dispose()
+    get_current_scheduler().cleanup_disposed_items()
 }
 
 const eff_dispatch_inputs = (closure: UnfoldedClosure, inputs: Cell<any>[]) => {
@@ -198,18 +212,25 @@ export const internal_unfold_closure = (
     compile: (expr: LainElement, env: LexicalEnvironment) => Cell<any>
 ): InternalUnfoldedClosure =>  {
     const inputs_cell: Cell<any>[] = closure.inputs.map(expr_value).map((name: string) => construct_cell(name))
+    const internal_outputs_cell: Cell<any>[] = closure.outputs
+        .map(expr_value)
+        .map((name: string) => construct_cell(`${name} | internal_output`))
 
     const inputs_vars: string[] = closure.inputs.map(expr_value)
     const outputs_vars: string[] = closure.outputs.map(expr_value)
 
     const env = extend_env(parent_env, [
         ...zip(inputs_vars, inputs_cell),
-        ...zip(outputs_vars, outputs_cell)
+        ...zip(outputs_vars, internal_outputs_cell)
     ])
+
+    const output_connectors = zip(internal_outputs_cell, outputs_cell).map(
+        ([internal_output, external_output]) => p_connect_to_source(internal_output, external_output)
+    )
 
     const unfolded_network = compound_propagator(
         inputs_cell,
-        outputs_cell,
+        internal_outputs_cell,
         () => {
             closure.body.forEach((body: LainElement) => {
                compile(body, env)
@@ -230,8 +251,10 @@ export const internal_unfold_closure = (
 
     const dispose = () => {
         inputs_cell.forEach(cell => cell.dispose())
+        internal_outputs_cell.forEach(cell => cell.dispose())
         env.dispose()
-        unfolded_network.dispose()
+        output_connectors.forEach(dispose_propagator)
+        dispose_propagator(unfolded_network)
         // Clean up hash store entries to prevent memory leaks
         remove_hash_from_store(closure)
     }
@@ -294,19 +317,41 @@ export const p_apply_closure_template = (
     output_cells: Cell<any>[], 
     input_cells: Cell<any>[],
     parent_env: LexicalEnvironment,
-) => function_to_primitive_propagator(
-    PROPAGATOR_NAMES.APPLY_CLOSURE_TEMPLATE,
-    (closure: ClosureTemplate, ..._inputs: any[]) => {
-        const template = construct_apply_closure_template(
-            closure, 
-            input_cells, 
-            output_cells, 
-            parent_env, 
-            compile
-        )
-        return template
-    }
-)
+) => (closure: Cell<ClosureTemplate>, output: Cell<any>) =>
+    construct_propagator(
+        [closure, ...input_cells],
+        [output],
+        () => {
+            if ([closure, ...input_cells].some((cell) => is_unusable_value(cell_strongest(cell)))) {
+                return;
+            }
+
+            const template = construct_apply_closure_template(
+                cell_strongest_base_value(closure) as ClosureTemplate,
+                input_cells,
+                output_cells,
+                parent_env,
+                compile
+            );
+
+            const merged_vector_clock = [cell_strongest(closure), ...input_cells.map(cell_strongest)]
+                .filter(is_reactive_value)
+                .reduce(
+                    (acc, value) => merge_vector_clocks(acc, get_vector_clock_layer(value)),
+                    construct_vector_clock([])
+                );
+
+            update_cell(
+                output,
+                construct_layered_datum(
+                    template,
+                    vector_clock_layer,
+                    merged_vector_clock
+                )
+            );
+        },
+        PROPAGATOR_NAMES.APPLY_CLOSURE_TEMPLATE
+    )
 
 export const ce_apply_closure = (
     compile: (expr: LainElement, env: LexicalEnvironment) => any, 
@@ -316,15 +361,39 @@ export const ce_apply_closure = (
     closure: Cell<ClosureTemplate>
 ) => {
     const unfolded_closure = construct_cell("unfolded closure") 
+    let current_unfolded: UnfoldedClosure | null = null;
 
-    const args = [closure, ...inputs, unfolded_closure]
+    construct_propagator(
+        [closure, ...inputs],
+        [unfolded_closure],
+        () => {
+            if ([closure, ...inputs].some((cell) => is_unusable_value(cell_strongest(cell)))) {
+                return;
+            }
 
-    p_apply_closure_template(
-        compile,
-        outputs,
-        inputs,
-        parent_env
-    )(...args)
+            const template = construct_apply_closure_template(
+                cell_strongest_base_value(closure) as ClosureTemplate,
+                inputs,
+                outputs,
+                parent_env,
+                compile
+            );
+
+            if (current_unfolded == null) {
+                current_unfolded = unfold_template(template);
+                return;
+            }
+
+            if (source_template_inconsistent(current_unfolded, template)) {
+                eff_dispose_unfolded_closure(current_unfolded);
+                current_unfolded = unfold_template(template);
+                return;
+            }
+
+            eff_dispatch_inputs(current_unfolded, get_scoped_inputs(template));
+        },
+        "ce_apply_closure_live"
+    )
 
     return unfolded_closure
 
@@ -453,15 +522,15 @@ define_generic_procedure_handler(merge_closure_incremental, match_args(is_any, i
         if (is_unfolded_closure(content_base)) {
             if (source_template_inconsistent(content_base, increment_base)) {
                 eff_dispose_unfolded_closure(content_base)
-                const new_unfold = layered_unfold(increment_base)
-                return new_unfold
+                return layered_pass_dependences(increment, unfold_template(increment_base))
             }
             else {
+                eff_dispatch_inputs(content_base, get_scoped_inputs(content_base))
                 return layered_pass_dependences(increment, content_base)
             }
         }
         else if (is_nothing(content_base)) {
-            return layered_unfold(increment_base)
+            return layered_pass_dependences(increment, unfold_template(increment_base))
         }
         else if (is_contradiction(content_base)) {
             return content
@@ -489,5 +558,3 @@ export const install_merge_closure_incremental = (generic_merge: (content: any, 
         return merge_closure_incremental(content, increment)
     })
 }
-
-

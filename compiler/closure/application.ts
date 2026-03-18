@@ -69,7 +69,7 @@ export const incremental_apply_closure = (
         const unfolded_closure = ce_apply_closure(
             compile,
             outputs_cell,
-            scoped_inputs_cell,
+            inputs_cell,
             env,
             closure
         )        
@@ -112,4 +112,3 @@ export const apply_closure = (closure: Cell<ClosureTemplate>, operands_expr: Lai
     },
     "apply_closure"
 )
-
