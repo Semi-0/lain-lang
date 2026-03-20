@@ -7,7 +7,7 @@ import { constant_cell_from_expr,  is_self_evaluating, is_element_symbol, expr_v
 import type { LainElement } from "./lain_element"
 import { ce_cached_lexical_lookup, define, type LexicalEnvironment, bind_to_env } from "./env"
 import { define_generic_expr_handler } from "./compiler_helper"
-import { cell_content, cell_name, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, execute_all_tasks_sequential, inspect_strongest, PublicStateCommand, set_global_state, set_merge, simple_scheduler } from "ppropogator"
+import { cell_content, cell_name, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, execute_all_tasks_sequential, init_propagator_system, inspect_strongest, PublicStateCommand, set_global_state, set_merge, simple_scheduler } from "ppropogator"
 // Type imports separated to avoid Vite export issues
 import type { Cell } from "ppropogator/Cell/Cell"
 import type { Propagator } from "ppropogator/Propagator/Propagator"
@@ -65,6 +65,7 @@ export const init_system = () => {
     set_scheduler(simple_scheduler());
     init_specialized_reactive_runtime();
     
+    init_propagator_system();
     pretentious_welcoming_message()
 }
 

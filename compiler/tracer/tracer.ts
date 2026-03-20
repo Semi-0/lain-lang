@@ -230,6 +230,7 @@ export function trace_upstream_reactively(
       };
       const on_visit = (cell: Cell<any>, id: string) =>
         attach_tap_if_needed(cell, id, gatherer_id, tapped, taps, on_fire);
+      
       last_sig = rebuild_core(graph, root, max_nodes, gatherer, last_sig, {
         on_visit,
         truncate_label: "BFS",

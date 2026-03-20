@@ -964,7 +964,7 @@ describe("Card API Tests", () => {
             expect(is_contradiction(read_slot_value(center, internal_cell_right))).toBe(false);
 
             update_card("rebuild-code-above", 6);
-            execute_all_tasks_sequential(() => {});
+            execute_all_tasks_sequential(console.error);
             expect(read_slot_value(right, internal_cell_this)).toBe(8);
         });
 
