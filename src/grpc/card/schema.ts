@@ -148,6 +148,47 @@ export const get_local_env = (env: LexicalEnvironment, card: Cell<unknown>) => {
     ]);
 }
 
+// export const c_get_local_env = (env: LexicalEnvironment, card: Cell<unknown>) => {
+//     const local_env = construct_cell("local_env")
+//     const extend_local_env = compound_propagator(
+//         [],
+//         [],
+//         () => {
+//             const this_cell = internal_cell_this(card);
+//             const left_cell = internal_cell_left(card);
+//             const right_cell = internal_cell_right(card);
+//             const above_cell = internal_cell_above(card);
+//             const below_cell = internal_cell_below(card);
+//             const local_environment = extends_local_environment(env, [
+//                 [slot_this, this_cell],
+//                 [slot_left, left_cell],
+//                 [slot_right, right_cell],
+//                 [slot_above, above_cell],
+//                 [slot_below, below_cell],
+//             ]);
+//             bi_sync(local_environment, local_env);
+//         },
+//         "c_get_local_env"
+//     )
+//     return local_env;
+// }
+
+
+export const compile_internal_network_precise = (
+    card_this: Cell<any>,
+    internal_env: LexicalEnvironment,
+    source_cell: Cell<unknown>,
+    timestamp: number,
+) => compound_propagator(
+    [card_this, internal_env],
+    [],
+    () => {
+        console.log("compiling internal network precisely");
+        compile_card_internal_code(card_this, internal_env, source_cell, timestamp);
+    },
+    "compile_internal_network"
+)
+
 export const compile_internal_network = (
     card: Cell<unknown>,
     env: LexicalEnvironment,
@@ -155,7 +196,7 @@ export const compile_internal_network = (
     timestamp: number,
 ) =>
     compound_propagator(
-        [],
+        [env, card],
         [],
         () => {
             console.log("unfolding card internal network");
@@ -213,6 +254,6 @@ export const card_connector_below_above = card_connector_constructor(slot_below,
 export const internal_build_card = (env: LexicalEnvironment) => (id: string) => {
     const card = construct_cell("card", id) as Cell<unknown>;
     p_construct_card_cell(id)(card);
-    compile_internal_network(card, env, construct_cell(`internal-build-source:${id}`), 0);
+    compile_internal_network_precise(internal_cell_this(card), get_local_env(env, card), construct_cell(`internal-build-source:${id}`), 0);
     return card;
 };

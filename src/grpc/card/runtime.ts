@@ -8,7 +8,7 @@ import { trace_card_runtime_io } from "../util/tracer.js";
 import { cell_strongest, cell_strongest_base_value, dispose_cell } from "ppropogator/Cell/Cell";
 import { dispose_propagator, type Propagator } from "ppropogator/Propagator/Propagator";
 import { LexicalEnvironment } from "../../../compiler/env/env.js";
-import { card_connector_constructor_cell, internal_cell_above, internal_cell_below, internal_cell_getter, internal_cell_left, internal_cell_right, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io } from "./schema.js";
+import { card_connector_constructor_cell, internal_cell_above, internal_cell_below, internal_cell_getter, internal_cell_left, internal_cell_right, internal_cell_this, p_construct_card_cell, p_emit_card_internal_updates_to_runtime, compile_internal_network, no_echo_card_io, compile_internal_network_precise, get_local_env } from "./schema.js";
 import { p_reactive_dispatch, source_constant_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 import { execute_all_tasks_sequential, get_current_scheduler } from "ppropogator/Shared/Scheduler/Scheduler";
 import { bi_sync } from "ppropogator/Propagator/BuiltInProps";
@@ -134,24 +134,25 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
     // Rebuilds need the latest ::this value before compiling, and disposal is deferred
     // until the scheduler cleanup phase. Flush both edges explicitly around the swap.
     execute_all_tasks_sequential(console.error);
-    
 
-    const has_old_network = dispose_card_internal_network_io(id);
+    const has_old_network = internal_network_storage.has(id);
     if (has_old_network) {
+        dispose_card_internal_network_io(id);
         execute_all_tasks_sequential(console.error);
         trace_card_runtime_io("build_card_dispose_old_internal_network", { id });
     }
 
-    refresh_card_neighbor_clocks(id, card);
-    execute_all_tasks_sequential(console.error);
-
     const source_cell = get_or_create_card_compile_source(id);
-    const timestamp = compile_timestamp_storage.get(id) ?? 0;
-    const internal_network = compile_internal_network(card, env, source_cell, timestamp);
-    internal_network_storage.set(id, internal_network);
-    compile_timestamp_storage.set(id, timestamp + 1);
+    const compile_once = () => {
+        const timestamp = compile_timestamp_storage.get(id) ?? 0;
 
-    refresh_all_card_neighbor_clocks();
+        const internal_network = compile_internal_network_precise(internal_cell_this(card), get_local_env(env, card), source_cell, timestamp);
+        internal_network_storage.set(id, internal_network);
+        compile_timestamp_storage.set(id, timestamp + 1);
+    };
+
+    compile_once();
+    refresh_card_neighbor_clocks(id, card);
     execute_all_tasks_sequential(console.error);
 
     trace_card_runtime_io("build_card", { id });

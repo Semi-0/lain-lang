@@ -18,7 +18,7 @@ import { cell_id, summarize_cells, update_cell } from "ppropogator/Cell/Cell"
 import { is_map } from "ppropogator/Helper/Helper"
 import { set_scheduler } from "ppropogator/Shared/Scheduler/Scheduler"
 import { reactive_update } from "ppropogator/Helper/UI"
-import { install_temporary_value_set_handlers, merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
+import { init_temporary_value_set_system, merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet"
 import { incremental_apply_closure } from "./closure"
 // TODO: CE ZIP
 // CE FOREACH
@@ -61,7 +61,7 @@ import { init_specialized_reactive_runtime } from "../src/grpc/better_runtime"
 
 export const init_system = () => {
     set_global_state(PublicStateCommand.CLEAN_UP);
-    install_temporary_value_set_handlers();
+    init_temporary_value_set_system();
     set_scheduler(simple_scheduler());
     init_specialized_reactive_runtime();
     
