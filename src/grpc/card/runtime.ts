@@ -17,12 +17,11 @@ import { type LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { compound_tell } from "ppropogator/Helper/UI";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic.js";
 import { update_specialized_reactive_value } from "../better_runtime.js";
-
-const connector_key_separator = "!!*!!";
-const make_connector_key_from_ids = (cardA_id: string, cardB_id: string) =>
-    `${cardA_id}${connector_key_separator}${cardB_id}`;
-const make_connector_key = (cardA: Cell<unknown>, cardB: Cell<unknown>) =>
-    make_connector_key_from_ids(cell_id(cardA), cell_id(cardB));
+import {
+    connector_key_separator,
+    make_connector_key,
+    make_connector_key_from_ids,
+} from "./connector_key.js";
 
 const connector_storage = new Map<string, Propagator>();
 const internal_network_storage = new Map<string, Propagator>();
@@ -152,7 +151,7 @@ export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cel
     };
 
     compile_once();
-    refresh_card_neighbor_clocks(id, card);
+    // refresh_card_neighbor_clocks(id, card);
     execute_all_tasks_sequential(console.error);
 
     trace_card_runtime_io("build_card", { id });
@@ -202,7 +201,6 @@ export const runtime_remove_card = (id: string): void => {
         return;
     }
     dispose_card_internal_network_io(id);
-    dispose_cell(card);
     card_storage.delete(id);
     compile_source_storage.delete(id);
     compile_timestamp_storage.delete(id);

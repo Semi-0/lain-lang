@@ -54,6 +54,17 @@ export const p_construct_card_cell = (cardId: string) => (output: Cell<unknown>)
         output
     );
 
+
+export const internal_cell_connector = (key: string) => 
+(card: Cell<any>, slot: Cell<any>) => 
+    c_dict_accessor(key)(card, slot)
+
+export const internal_cell_connector_this = internal_cell_connector(slot_this);
+export const internal_cell_connector_left = internal_cell_connector(slot_left);
+export const internal_cell_connector_right = internal_cell_connector(slot_right);
+export const internal_cell_connector_above = internal_cell_connector(slot_above);
+export const internal_cell_connector_below = internal_cell_connector(slot_below);
+
 export const internal_cell_getter = (key: string) => ce_dict_accessor(key);
 export const internal_cell_this = internal_cell_getter(slot_this);
 export const internal_cell_left = internal_cell_getter(slot_left);

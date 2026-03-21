@@ -1,6 +1,6 @@
 /**
  * Card API: build, add, remove, connect (attach), detach.
- * Single entry point for card lifecycle operations.
+ * Single entry point for card lifecycle operations (metadata-backed; see `card_lifecycle.ts`).
  */
 export {
     internal_build_card,
@@ -25,7 +25,13 @@ export {
     connect_cards,
     detach_cards,
     detach_cards_by_key,
-} from "./storage.js";
+} from "./card_lifecycle.js";
+
+export {
+    clear_card_metadata,
+    get_card_metadata,
+    guarantee_get_card_metadata,
+} from "./card_metadata.js";
 
 export type {
     GraphEdge,
@@ -58,7 +64,7 @@ export {
     type RuntimeCardOutputEvent,
 } from "../bridge/card_runtime_events.js";
 
-import { connect_cards } from "./storage.js";
+import { connect_cards } from "./card_lifecycle.js";
 
 /** Alias for connect_cards. */
 export const attach_cards = connect_cards;
