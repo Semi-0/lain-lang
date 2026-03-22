@@ -34,6 +34,7 @@ type CardMetadata = {
     tracking_propagators: Map<string, Propagator>;
     compile_source: Cell<any>
     compile_timestamp: number;
+    local_env: import("../../../compiler/env").LexicalEnvironment | null;
 }
 
 const card_metadata_storage = new Map<string, CardMetadata>();
@@ -162,6 +163,7 @@ export const construct_card_metadata = (id: string) => {
         tracking_propagators,
         compile_source,
         compile_timestamp,
+        local_env: null,
     };
 
     set_card_metadata(id, metadata);
@@ -226,21 +228,37 @@ export const card_metadata_build = (env: LexicalEnvironment, metadata: CardMetad
 
     if (card_metadata_compiled(metadata)) {
         dispose_propagator(metadata.tracking_propagators.get("compiled_network")!);
+        // Flush: cascade disposes compiled_network → cc_prop → apply_prim_prop → lookup propagators.
+        // After this, old local_env's only remaining neighbor is the selective_sync propagator.
         execute_all_tasks_sequential(console.error);
     }
 
+    // Dispose the selective_sync propagator for the old local_env (not in the compiled_network cascade).
+    // After the cascade above, local_env's only remaining neighbors are propagators that have it as input
+    // (i.e. selective_sync). Disposing them allows local_env to be GC'd by the scheduler.
+    if (metadata.local_env) {
+        const old_local_env = metadata.local_env;
+        old_local_env.getNeighbors().forEach((neighbor) => {
+            if (neighbor.propagator != null) {
+                dispose_propagator(neighbor.propagator);
+            }
+        });
+        metadata.local_env = null;
+    }
+
     const ts = metadata.compile_timestamp;
+    const local_env = get_local_env(env, metadata.card);
+    metadata.local_env = local_env;
+
     const compiled_network = compile_internal_network_precise(
         guarantee_get(metadata.tracking_internal_cells, slot_this),
-        get_local_env(env, metadata.card),
+        local_env,
         metadata.compile_source,
         ts
     );
-    // const compiled_network = compile_internal_network_with_metadata(metadata, env);
     metadata.tracking_propagators.set("compiled_network", compiled_network);
     metadata.compile_timestamp = ts + 1;
 
-    // refresh_card_neighbor_clocks(metadata.id, metadata.card);
     execute_all_tasks_sequential(console.error);
     return metadata;
 };
