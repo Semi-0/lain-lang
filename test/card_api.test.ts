@@ -11,9 +11,11 @@
 import { expect, test, beforeEach, describe } from "bun:test";
 import {
     cell_id,
+    cell_snapshot,
     cell_strongest_base_value,
     is_contradiction,
     is_cell,
+    propagator_snapshot,
     type Cell,
 } from "ppropogator";
 import { execute_all_tasks_sequential } from "ppropogator/Shared/Scheduler/Scheduler";
@@ -1144,5 +1146,64 @@ describe("Card API Tests", () => {
 
             expect(final_value_3).toBe(5)
         })
+    });
+
+    /**
+     * Uses global propagator registry snapshots (`cell_snapshot`, `propagator_snapshot`).
+     * After many dispose+rebuild cycles on the same card, counts should not drift: each
+     * rebuild should replace `compiled_network` and GC prior local env / inner compile
+     * artifacts rather than accumulate.
+     *
+     * Contract: delta must be 0. As of a local run, this fails (e.g. ~+880 over 80 rebuilds),
+     * indicating growth in the global registry — treat as a leak to fix, not a flaky test.
+     */
+    describe("GC: repeated center rebuild (global registry)", () => {
+        test("many rebuilds do not monotonically grow cell + propagator counts", () => {
+            const env = primitive_env();
+            add_card("gc-leak-above");
+            add_card("gc-leak-center");
+            add_card("gc-leak-right");
+            build_card(env)("gc-leak-above");
+            build_card(env)("gc-leak-center");
+            build_card(env)("gc-leak-right");
+
+            connect_cards("gc-leak-above", "gc-leak-center", slot_below, slot_above);
+            connect_cards("gc-leak-center", "gc-leak-right", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            update_card("gc-leak-center", "(+ ::above 1 ::right)");
+            build_card(env)("gc-leak-center");
+            execute_all_tasks_sequential(() => {});
+
+            const measure = () => ({
+                cells: cell_snapshot().length,
+                props: propagator_snapshot().length,
+            });
+            const sum = (m: { cells: number; props: number }) => m.cells + m.props;
+
+            // Stabilization builds (same pattern as stress; avoids counting one-off first-compile noise).
+            for (let i = 0; i < 5; i++) {
+                update_card("gc-leak-center", `(+ ::above ${(i % 7) + 1} ::right)`);
+                build_card(env)("gc-leak-center");
+                execute_all_tasks_sequential(() => {});
+            }
+            const baseline = measure();
+
+            const REBUILDS = 80;
+            for (let i = 0; i < REBUILDS; i++) {
+                update_card("gc-leak-center", `(+ ::above ${(i % 7) + 1} ::right)`);
+                build_card(env)("gc-leak-center");
+                execute_all_tasks_sequential(() => {});
+            }
+            const after = measure();
+
+            const delta = sum(after) - sum(baseline);
+            if (delta > 0) {
+                throw new Error(
+                    `registry leak: after ${REBUILDS} rebuilds, (cells+props) grew by ${delta} (baseline ${sum(baseline)} → ${sum(after)}). ` +
+                        `Each rebuild should dispose compiled_network and GC prior artifacts; monotonic growth indicates leak.`,
+                );
+            }
+        });
     });
 });

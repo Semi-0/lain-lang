@@ -106,5 +106,4 @@ export const graph_step = (graph: DirectedGraph, item: any) => {
         )
         graph.mergeEdge(node_id, dependent_id)
     })
-
 }

@@ -63,7 +63,9 @@ export const  construct_env_with_inital_value = (initial: [string, Cell<any>][],
 //      output: Cell<LexicalEnvironment>
 //     ) => p_dict
 
-export const extend_env = (parent: LexicalEnvironment, pairs: [string, Cell<any>][]) => ce_dict(new Map<string, Cell<any>>([[parent_key, parent], ...pairs]))
+export const extend_env = (parent: LexicalEnvironment, pairs: [string, Cell<any>][]) => ce_dict(
+    new Map<string, Cell<any>>([[parent_key, parent], ...pairs]))
+
 
 export const summarize_env: (env: LexicalEnvironment) => string  = (env: LexicalEnvironment) => {
     const map = cell_strongest_base_value(env)
