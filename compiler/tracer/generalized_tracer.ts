@@ -10,6 +10,9 @@ import { pipe } from "effect"
 import { p_tap } from "ppropogator/Propagator/BuiltInProps"
 import { update_specialized_reactive_value } from "../../src/grpc/better_runtime"
 import { cell_id } from "ppropogator/Cell/Cell"
+import { generic_relation_parent_child } from "ppropogator/Shared/Generics"
+import { parameterize_parent } from "ppropogator/Shared/PublicState"
+import { get_dependents, get_downstream } from "ppropogator/Shared/Generics"
 
 export const traverse = (
   walk: (x: any) => any[],
@@ -60,42 +63,6 @@ export const max_nodes_step = (max_nodes: number) => {
       }
     }
 }
-
-export const get_dependents = construct_simple_generic_procedure(
-  "get_dependents",
-  1,
-  error_generic_procedure_handler("get_dependents")
-)
-
-define_generic_procedure_handler(
-  get_dependents,
-  match_args(is_cell),
-  cell_dependents
-)
-
-define_generic_procedure_handler(
-  get_dependents,
-  match_args(is_propagator),
-  propagator_inputs
-)
-
-export const get_downstream = construct_simple_generic_procedure(
-  "get_downstream",
-  1,
-  error_generic_procedure_handler("get_downstream")
-)
-
-define_generic_procedure_handler(
-  get_downstream,
-  match_args(is_cell),
-  cell_downstream
-)
-
-define_generic_procedure_handler(
-  get_downstream,
-  match_args(is_propagator),
-  propagator_outputs
-)
 
 export const create_label = (item: any) => {
   if (is_cell(item)) {
@@ -163,18 +130,19 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
   root: Cell<any>,
   gatherer: Cell<any>
 ): Propagator => {
-  // TODO: we need to be careful of GC 
-  // for tapped cells
   var graph = new DirectedGraph();
   var active = false;
   var initialized = false;
 
   const tap_cell = tap_cell_step((x: Cell<any>) => {
-    p_tap(x, () => {
+    const tracer = p_tap(x, () => {
       queueMicrotask(() => {
         schedule();
       })
     })
+
+    // so propagator can correct GC tracer
+    generic_relation_parent_child(propagator, tracer)
   })
 
   const construct_traverse_for_graph = () => traverse(
@@ -201,7 +169,7 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
     }
   }
 
-  return construct_propagator(
+  const propagator = construct_propagator(
     [root],
     [gatherer],
     () => {
@@ -215,6 +183,8 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
     },
     "trace_dependents"
   )
+
+  return propagator
 }
 
 export const trace_upstream = trace(get_dependents)

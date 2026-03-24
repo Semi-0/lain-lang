@@ -30,7 +30,6 @@ import {
   traverse,
   cyclic_prevention_step,
   max_nodes_step,
-  get_dependents,
   create_label,
   graph_dependents_step,
   trace_upstream,
@@ -48,6 +47,7 @@ import { is_layered_object, type LayeredObject } from "sando-layer/Basic/Layered
 import { to_string } from "generic-handler/built_in_generics/generic_conversation";
 import { init_system as init_incremental_system } from "../incremental_compiler";
 import { propagator_name } from "ppropogator/Propagator/Propagator";
+import { get_dependents } from "ppropogator/Shared/Generics";
 
 function rawToGraphData(raw: unknown): { nodes: { id: string; label: string }[]; links: { source: string; target: string }[] } {
   const base = is_layered_object(raw) ? get_base_value(raw as LayeredObject<unknown>) : raw;
