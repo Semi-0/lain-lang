@@ -92,27 +92,33 @@ export const create_label = (item: any) => {
   }
 }
 
-export const graph_dependents_step = (graph: DirectedGraph, item: any) => {
-  const node_id = get_id(item)
-  const dependents = get_dependents(item)
-  graph.mergeNode(
-    node_id,
-    {
-      label: create_label(item)
-    }
-  )
-  for_each(dependents, (dependent: any) => {
-    const dependent_id = get_id(dependent)
+
+
+
+export const graph_step = (get_nodes: (x: any) => any[]) => (graph: DirectedGraph, item: any) => {
+ 
+    const node_id = get_id(item)
+    const dependents = get_nodes(item)
     graph.mergeNode(
-      dependent_id,
+      node_id,
       {
-        label: create_label(dependent)
+        label: create_label(item)
       }
     )
-    graph.mergeEdge(node_id, dependent_id)
-  })
-  return graph
+    for_each(dependents, (dependent: any) => {
+      const dependent_id = get_id(dependent)
+      graph.mergeNode(
+        dependent_id,
+        {
+          label: create_label(dependent)
+        }
+      )
+      graph.mergeEdge(node_id, dependent_id)
+    })
+    return graph
+  
 }
+export const graph_dependents_step = graph_step(get_dependents)
 
 const tap_cell_step = (on_visit: (cell: Cell<any>) => void) => {
   const tapped = new Set<string>()
@@ -140,12 +146,11 @@ export const cyclic_prevention_walk = (walk: (x: any) => any[]) => {
   }
 }
 
-// actually the best way to do this is 
-// to treat traced graph as a partial information 
-export function trace_dependents(
+
+export const trace = (walks_nodes: (x: any) => any[]) => (
   root: Cell<any>,
   gatherer: Cell<any>
-): Propagator {
+): Propagator => {
 
   var graph = new DirectedGraph();
   var active = false;
@@ -160,11 +165,10 @@ export function trace_dependents(
   })
 
   const construct_traverse_for_graph = () => traverse(
-    cyclic_prevention_walk(get_dependents),
+    cyclic_prevention_walk(walks_nodes),
     pipe(
-      graph_dependents_step,
+      graph_step(walks_nodes),
       tap_cell,
-      // cyclic_prevention_step(get_id),
     )
   )
 
@@ -202,3 +206,4 @@ export function trace_dependents(
   )
 }
 
+export const trace_dependents = trace(get_dependents)
