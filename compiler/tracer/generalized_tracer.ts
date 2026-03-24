@@ -10,7 +10,6 @@ import { pipe } from "effect"
 import { p_tap } from "ppropogator/Propagator/BuiltInProps"
 import { update_specialized_reactive_value } from "../../src/grpc/better_runtime"
 import { cell_id } from "ppropogator/Cell/Cell"
-import { log_tracer } from "generic-handler/built_in_generics/generic_debugger"
 
 export const traverse = (
   walk: (x: any) => any[],
@@ -110,31 +109,27 @@ export const create_label = (item: any) => {
   }
 }
 
-
-
-
 export const graph_step = (get_nodes: (x: any) => any[]) => (graph: DirectedGraph, item: any) => {
- 
-    const node_id = get_id(item)
-    const dependents = get_nodes(item)
+  const node_id = get_id(item)
+  const dependents = get_nodes(item)
+  graph.mergeNode(
+    node_id,
+    {
+      label: create_label(item)
+    }
+  )
+  for_each(dependents, (dependent: any) => {
+    const dependent_id = get_id(dependent)
     graph.mergeNode(
-      node_id,
+      dependent_id,
       {
-        label: create_label(item)
+        label: create_label(dependent)
       }
     )
-    for_each(dependents, (dependent: any) => {
-      const dependent_id = get_id(dependent)
-      graph.mergeNode(
-        dependent_id,
-        {
-          label: create_label(dependent)
-        }
-      )
-      graph.mergeEdge(node_id, dependent_id)
-    })
-    return graph
-  
+    graph.mergeEdge(node_id, dependent_id)
+  })
+  return graph
+
 }
 export const graph_dependents_step = graph_step(get_dependents)
 
@@ -164,12 +159,12 @@ export const cyclic_prevention_walk = (walk: (x: any) => any[]) => {
   }
 }
 
-
-export const trace = (walks_nodes: (x: any) => any[]) => (
+export const trace = (walk_nodes: (x: any) => any[]) => (
   root: Cell<any>,
   gatherer: Cell<any>
 ): Propagator => {
-
+  // we need to be careful of GC 
+  // for tapped cells
   var graph = new DirectedGraph();
   var active = false;
   var initialized = false;
@@ -183,9 +178,9 @@ export const trace = (walks_nodes: (x: any) => any[]) => (
   })
 
   const construct_traverse_for_graph = () => traverse(
-    cyclic_prevention_walk(walks_nodes),
+    cyclic_prevention_walk(walk_nodes),
     pipe(
-      graph_step(walks_nodes),
+      graph_step(walk_nodes),
       tap_cell,
     )
   )
@@ -205,8 +200,6 @@ export const trace = (walks_nodes: (x: any) => any[]) => (
       toggle_active()
     }
   }
-
-  // it should traverse all dependents once and tapping all the cell 
 
   return construct_propagator(
     [root],
