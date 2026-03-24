@@ -12,6 +12,7 @@ import { construct_env_with_inital_value } from "../env";
 import { make_primitive, make_two_arity_primitive } from "./base";
 import { trace_upstream_periodically, trace_upstream_reactively } from "../tracer/tracer";
 import { p_graph_card, p_graph_connected_prefix, p_graph_label_prefix, p_graph_name, p_graph_nodes } from "../tracer/graph_queries";
+import { trace_upstream, trace_upstream_primitive } from "../tracer/generalized_tracer";
 
 export const two_arity_prims: [string, any][] = [
     ["+", p_add],
@@ -98,6 +99,8 @@ export const primitive_env = (id: string = "root") => {
         ["graph:trace", make_primitive("graph:trace", 1, 1, trace_upstream_reactively)],
         // @ts-ignore
         ["graph:active-trace", make_primitive("graph:active-trace", 1, 1, trace_upstream_periodically)],
+        ["graph:dependents", make_primitive("graph:dependents", 1, 1, trace_upstream)],
+        ["graph:prim-dependents", make_primitive("graph:primitive-dependents", 1, 1, trace_upstream_primitive)],
         ["graph:card", make_primitive("graph:card", 2, 1, p_graph_card)],
         ["graph:prefix", make_primitive("graph:label", 2, 1, p_graph_label_prefix)],
         // CELL|CARD

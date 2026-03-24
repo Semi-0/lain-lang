@@ -2,11 +2,12 @@ import { beforeEach, describe, expect, test } from "bun:test"
 import { init_system } from "../compiler/incremental_compiler"
 import { empty_lexical_environment } from "../compiler/env/env"
 import { apply_card_api_events_io, diff_slot_maps_to_card_api_events } from "../src/grpc/delta/card_slot_sync"
-import { get_card_metadata } from "../src/grpc/card/card_api"
+import { clear_card_metadata, get_card_metadata } from "../src/grpc/card/card_api"
 
 describe("card_slot_sync", () => {
   beforeEach(() => {
     init_system()
+    clear_card_metadata()
   })
 
   test("diff dedupes reciprocal neighbor declarations", () => {

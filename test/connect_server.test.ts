@@ -2,7 +2,7 @@
  * Connect server tests: in-process Connect router transport (no TCP socket binding).
  * Verifies backend speaks Connect (Compile + NetworkStream, OpenSession + PushDeltas).
  */
-import { expect, test, describe, beforeAll, afterAll } from "bun:test"
+import { expect, test, describe, beforeAll, beforeEach, afterAll } from "bun:test"
 import { createPromiseClient, createRouterTransport } from "@bufbuild/connect"
 import {
   CardBuildRequest,
@@ -13,17 +13,25 @@ import {
   PushDeltasRequest,
 } from "../src/grpc/connect_generated/lain_pb.js"
 import { LainViz } from "../src/grpc/connect_generated/lain_connect.js"
+import { init_system } from "../compiler/incremental_compiler"
 import { empty_lexical_environment } from "../compiler/env/env"
 import { create_connect_routes } from "../src/grpc/connect_server"
-import { get_card_metadata, runtime_get_card } from "../src/grpc/card/card_api"
+import { clear_card_metadata, get_card_metadata, runtime_get_card } from "../src/grpc/card/card_api"
 import { emit_runtime_card_output_io } from "../src/grpc/bridge/card_runtime_events"
 
 let client: ReturnType<typeof createPromiseClient<typeof LainViz>>
 
 beforeAll(() => {
+  init_system()
+  clear_card_metadata()
   const env = empty_lexical_environment("connect-test")
   const transport = createRouterTransport(create_connect_routes(env))
   client = createPromiseClient(LainViz, transport)
+})
+
+beforeEach(() => {
+  init_system()
+  clear_card_metadata()
 })
 
 afterAll(() => {

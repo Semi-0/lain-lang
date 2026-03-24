@@ -1,10 +1,10 @@
 import { for_each } from "generic-handler/built_in_generics/generic_collection"
 import { construct_simple_generic_procedure, define_generic_procedure_handler, error_generic_procedure_handler } from "generic-handler/GenericProcedure"
 import { DirectedGraph } from "graphology"
-import { is_cell, match_args } from "ppropogator"
+import {  is_cell, match_args } from "ppropogator"
 import { cell_dependents, cell_downstream, cell_name } from "ppropogator/Cell/Cell"
 import { construct_propagator, is_propagator, propagator_inputs, propagator_name, propagator_outputs } from "ppropogator/Propagator/Propagator"
-import { get_id } from "ppropogator/Shared/Generics"
+import { at_primitives, get_id } from "ppropogator/Shared/Generics"
 import { Cell, Propagator } from "ppropogator"
 import { pipe } from "effect"
 import { p_tap } from "ppropogator/Propagator/BuiltInProps"
@@ -13,6 +13,8 @@ import { cell_id } from "ppropogator/Cell/Cell"
 import { generic_relation_parent_child } from "ppropogator/Shared/Generics"
 import { parameterize_parent } from "ppropogator/Shared/PublicState"
 import { get_dependents, get_downstream } from "ppropogator/Shared/Generics"
+import { curried_filter } from "ppropogator/Helper/Helper"
+import { compose } from "generic-handler/built_in_generics/generic_combinator"
 
 export const traverse = (
   walk: (x: any) => any[],
@@ -188,4 +190,5 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
 }
 
 export const trace_upstream = trace(get_dependents)
+export const trace_upstream_primitive = trace(compose(get_dependents, curried_filter(at_primitives)))
 export const trace_downstream = trace(get_downstream)
