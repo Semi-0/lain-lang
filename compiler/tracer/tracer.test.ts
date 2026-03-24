@@ -33,7 +33,7 @@ import {
   get_dependents,
   create_label,
   graph_dependents_step,
-  trace_dependents,
+  trace_upstream,
 } from "./generalized_tracer";
 import {
   find_cells_by_card,
@@ -773,7 +773,7 @@ describe("trace_dependents", () => {
 
     p_sync(root, mid);
     p_sync(mid, out);
-    trace_dependents(root, gatherer);
+    trace_upstream(root, gatherer);
 
     update_source_cell(root, 1);
     await execute_all_tasks_sequential(() => {});
@@ -795,7 +795,7 @@ describe("trace_dependents", () => {
 
     p_sync(root, mid);
     p_sync(mid, out);
-    trace_dependents(out, gatherer);
+    trace_upstream(out, gatherer);
 
     update_source_cell(root, 1);
     await execute_all_tasks_sequential(() => {});
@@ -816,7 +816,7 @@ describe("trace_dependents", () => {
     let gathererUpdateCount = 0;
 
     p_sync(root, out);
-    trace_dependents(root, gatherer);
+    trace_upstream(root, gatherer);
     const gathererTap = p_tap(gatherer, () => {
       gathererUpdateCount++;
     });
@@ -847,7 +847,7 @@ describe("trace_dependents", () => {
 
     p_sync(source, a);
     bi_sync(a, b);
-    trace_dependents(a, gatherer);
+    trace_upstream(a, gatherer);
 
     update_source_cell(source, 1);
     await execute_all_tasks_sequential(() => {});
@@ -875,7 +875,7 @@ describe("trace_dependents", () => {
     const mid = construct_cell("diagGathererMid");
     const gatherer = construct_cell("diagGathererCell");
     p_sync(root, mid);
-    trace_dependents(mid, gatherer);
+    trace_upstream(mid, gatherer);
     update_source_cell(root, 1);
     await execute_all_tasks_sequential(() => {});
     await new Promise((r) => setTimeout(r, 0));
@@ -895,7 +895,7 @@ describe("trace_dependents", () => {
     const gatherer = construct_cell("diagTapGatherer");
     let gathererWrites = 0;
     p_sync(root, mid);
-    trace_dependents(mid, gatherer);
+    trace_upstream(mid, gatherer);
     const gathererTap = p_tap(gatherer, () => {
       gathererWrites++;
     });

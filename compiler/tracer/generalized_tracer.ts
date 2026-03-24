@@ -2,8 +2,8 @@ import { for_each } from "generic-handler/built_in_generics/generic_collection"
 import { construct_simple_generic_procedure, define_generic_procedure_handler, error_generic_procedure_handler } from "generic-handler/GenericProcedure"
 import { DirectedGraph } from "graphology"
 import { is_cell, match_args } from "ppropogator"
-import { cell_dependents, cell_name } from "ppropogator/Cell/Cell"
-import { construct_propagator, is_propagator, propagator_inputs, propagator_name } from "ppropogator/Propagator/Propagator"
+import { cell_dependents, cell_downstream, cell_name } from "ppropogator/Cell/Cell"
+import { construct_propagator, is_propagator, propagator_inputs, propagator_name, propagator_outputs } from "ppropogator/Propagator/Propagator"
 import { get_id } from "ppropogator/Shared/Generics"
 import { Cell, Propagator } from "ppropogator"
 import { pipe } from "effect"
@@ -78,6 +78,24 @@ define_generic_procedure_handler(
   get_dependents,
   match_args(is_propagator),
   propagator_inputs
+)
+
+export const get_downstream = construct_simple_generic_procedure(
+  "get_downstream",
+  1,
+  error_generic_procedure_handler("get_downstream")
+)
+
+define_generic_procedure_handler(
+  get_downstream,
+  match_args(is_cell),
+  cell_downstream
+)
+
+define_generic_procedure_handler(
+  get_downstream,
+  match_args(is_propagator),
+  propagator_outputs
 )
 
 export const create_label = (item: any) => {
@@ -206,4 +224,5 @@ export const trace = (walks_nodes: (x: any) => any[]) => (
   )
 }
 
-export const trace_dependents = trace(get_dependents)
+export const trace_upstream = trace(get_dependents)
+export const trace_downstream = trace(get_downstream)
