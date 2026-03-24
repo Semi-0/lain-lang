@@ -192,3 +192,4 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
 export const trace_upstream = trace(get_dependents)
 export const trace_upstream_primitive = trace(compose(get_dependents, curried_filter(at_primitives)))
 export const trace_downstream = trace(get_downstream)
+export const trace_upstream_primitive_layer = trace(compose(get_dependents, curried_filter(at_primitives)))
