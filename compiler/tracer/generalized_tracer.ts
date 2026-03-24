@@ -163,7 +163,7 @@ export const trace = (walk_nodes: (x: any) => any[]) => (
   root: Cell<any>,
   gatherer: Cell<any>
 ): Propagator => {
-  // we need to be careful of GC 
+  // TODO: we need to be careful of GC 
   // for tapped cells
   var graph = new DirectedGraph();
   var active = false;
