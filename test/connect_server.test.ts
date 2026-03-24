@@ -15,7 +15,7 @@ import {
 import { LainViz } from "../src/grpc/connect_generated/lain_connect.js"
 import { empty_lexical_environment } from "../compiler/env/env"
 import { create_connect_routes } from "../src/grpc/connect_server"
-import { runtime_get_card } from "../src/grpc/card/card_api"
+import { get_card_metadata, runtime_get_card } from "../src/grpc/card/card_api"
 import { emit_runtime_card_output_io } from "../src/grpc/bridge/card_runtime_events"
 
 let client: ReturnType<typeof createPromiseClient<typeof LainViz>>
@@ -177,7 +177,7 @@ describe("Connect server", () => {
     await streamPromise
   })
 
-  test("PushDeltas: connect auto-builds missing cards", async () => {
+  test("PushDeltas: reciprocal edges yield card_add x2 + connect; metadata present", async () => {
     const sessionId = "test-session-connect-build-" + Date.now()
     const cardA = "auto-build-a-" + Date.now()
     const cardB = "auto-build-b-" + Date.now()
@@ -203,14 +203,15 @@ describe("Connect server", () => {
     })
     await client.pushDeltas(new PushDeltasRequest({ sessionId, delta }))
 
-    expect(runtime_get_card(cardA)).toBeDefined()
-    expect(runtime_get_card(cardB)).toBeDefined()
+    // Lifecycle add_card populates card metadata, not runtime card_storage (runtime_get_card).
+    expect(get_card_metadata(cardA)).toBeDefined()
+    expect(get_card_metadata(cardB)).toBeDefined()
 
     controller.abort()
     await streamPromise
   })
 
-  test("PushDeltas: code-only delta does not build missing card", async () => {
+  test("PushDeltas: code-only delta adds metadata but not runtime card_storage", async () => {
     const sessionId = "test-session-code-skip-" + Date.now()
     const cardId = "code-only-" + Date.now()
     const openReq = new OpenSessionRequest({ sessionId })
@@ -237,6 +238,8 @@ describe("Connect server", () => {
     })
     await client.pushDeltas(new PushDeltasRequest({ sessionId, delta }))
 
+    // Metadata exists after card_add + update; runtime thin layer stays empty until runtime_add_card / build.
+    expect(get_card_metadata(cardId)).toBeDefined()
     expect(runtime_get_card(cardId)).toBeUndefined()
 
     controller.abort()

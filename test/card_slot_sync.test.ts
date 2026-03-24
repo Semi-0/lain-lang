@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from "bun:test"
 import { init_system } from "../compiler/incremental_compiler"
 import { empty_lexical_environment } from "../compiler/env/env"
 import { apply_card_api_events_io, diff_slot_maps_to_card_api_events } from "../src/grpc/delta/card_slot_sync"
-import { runtime_get_card } from "../src/grpc/card/card_api"
+import { get_card_metadata } from "../src/grpc/card/card_api"
 
 describe("card_slot_sync", () => {
   beforeEach(() => {
@@ -18,24 +18,27 @@ describe("card_slot_sync", () => {
       }
     )
     const connects = events.filter((event) => event.type === "card_connect")
+    const adds = events.filter((event) => event.type === "card_add")
     expect(connects.length).toBe(1)
+    expect(adds.map((e) => e.card_id).sort()).toEqual(["card-a", "card-b"])
   })
 
-  test("apply connect ensures cards exist then connects", () => {
+  test("apply connect: card_add for both keyed cards then single connect", () => {
     const env = empty_lexical_environment("card-slot-sync")
     const events = diff_slot_maps_to_card_api_events(
       {},
       {
         "card-auto-a::right": { id: "card-auto-b", value: undefined },
+        "card-auto-b::left": { id: "card-auto-a", value: undefined },
       }
     )
     const report = apply_card_api_events_io(env, events)
     expect(report.issues.length).toBe(0)
-    expect(runtime_get_card("card-auto-a")).toBeDefined()
-    expect(runtime_get_card("card-auto-b")).toBeDefined()
+    expect(get_card_metadata("card-auto-a")).toBeDefined()
+    expect(get_card_metadata("card-auto-b")).toBeDefined()
   })
 
-  test("code-only delta does not emit card update events", () => {
+  test("code-only delta emits card_add then card_update (metadata-backed)", () => {
     const env = empty_lexical_environment("card-slot-sync")
     const events = diff_slot_maps_to_card_api_events(
       {},
@@ -43,13 +46,13 @@ describe("card_slot_sync", () => {
         "card-code-onlycode": { id: "card-code-only", value: "(+ 1 2 out)" },
       }
     )
+    expect(events.map((e) => e.type)).toEqual(["card_add", "card_update"])
     const report = apply_card_api_events_io(env, events)
-    expect(events.length).toBe(0)
     expect(report.issues).toEqual([])
-    expect(runtime_get_card("card-code-only")).toBeUndefined()
+    expect(get_card_metadata("card-code-only")).toBeDefined()
   })
 
-  test("diff emits card_update when ::this value changes", () => {
+  test("diff does not emit ::this updates while sync_this_slots is disabled in diff", () => {
     const events = diff_slot_maps_to_card_api_events(
       {
         "card-this::this": { id: "card-this", value: 1 },
@@ -58,13 +61,7 @@ describe("card_slot_sync", () => {
         "card-this::this": { id: "card-this", value: 2 },
       }
     )
-    expect(events).toEqual([
-      {
-        type: "card_update",
-        card_id: "card-this",
-        value: 2,
-      },
-    ])
+    expect(events).toEqual([])
   })
 
   test("diff skips card_update when ::this value is unchanged", () => {
@@ -81,16 +78,26 @@ describe("card_slot_sync", () => {
     expect(updates.length).toBe(0)
   })
 
-  test("apply card_update on missing card adds card then updates (no issue)", () => {
+  test("apply card_update without prior card_add throws (metadata missing)", () => {
+    const env = empty_lexical_environment("card-slot-sync")
+    expect(() =>
+      apply_card_api_events_io(env, [
+        {
+          type: "card_update",
+          card_id: "card-missing-update",
+          value: 123,
+        },
+      ])
+    ).toThrow(/Card metadata not found/)
+  })
+
+  test("apply card_add then card_update on new card succeeds", () => {
     const env = empty_lexical_environment("card-slot-sync")
     const report = apply_card_api_events_io(env, [
-      {
-        type: "card_update",
-        card_id: "card-missing-update",
-        value: 123,
-      },
+      { type: "card_add", card_id: "card-new-seq" },
+      { type: "card_update", card_id: "card-new-seq", value: 123 },
     ])
     expect(report.issues).toEqual([])
-    expect(runtime_get_card("card-missing-update")).toBeDefined()
+    expect(get_card_metadata("card-new-seq")).toBeDefined()
   })
 })

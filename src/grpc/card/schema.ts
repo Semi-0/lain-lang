@@ -2,7 +2,7 @@
  * Card schema: slot definitions, internal cell structure, build_card, connector constructor.
  * Internal module – prefer importing from card_api or card/index.
  */
-import { Cell, cell_id, cell_strongest, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, register_predicate } from "ppropogator";
+import { Cell, cell_id, cell_strongest, cell_strongest_base_value, compound_propagator, construct_cell, construct_propagator, is_nothing, register_predicate } from "ppropogator";
 import { c_dict_accessor, ce_dict, ce_dict_accessor, p_construct_dict_carrier } from "ppropogator/DataTypes/CarriedCell";
 import { create_card_cell_name } from "../../../compiler/naming";
 import { bi_sync, p_filter_a, p_sync } from "ppropogator/Propagator/BuiltInProps";
@@ -109,6 +109,12 @@ export const p_emit_card_internal_updates_to_runtime = (cardId: string) => (
     [internal_content],
     [],
     () => {
+        if (is_nothing(cell_strongest(internal_content))) {
+            return;
+        }
+ 
+
+
         emit_runtime_card_output_io({
             cardId,
             slot: slot_this,

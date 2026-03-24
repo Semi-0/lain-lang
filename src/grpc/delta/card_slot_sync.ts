@@ -2,7 +2,7 @@
  * Slot-map -> Card API synchronization (Part A reducer output -> Part B structure/runtime).
  */
 import type { LexicalEnvironment } from "../../compiler/env/env";
-import { add_card, connect_cards, detach_cards_by_key, remove_card, runtime_get_card, slot_above, slot_below, slot_left, slot_right, slot_this, type SlotName, update_card } from "../card/card_api.js";
+import { add_card, connect_cards, detach_cards_by_key, remove_card, slot_above, slot_below, slot_left, slot_right, slot_this, type SlotName, update_card } from "../card/card_api.js";
 import type { CompileRequestData, CardRefData } from "../codec/decode.js";
 import { key_to_card_and_slot } from "../codec/session_encode.js";
 
@@ -16,6 +16,7 @@ type StructuralEdge = {
 export type CardApiEvent =
   | { type: "card_detach"; from_id: string; to_id: string }
   | { type: "card_remove"; card_id: string }
+  | { type: "card_add"; card_id: string }
   | { type: "card_connect"; from_id: string; from_slot: SlotName; to_id: string; to_slot: SlotName }
   | { type: "card_update"; card_id: string; value: unknown };
 
@@ -115,16 +116,6 @@ const collect_edges = (slot_map: CompileRequestData): Map<string, StructuralEdge
   return out;
 };
 
-/** Ensures card exists in runtime (add only). Does not build. */
-const ensure_card_exists = (card_id: string) => {
-  const existing = runtime_get_card(card_id);
-  if (existing != null) {
-    return existing;
-  }
-  add_card(card_id);
-  return runtime_get_card(card_id)!;
-};
-
 function value_signature(value: unknown): string {
   if (
     value === null ||
@@ -221,6 +212,13 @@ export function diff_slot_maps_to_card_api_events(
     }
   }
 
+  // New card ids that appear as slot-map keys (see collect_card_ids). Runs before connect/update
+  // so metadata exists. Cards only referenced as edge targets without their own keys need another path.
+  const added_card_ids = [...next_cards].filter((id) => !prev_cards.has(id)).sort();
+  for (const card_id of added_card_ids) {
+    out.push({ type: "card_add", card_id });
+  }
+
   for (const [key, edge] of next_edges.entries()) {
     if (prev_edges.has(key)) {
       continue;
@@ -245,6 +243,7 @@ export function apply_card_api_events_io(
 ): CardApiApplyReport {
   const issues: CardApiApplyIssue[] = [];
   for (const event of events) {
+
     if (event.type === "card_detach") {
       detach_cards_by_key(event.from_id, event.to_id);
       continue;
@@ -253,16 +252,15 @@ export function apply_card_api_events_io(
       remove_card(event.card_id);
       continue;
     }
+    if (event.type === "card_add") {
+      add_card(event.card_id);
+      continue;
+    }
     if (event.type === "card_connect") {
-      ensure_card_exists(event.from_id);
-      ensure_card_exists(event.to_id);
       connect_cards(event.from_id, event.to_id, event.from_slot, event.to_slot);
       continue;
     }
     if (event.type === "card_update") {
-      if (runtime_get_card(event.card_id) == null) {
-        add_card(event.card_id);
-      }
       update_card(event.card_id, event.value);
       continue;
     }
