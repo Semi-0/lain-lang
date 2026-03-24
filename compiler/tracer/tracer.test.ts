@@ -17,7 +17,7 @@ import {
 import { execute_all_tasks_sequential } from "ppropogator/Shared/Scheduler/Scheduler";
 import { p_sync, bi_sync, p_feedback, p_tap } from "ppropogator/Propagator/BuiltInProps";
 import { dispose_propagator } from "ppropogator/Propagator/Propagator";
-import { cell_neighbor_set } from "ppropogator/Cell/Cell";
+import { cell_neighbor_set, cell_name } from "ppropogator/Cell/Cell";
 import {
   internal_clear_source_cells,
   source_constant_cell,
@@ -26,6 +26,15 @@ import {
 import { set_global_state, PublicStateCommand, set_merge } from "ppropogator";
 import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet";
 import { trace_upstream_reactively, trace_upstream_periodically } from "./tracer";
+import {
+  traverse,
+  cyclic_prevention_step,
+  max_nodes_step,
+  get_dependents,
+  create_label,
+  graph_dependents_step,
+  trace_dependents,
+} from "./generalized_tracer";
 import {
   find_cells_by_card,
   get_connected_subgraph_by_label_prefix,
@@ -36,13 +45,16 @@ import {
 import { graphology_graph_to_graph_data, is_graphology_graph } from "../../src/grpc/codec/session_encode";
 import { get_base_value } from "sando-layer/Basic/Layer";
 import { is_layered_object, type LayeredObject } from "sando-layer/Basic/LayeredObject";
+import { to_string } from "generic-handler/built_in_generics/generic_conversation";
+import { init_system as init_incremental_system } from "../incremental_compiler";
+import { propagator_name } from "ppropogator/Propagator/Propagator";
 
 function rawToGraphData(raw: unknown): { nodes: { id: string; label: string }[]; links: { source: string; target: string }[] } {
   const base = is_layered_object(raw) ? get_base_value(raw as LayeredObject<unknown>) : raw;
   if (is_graphology_graph(base)) return graphology_graph_to_graph_data(base) as { nodes: { id: string; label: string }[]; links: { source: string; target: string }[] };
   if (base != null && typeof base === "object" && Array.isArray((base as Record<string, unknown>).nodes) && Array.isArray((base as Record<string, unknown>).links))
     return base as { nodes: { id: string; label: string }[]; links: { source: string; target: string }[] };
-  throw new Error("Expected graphology graph or GraphData");
+  throw new Error("Expected graphology graph or GraphData, but got " + to_string(base));
 }
 
 function assertGraphShape(val: unknown): asserts val is { nodes: { id: string; label: string }[]; links: { source: string; target: string }[] } {
@@ -624,6 +636,284 @@ describe("trace_upstream_periodically", () => {
     dispose_propagator(gathererTap);
     await execute_all_tasks_sequential(() => {});
   }, 5000);
+});
+
+/**
+ * Fine-grained tests for generalized_tracer combinators (mostly pure).
+ * Integration tests for trace_dependents use the same env init as card_api.test.ts:
+ * incremental init_system + propagator cleanup + merge.
+ */
+describe("generalized_tracer", () => {
+  /** Sync tests: timeout only to surface hangs with a named failure. */
+  const GT_MS = 5000;
+
+  describe("traverse", () => {
+    test("BFS-like walk accumulates visited items in queue order", () => {
+      // Note: traverse uses `if (x)` — 0 is skipped (falsy). Start from 1, not 0.
+      const walk = (x: number) => (x < 3 ? [x + 1] : []);
+      const step = (acc: number[], x: number) => [...acc, x];
+      const result = traverse(walk, step)(1, []);
+      expect(result).toEqual([1, 2, 3]);
+    }, GT_MS);
+
+    test("empty walk stops at root only", () => {
+      const walk = (_x: number) => [] as number[];
+      const step = (acc: number[], x: number) => [...acc, x];
+      const result = traverse(walk, step)(42, []);
+      expect(result).toEqual([42]);
+    }, GT_MS);
+  });
+
+  describe("cyclic_prevention_step", () => {
+    test("second visit with same id skips inner step (state unchanged)", () => {
+      type Item = { id: string; tag: string };
+      const step = (state: string[], x: Item) => [...state, x.tag];
+      const wrapped = cyclic_prevention_step((o: Item) => o.id)(step);
+      const a1: Item = { id: "a", tag: "first" };
+      const a2: Item = { id: "a", tag: "second" };
+      const s1 = wrapped([], a1);
+      expect(s1).toEqual(["first"]);
+      const s2 = wrapped(s1, a2);
+      expect(s2).toEqual(["first"]);
+    }, GT_MS);
+
+    test("different ids both run inner step", () => {
+      type Item = { id: string; n: number };
+      const step = (state: number[], x: Item) => [...state, x.n];
+      const wrapped = cyclic_prevention_step((o: Item) => o.id)(step);
+      expect(wrapped([], { id: "x", n: 1 })).toEqual([1]);
+      expect(wrapped([1], { id: "y", n: 2 })).toEqual([1, 2]);
+    }, GT_MS);
+  });
+
+  describe("max_nodes_step", () => {
+    test("stops invoking inner step after max_nodes visits", () => {
+      const step = (state: number[], _x: number) => [...state, 1];
+      const wrapped = max_nodes_step(2)(step);
+      expect(wrapped([], 0)).toEqual([1]);
+      expect(wrapped([1], 0)).toEqual([1, 1]);
+      expect(wrapped([1, 1], 0)).toEqual([1, 1]);
+    }, GT_MS);
+  });
+
+  describe("get_dependents, create_label, graph_dependents_step (with propagator graph)", () => {
+    beforeEach(() => {
+      init_incremental_system();
+      set_global_state(PublicStateCommand.CLEAN_UP);
+      internal_clear_source_cells();
+      set_merge(merge_temporary_value_set);
+    });
+
+    test("get_dependents(cell): only OUTPUT cells have cell_dependents; p_sync input has none", () => {
+      const root = source_constant_cell("gdRoot");
+      const mid = construct_cell("gdMid");
+      const p = p_sync(root, mid);
+      // Propagator registers inputs with [updated] and outputs with [dependents].
+      // cell_dependents() only lists neighbors tagged dependents — i.e. output side.
+      expect(get_dependents(root).length).toBe(0);
+      const fromOut = get_dependents(mid);
+      expect(fromOut.length).toBeGreaterThanOrEqual(1);
+      expect(fromOut.some((x) => x === p)).toBe(true);
+      // For propagators, get_dependents dispatches to propagator_inputs (see generalized_tracer),
+      // i.e. input cells only — not outputs. So mid must not appear here.
+      const fromProp = get_dependents(p);
+      expect(fromProp.map(cell_id)).toEqual([cell_id(root)]);
+    }, GT_MS);
+
+    test("create_label uses cell_name for cells and propagator_name for propagators", () => {
+      const root = source_constant_cell("lblRoot");
+      const mid = construct_cell("lblMid");
+      const p = p_sync(root, mid);
+      expect(create_label(root)).toBe(cell_name(root));
+      expect(create_label(p)).toBe(propagator_name(p));
+    }, GT_MS);
+
+    test("graph_dependents_step from p_sync output cell adds propagator nodes and edges", () => {
+      const root = source_constant_cell("gdsRoot");
+      const mid = construct_cell("gdsMid");
+      p_sync(root, mid);
+      const g = new DirectedGraph();
+      const out = graph_dependents_step(g, mid);
+      expect(out.hasNode(cell_id(mid))).toBe(true);
+      expect(out.order).toBeGreaterThanOrEqual(2);
+      expect(out.size).toBeGreaterThanOrEqual(1);
+    }, GT_MS);
+
+    test("traverse from chain output walks propagators and inputs (not from source input cell)", () => {
+      const root = source_constant_cell("trRoot");
+      const mid = construct_cell("trMid");
+      const out = construct_cell("trOut");
+      p_sync(root, mid);
+      p_sync(mid, out);
+      const g = new DirectedGraph();
+      const result = traverse(get_dependents, graph_dependents_step)(out, g);
+      expect(result.hasNode(cell_id(out))).toBe(true);
+      expect(result.order).toBeGreaterThanOrEqual(3);
+    }, GT_MS);
+  });
+});
+
+describe("trace_dependents", () => {
+  /** Async / scheduler-heavy: on timeout, Bun reports this test’s name. */
+  const TD_ASYNC_MS = 10_000;
+  const TD_SYNC_MS = 5000;
+
+  beforeEach(() => {
+    init_incremental_system();
+    set_global_state(PublicStateCommand.CLEAN_UP);
+    internal_clear_source_cells();
+    set_merge(merge_temporary_value_set);
+  });
+
+  test("from p_sync input as trace root: only root node (cell_dependents is empty on input cells)", async () => {
+    const root = source_constant_cell("depRoot");
+    const mid = construct_cell("depMid");
+    const out = construct_cell("depOut");
+    const gatherer = construct_cell("depGatherer");
+
+    p_sync(root, mid);
+    p_sync(mid, out);
+    trace_dependents(root, gatherer);
+
+    update_source_cell(root, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    const graph = rawToGraphData(cell_strongest_base_value(gatherer));
+    assertGraphShape(graph);
+    expect(graph.nodes.some((n) => n.id === cell_id(root))).toBe(true);
+    expect(graph.nodes.length).toBe(1);
+    expect(graph.links.length).toBe(0);
+  }, TD_ASYNC_MS);
+
+  test("from chain output as trace root: graph includes propagator/cell structure", async () => {
+    const root = source_constant_cell("depRootOut");
+    const mid = construct_cell("depMidOut");
+    const out = construct_cell("depOutLeaf");
+    const gatherer = construct_cell("depGathererOut");
+
+    p_sync(root, mid);
+    p_sync(mid, out);
+    trace_dependents(out, gatherer);
+
+    update_source_cell(root, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    const graph = rawToGraphData(cell_strongest_base_value(gatherer));
+    assertGraphShape(graph);
+    expect(graph.nodes.some((n) => n.id === cell_id(out))).toBe(true);
+    expect(graph.nodes.length).toBeGreaterThanOrEqual(2);
+    expect(graph.links.length).toBeGreaterThanOrEqual(1);
+  }, TD_ASYNC_MS);
+
+  test("reactively rebuilds on updates to tapped cells", async () => {
+    const root = source_constant_cell("depReactiveRoot");
+    const out = construct_cell("depReactiveOut");
+    const gatherer = construct_cell("depReactiveGatherer");
+    let gathererUpdateCount = 0;
+
+    p_sync(root, out);
+    trace_dependents(root, gatherer);
+    const gathererTap = p_tap(gatherer, () => {
+      gathererUpdateCount++;
+    });
+
+    update_source_cell(root, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    const firstCount = gathererUpdateCount;
+    expect(firstCount).toBeGreaterThan(0);
+
+    update_source_cell(root, 2);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    expect(gathererUpdateCount).toBeGreaterThan(firstCount);
+    dispose_propagator(gathererTap);
+  }, TD_ASYNC_MS);
+
+  test("feedback cycle completes without infinite loop", async () => {
+    // it stucked on cycle
+    const source = source_constant_cell("depFeedbackSource");
+    const a = construct_cell("depFeedbackA");
+    const b = construct_cell("depFeedbackB");
+    const gatherer = construct_cell("depFeedbackGatherer");
+
+    p_sync(source, a);
+    bi_sync(a, b);
+    trace_dependents(a, gatherer);
+
+    update_source_cell(source, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    const graph = rawToGraphData(cell_strongest_base_value(gatherer));
+    assertGraphShape(graph);
+    expect(graph.nodes.some((n) => n.id === cell_id(a))).toBe(true);
+    expect(graph.nodes.some((n) => n.id === cell_id(b))).toBe(true);
+  }, TD_ASYNC_MS);
+
+  test("diagnostic: traverse + graph_dependents_step from p_sync output builds graph (isolates pure walk)", () => {
+    const root = source_constant_cell("isoRoot");
+    const mid = construct_cell("isoMid");
+    p_sync(root, mid);
+    const g = new DirectedGraph();
+    const built = traverse(get_dependents, graph_dependents_step)(mid, g);
+    expect(built.order).toBeGreaterThanOrEqual(2);
+    expect(built.order).toBe(g.order);
+  }, TD_SYNC_MS);
+
+  test("diagnostic: gatherer strongest base should be Graphology — if not, suspect update_specialized_reactive_value / merge / layered strongest", async () => {
+    const root = source_constant_cell("diagGathererRoot");
+    const mid = construct_cell("diagGathererMid");
+    const gatherer = construct_cell("diagGathererCell");
+    p_sync(root, mid);
+    trace_dependents(mid, gatherer);
+    update_source_cell(root, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+
+    const raw = cell_strongest_base_value(gatherer);
+    const base = is_layered_object(raw) ? get_base_value(raw as LayeredObject<unknown>) : raw;
+    expect(
+      is_graphology_graph(base),
+      `potential problem: gatherer base is not graphology (got ${to_string(base)}); pure traverse+graph_dependents_step still works; check update_specialized_reactive_value, merge_temporary_value_set, and layered strongest`,
+    ).toBe(true);
+  }, TD_ASYNC_MS);
+
+  test("diagnostic: second source update should re-trigger gatherer tap if tap+schedule work — if not, suspect active flag or coalesced microtasks", async () => {
+    const root = source_constant_cell("diagTapRoot");
+    const mid = construct_cell("diagTapMid");
+    const gatherer = construct_cell("diagTapGatherer");
+    let gathererWrites = 0;
+    p_sync(root, mid);
+    trace_dependents(mid, gatherer);
+    const gathererTap = p_tap(gatherer, () => {
+      gathererWrites++;
+    });
+    update_source_cell(root, 1);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+    const afterFirst = gathererWrites;
+    update_source_cell(root, 2);
+    await execute_all_tasks_sequential(() => {});
+    await new Promise((r) => setTimeout(r, 0));
+    await execute_all_tasks_sequential(() => {});
+    dispose_propagator(gathererTap);
+    expect(
+      gathererWrites > afterFirst,
+      "potential problem: second source update did not propagate to gatherer tap; check schedule/tap deduping, active flag, or trace_dependents only running once (initialized)",
+    ).toBe(true);
+  }, TD_ASYNC_MS);
 });
 
 describe("graph_queries", () => {

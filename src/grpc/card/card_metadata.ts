@@ -224,7 +224,6 @@ export const card_metadata_compiled = (metadata: CardMetadata) => {
 
 
 export const card_metadata_build = (env: LexicalEnvironment, metadata: CardMetadata) => {
-    execute_all_tasks_sequential(console.error);
 
     if (card_metadata_compiled(metadata)) {
         dispose_propagator(metadata.tracking_propagators.get("compiled_network")!);
