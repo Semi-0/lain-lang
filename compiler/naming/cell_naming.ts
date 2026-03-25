@@ -14,6 +14,7 @@ import { propagator_name } from "ppropogator";
 /** Separator for multi-part names. */
 export const SEP = "|";
 
+export const card_header = "CARD";
 /** Join parts with SEP. */
 export const make_name = (parts: string[]): string => parts.join(SEP);
 

@@ -26,6 +26,7 @@ import { LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic";
 import { update_specialized_reactive_value } from "../better_runtime";
 import { to_string } from "generic-handler/built_in_generics/generic_conversation";
+import { card_header, make_name } from "../../../compiler/naming";
 
 type CardMetadata = {
     id : string;
@@ -104,9 +105,9 @@ export const tracked_apply_propagator = (tracker: Map<string, Propagator>) =>
  * The unfolder and all other card propagators are registered for `card_metadata_remove`.
  */
 export const construct_card_metadata = (id: string) => {
-    const card = construct_cell("card", id) as Cell<unknown>;
-    update_cell(card, new Map());
-    execute_all_tasks_sequential(console.error);
+    const card = construct_cell(make_name([card_header, id])) as Cell<unknown>;
+    // update_cell(card, new Map());
+    // execute_all_tasks_sequential(console.error);
 
     const compile_source = source_constant_cell(`card-compile:${id}`) as Cell<unknown>;
     const compile_timestamp = 0;
