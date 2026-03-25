@@ -16,6 +16,7 @@ import { execute_all_tasks_sequential } from "ppropogator/Shared/Scheduler/Sched
 import {
   subgraph_by_kind,
   subgraph_by_namespace,
+  subgraph_by_namespace_connected,
   subgraph_by_level,
   intersect_graphs,
   union_graphs,
@@ -26,7 +27,7 @@ import {
 import { node_attrs, trace_upstream, trace_downstream } from "../compiler/tracer/generalized_tracer"
 import { clear_card_metadata } from "../src/grpc/card"
 import { init_system } from "../compiler/incremental_compiler"
-import { p_sync } from "ppropogator/Propagator/BuiltInProps"
+import { bi_sync, p_sync } from "ppropogator/Propagator/BuiltInProps"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -143,6 +144,172 @@ describe("subgraph_by_namespace", () => {
     const g = make_fixture_graph()
     const result = subgraph_by_namespace(g, "NONEXISTENT")
     expect(result.order).toBe(0)
+  })
+
+  test("retains edges between nodes that remain in namespace subgraph", () => {
+    const g = make_fixture_graph()
+    const result = subgraph_by_namespace(g, "CARD")
+    expect(result.hasEdge("c2", "p2")).toBe(true)
+    expect(result.size).toBe(1)
+  })
+})
+
+describe("subgraph_by_namespace_connected", () => {
+  beforeEach(() => { init_system(); clear_card_metadata() })
+  test("keeps intermediate nodes on paths between matching namespace nodes", () => {
+    const g = new DirectedGraph()
+    g.addNode("a", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|a" })
+    g.addNode("x", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|x" })
+    g.addNode("y", { kind: "propagator", namespace: "Core", relationLevel: 2, label: "Core|y" })
+    g.addNode("b", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|b" })
+    g.addNode("dead", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|dead" })
+    g.addEdge("a", "x")
+    g.addEdge("x", "y")
+    g.addEdge("y", "b")
+    g.addEdge("a", "dead")
+
+    const result = subgraph_by_namespace_connected(g, "CARD")
+    expect(result.hasNode("a")).toBe(true)
+    expect(result.hasNode("x")).toBe(true)
+    expect(result.hasNode("y")).toBe(true)
+    expect(result.hasNode("b")).toBe(true)
+    // One-way outbound branch from an anchor is retained.
+    expect(result.hasNode("dead")).toBe(true)
+    expect(result.hasEdge("a", "x")).toBe(true)
+    expect(result.hasEdge("x", "y")).toBe(true)
+    expect(result.hasEdge("y", "b")).toBe(true)
+    expect(result.hasEdge("a", "dead")).toBe(true)
+    expect(result.size).toBe(4)
+  })
+
+  test("retains one-way outbound intermediates from anchors", () => {
+    const g = new DirectedGraph()
+    g.addNode("a", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|a" })
+    g.addNode("b", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|b" })
+    g.addNode("x", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|x" })
+    g.addEdge("a", "x")
+
+    const result = subgraph_by_namespace_connected(g, "CARD")
+    expect(result.hasNode("a")).toBe(true)
+    expect(result.hasNode("b")).toBe(true)
+    expect(result.hasNode("x")).toBe(true)
+    expect(result.hasEdge("a", "x")).toBe(true)
+  })
+
+  test("retains one-way inbound intermediates to anchors", () => {
+    const g = new DirectedGraph()
+    g.addNode("a", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|a" })
+    g.addNode("u", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|u" })
+    g.addNode("v", { kind: "propagator", namespace: "Core", relationLevel: 2, label: "Core|v" })
+    g.addEdge("u", "v")
+    g.addEdge("v", "a")
+
+    const result = subgraph_by_namespace_connected(g, "CARD")
+    expect(result.hasNode("u")).toBe(true)
+    expect(result.hasNode("v")).toBe(true)
+    expect(result.hasNode("a")).toBe(true)
+    expect(result.hasEdge("u", "v")).toBe(true)
+    expect(result.hasEdge("v", "a")).toBe(true)
+  })
+
+  test("handles cyclic intermediate paths without duplicating or hanging", () => {
+    const g = new DirectedGraph()
+    g.addNode("a", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|a" })
+    g.addNode("x", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|x" })
+    g.addNode("y", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|y" })
+    g.addNode("b", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|b" })
+    g.addEdge("a", "x")
+    g.addEdge("x", "y")
+    g.addEdge("y", "x") // cycle in intermediates
+    g.addEdge("y", "b")
+
+    const result = subgraph_by_namespace_connected(g, "CARD")
+    expect(result.hasNode("a")).toBe(true)
+    expect(result.hasNode("x")).toBe(true)
+    expect(result.hasNode("y")).toBe(true)
+    expect(result.hasNode("b")).toBe(true)
+    expect(result.hasEdge("a", "x")).toBe(true)
+    expect(result.hasEdge("x", "y")).toBe(true)
+    expect(result.hasEdge("y", "x")).toBe(true)
+    expect(result.hasEdge("y", "b")).toBe(true)
+    expect(result.order).toBe(4)
+    expect(result.size).toBe(4)
+  })
+
+  test("retains alternating cell/propagator bridge with cycles (bi_sync-like topology)", () => {
+    const g = new DirectedGraph()
+
+    // Anchor cells
+    g.addNode("left", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|bridge|left" })
+    g.addNode("right", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|bridge|right" })
+
+    // In-between cells
+    g.addNode("mid1", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|bridge|mid1" })
+    g.addNode("mid2", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|bridge|mid2" })
+
+    // In-between propagators (bi_sync-like directional sync nodes)
+    g.addNode("p_l_m1", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync left->mid1" })
+    g.addNode("p_m1_l", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync mid1->left" })
+    g.addNode("p_m1_m2", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync mid1->mid2" })
+    g.addNode("p_m2_m1", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync mid2->mid1" })
+    g.addNode("p_m2_r", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync mid2->right" })
+    g.addNode("p_r_m2", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync right->mid2" })
+
+    // Side branch that should be excluded
+    g.addNode("noise_cell", { kind: "cell", namespace: "Core", relationLevel: 2, label: "Core|noise|cell" })
+    g.addNode("noise_prop", { kind: "propagator", namespace: "sync", relationLevel: 2, label: "sync left->noise" })
+
+    // left <-> mid1
+    g.addEdge("left", "p_l_m1"); g.addEdge("p_l_m1", "mid1")
+    g.addEdge("mid1", "p_m1_l"); g.addEdge("p_m1_l", "left")
+    // mid1 <-> mid2
+    g.addEdge("mid1", "p_m1_m2"); g.addEdge("p_m1_m2", "mid2")
+    g.addEdge("mid2", "p_m2_m1"); g.addEdge("p_m2_m1", "mid1")
+    // mid2 <-> right
+    g.addEdge("mid2", "p_m2_r"); g.addEdge("p_m2_r", "right")
+    g.addEdge("right", "p_r_m2"); g.addEdge("p_r_m2", "mid2")
+    // unrelated branch
+    g.addEdge("left", "noise_prop"); g.addEdge("noise_prop", "noise_cell")
+
+    const result = subgraph_by_namespace_connected(g, "CARD")
+
+    expect(result.hasNode("left")).toBe(true)
+    expect(result.hasNode("mid1")).toBe(true)
+    expect(result.hasNode("mid2")).toBe(true)
+    expect(result.hasNode("right")).toBe(true)
+    expect(result.hasNode("p_l_m1")).toBe(true)
+    expect(result.hasNode("p_m1_m2")).toBe(true)
+    expect(result.hasNode("p_m2_r")).toBe(true)
+    expect(result.hasNode("noise_cell")).toBe(true)
+    expect(result.hasNode("noise_prop")).toBe(true)
+    expect(result.hasEdge("left", "p_l_m1")).toBe(true)
+    expect(result.hasEdge("p_l_m1", "mid1")).toBe(true)
+    expect(result.hasEdge("mid1", "p_m1_m2")).toBe(true)
+    expect(result.hasEdge("p_m1_m2", "mid2")).toBe(true)
+    expect(result.hasEdge("mid2", "p_m2_r")).toBe(true)
+    expect(result.hasEdge("p_m2_r", "right")).toBe(true)
+  })
+
+  test("integration: bi_sync bridge + trace_upstream retains one-way intermediates", () => {
+    const left = construct_cell("CARD|bridge|left")
+    const mid1 = construct_cell("Core|bridge|mid1")
+    const mid2 = construct_cell("Core|bridge|mid2")
+    const right = construct_cell("CARD|bridge|right")
+    const gatherer = construct_cell("gatherer-namespace-connected-repro")
+
+    bi_sync(left, mid1)
+    bi_sync(mid1, mid2)
+    bi_sync(mid2, right)
+    update_cell(left, 1)
+    execute_all_tasks_sequential(console.error)
+
+    trace_upstream(right, gatherer)
+    execute_all_tasks_sequential(console.error)
+
+    // This line is where previous repro failed because gatherer did not contain a graph.
+    const traced = cell_strongest_base_value(gatherer) as DirectedGraph
+    const result = subgraph_by_namespace_connected(traced, "CARD")
+    expect(result.implementation == "graphology").toBe(true)
   })
 })
 

@@ -251,7 +251,7 @@ export const trace_downstream_once = trace_once(get_downstream)
  * @param walk_nodes  Direction function (get_dependents = upstream, get_downstream = downstream)
  * @param interval_ms Rebuild cadence in milliseconds (default 400)
  */
-export const trace_periodic = (walk_nodes: (x: any) => any[], interval_ms: number = 400) => (
+export const trace_periodic = (walk_nodes: (x: any) => any[], interval_ms: number = 1000) => (
   root: Cell<any>,
   gatherer: Cell<any>
 ): Propagator => {

@@ -23,8 +23,53 @@ import { function_to_primitive_propagator } from "ppropogator"
 import { find_cell_by_id } from "ppropogator/Shared/GraphTraversal"
 import { cell_content } from "ppropogator/Cell/Cell"
 import { to_string } from "generic-handler/built_in_generics/generic_conversation"
+import { bfsFromNode } from "graphology-traversal/bfs"
+import { set_union } from "../helper/set"
 
 // ── Subgraph filters ──────────────────────────────────────────────────────────
+
+const induced_subgraph_by_node_predicate = (
+  graph: DirectedGraph,
+  keep: (id: string, attrs: Record<string, any>) => boolean
+): DirectedGraph => {
+  const result = graph.copy() as DirectedGraph
+  const drop_ids: string[] = []
+
+  result.forEachNode((id, attrs) => {
+    if (!keep(id, attrs as Record<string, any>)) drop_ids.push(id)
+  })
+
+  for (const id of drop_ids) result.dropNode(id)
+  return result
+}
+const collect_reachable_from_anchors = (
+  graph: DirectedGraph,
+  anchor_ids: Set<string>,
+  mode: "outbound" | "inbound"
+): Set<string> => {
+  const visited = new Set<string>()
+  for (const seed of anchor_ids) {
+    bfsFromNode(
+      graph,
+      seed,
+      (id) => {
+        visited.add(String(id))
+      },
+      { mode }
+    )
+  }
+  return visited
+}
+
+const nodes_connected_to_anchors_any_direction = (
+  graph: DirectedGraph,
+  anchor_ids: Set<string>
+): Set<string> => {
+  const reachable_from_anchor = collect_reachable_from_anchors(graph, anchor_ids, "outbound")
+  const can_reach_anchor = collect_reachable_from_anchors(graph, anchor_ids, "inbound")
+
+  return set_union(reachable_from_anchor, can_reach_anchor)
+}
 
 /**
  * Nodes matching kind "cell" or "propagator".
@@ -34,7 +79,7 @@ export const subgraph_by_kind = (
   graph: DirectedGraph,
   kind: "cell" | "propagator"
 ): DirectedGraph =>
-  subgraph(graph, (_, attrs) => attrs?.kind === kind) as DirectedGraph
+  induced_subgraph_by_node_predicate(graph, (_, attrs) => attrs?.kind === kind)
 
 /**
  * Nodes whose namespace starts with the given prefix.
@@ -45,9 +90,36 @@ export const subgraph_by_namespace = (
   graph: DirectedGraph,
   ns: string
 ): DirectedGraph =>
-  subgraph(graph, (_, attrs) =>
+  induced_subgraph_by_node_predicate(graph, (_, attrs) =>
     typeof attrs?.namespace === "string" && attrs.namespace.startsWith(ns)
-  ) as DirectedGraph
+  )
+
+/**
+ * Namespace filter that preserves bridge nodes/edges connected to matching
+ * namespace nodes in either direction.
+ *
+ * Example:
+ *   CARD:a → Core:x → Core:y
+ * filtering by "CARD" keeps {a, x, y} and all path edges.
+ *
+ * Also keeps inbound-only chains:
+ *   Core:u → Core:v → CARD:b
+ * filtering by "CARD" keeps {u, v, b} and all path edges.
+ */
+export const subgraph_by_namespace_connected = (
+  graph: DirectedGraph,
+  ns: string
+): DirectedGraph => {
+  const anchors = new Set<string>()
+  graph.forEachNode((id, attrs) => {
+    if (typeof attrs?.namespace === "string" && attrs.namespace.startsWith(ns)) {
+      anchors.add(id)
+    }
+  })
+
+  const kept_ids = nodes_connected_to_anchors_any_direction(graph, anchors)
+  return induced_subgraph_by_node_predicate(graph, (id) => kept_ids.has(id))
+}
 
 /**
  * Nodes at exactly the given relation level.
@@ -57,7 +129,7 @@ export const subgraph_by_level = (
   graph: DirectedGraph,
   level: number
 ): DirectedGraph =>
-  subgraph(graph, (_, attrs) => attrs?.relationLevel === level) as DirectedGraph
+  induced_subgraph_by_node_predicate(graph, (_, attrs) => attrs?.relationLevel === level)
 
 // ── Graph algebra ─────────────────────────────────────────────────────────────
 
@@ -204,6 +276,12 @@ export const p_graph_kind = function_to_primitive_propagator(
 export const p_graph_namespace = function_to_primitive_propagator(
   "graph_namespace",
   subgraph_by_namespace
+)
+
+/** graph:namespace-connected — namespace filter that preserves connecting paths */
+export const p_graph_namespace_connected = function_to_primitive_propagator(
+  "graph_namespace_connected",
+  subgraph_by_namespace_connected
 )
 
 /** graph:at-level — filter by exact relation level number */

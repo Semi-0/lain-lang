@@ -12,11 +12,18 @@ import { make_primitive, make_two_arity_primitive } from "./base";
 import { trace_upstream_periodically, trace_upstream_reactively } from "../tracer/tracer";
 import { p_graph_card, p_graph_connected_prefix, p_graph_label_prefix, p_graph_name, p_graph_nodes } from "../tracer/graph_queries";
 import { trace_upstream, trace_upstream_primitive, trace_downstream, trace_upstream_periodic, trace_downstream_periodic } from "../tracer/generalized_tracer";
-import { p_graph_kind, p_graph_namespace, p_graph_at_level, p_graph_intersect, p_graph_union, p_graph_collapse_accessors, p_graph_annotate_content } from "../tracer/graph_combinators";
+import { p_graph_kind, p_graph_namespace, p_graph_namespace_connected, p_graph_at_level, p_graph_intersect, p_graph_union, p_graph_collapse_accessors, p_graph_annotate_content } from "../tracer/graph_combinators";
 import {
     p_graph_query_call_graph,
     p_graph_query_card_network,
     p_graph_query_downstream_of,
+    p_graph_rel_exists_query,
+    p_graph_rel_edges,
+    p_graph_rel_node_ids,
+    p_graph_rel_run_query,
+    p_graph_rel_nodes_by_kind,
+    p_graph_rel_nodes_by_level,
+    p_graph_rel_nodes_by_namespace,
     p_graph_query_inspect_content,
     p_graph_query_inspect_values,
     p_graph_query_primitive_direct,
@@ -106,7 +113,8 @@ export const primitive_env = (id: string = "root") => {
         ["<->", make_primitive("bi_sync", 0, 2, bi_sync)],
         ["->", make_primitive("->", 1, 1, p_sync)],
         // @ts-ignore
-        ["graph:trace", make_primitive("graph:trace", 1, 1, trace_upstream_reactively)],
+        ["graph:trace-dependents", make_primitive("graph:trace-dependents", 1, 1, trace_upstream)],
+        ["graph:trace-downstream", make_primitive("graph:trace-downstream", 1, 1, trace_downstream)],
         // @ts-ignore
         ["graph:active-trace", make_primitive("graph:active-trace", 1, 1, trace_upstream_periodically)],
         // graph:dependents and graph:downstream use the periodic (interval-based) trace variants.
@@ -125,6 +133,7 @@ export const primitive_env = (id: string = "root") => {
         ["graph:downstream",  make_primitive("graph:downstream",  1, 1, trace_downstream_periodic)],
         ["graph:kind",        make_primitive("graph:kind",        2, 1, p_graph_kind)],
         ["graph:namespace",   make_primitive("graph:namespace",   2, 1, p_graph_namespace)],
+        ["graph:namespace-connected", make_primitive("graph:namespace-connected", 2, 1, p_graph_namespace_connected)],
         ["graph:at-level",    make_primitive("graph:at-level",    2, 1, p_graph_at_level)],
         ["graph:intersect",         make_primitive("graph:intersect",         2, 1, p_graph_intersect)],
         ["graph:union",             make_primitive("graph:union",             2, 1, p_graph_union)],
@@ -138,6 +147,13 @@ export const primitive_env = (id: string = "root") => {
         ["graph:query:call-graph",  make_primitive("graph:query:call-graph",  1, 1, p_graph_query_call_graph)],
         ["graph:query:inspect-values", make_primitive("graph:query:inspect-values", 1, 1, p_graph_query_inspect_values)],
         ["graph:query:inspect-content", make_primitive("graph:query:inspect-content", 1, 1, p_graph_query_inspect_content)],
+        ["graph:rel:node-ids", make_primitive("graph:rel:node-ids", 1, 1, p_graph_rel_node_ids)],
+        ["graph:rel:edges", make_primitive("graph:rel:edges", 1, 1, p_graph_rel_edges)],
+        ["graph:rel:nodes-by-kind", make_primitive("graph:rel:nodes-by-kind", 2, 1, p_graph_rel_nodes_by_kind)],
+        ["graph:rel:nodes-by-namespace", make_primitive("graph:rel:nodes-by-namespace", 2, 1, p_graph_rel_nodes_by_namespace)],
+        ["graph:rel:nodes-by-level", make_primitive("graph:rel:nodes-by-level", 2, 1, p_graph_rel_nodes_by_level)],
+        ["graph:rel:run-query", make_primitive("graph:rel:run-query", 2, 1, p_graph_rel_run_query)],
+        ["graph:rel:exists-query", make_primitive("graph:rel:exists-query", 2, 1, p_graph_rel_exists_query)],
         ["socket:client", make_primitive("socket:client", 5, 0, p_socket_client)],
         ["socket:server", make_primitive("socket:server", 4, 0, p_socket_server)],
     ];

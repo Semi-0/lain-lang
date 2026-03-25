@@ -1,4 +1,5 @@
 import { expect, test, beforeEach, describe } from "bun:test";
+import { DirectedGraph } from "graphology";
 import { 
     type Cell,
     cell_strongest,
@@ -406,6 +407,67 @@ describe("Compiler (compile function) Tests", () => {
             expect(cell_strongest_base_value(e)).toBe(3);
         });
 
+        test("should expose low-level graph relation primitives in primitive_env", async () => {
+            const env = primitive_env();
+            const primitive_names = [
+                "graph:rel:node-ids",
+                "graph:rel:edges",
+                "graph:rel:nodes-by-kind",
+                "graph:rel:nodes-by-namespace",
+                "graph:rel:nodes-by-level",
+                "graph:rel:run-query",
+                "graph:rel:exists-query",
+            ];
+
+            const primitives = primitive_names.map((name) => raw_compile(name, env));
+            await execute_all_tasks_sequential(console.error);
+
+            for (let i = 0; i < primitive_names.length; i++) {
+                expect((cell_strongest_base_value(primitives[i]) as { name?: string })?.name).toBe(primitive_names[i]);
+            }
+        });
+
+        test("compiler can run composable graph relation queries", async () => {
+            const graph = new DirectedGraph();
+            graph.addNode("a", { kind: "cell", namespace: "CARD", relationLevel: 1, label: "CARD|a|this" });
+            graph.addNode("p", { kind: "propagator", namespace: "compiler", relationLevel: 2, label: "prop-a" });
+            graph.addEdge("a", "p");
+
+            const spec = JSON.stringify({
+                where: [
+                    { op: "edge", source: "?s", target: "?t" },
+                    { op: "kind", id: "?t", value: "propagator" },
+                ],
+                select: ["?s", "?t"],
+            });
+
+            const existsSpec = JSON.stringify({
+                where: [{ op: "reachable", source: "a", target: "p" }],
+            });
+
+            const env = extend_env(primitive_env(), [
+                ["gq", ce_constant(graph)],
+                ["spec", ce_constant(spec)],
+                ["exists_spec", ce_constant(existsSpec)],
+            ]);
+
+            raw_compile("(graph:rel:run-query gq spec rel_rows)", env);
+            raw_compile("(graph:rel:exists-query gq exists_spec rel_exists)", env);
+            await execute_all_tasks_sequential(console.error);
+
+            const e = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
+            const rowsCell = e.get("rel_rows");
+            const existsCell = e.get("rel_exists");
+            expect(rowsCell).toBeDefined();
+            expect(existsCell).toBeDefined();
+
+            const rows = cell_strongest_base_value(rowsCell!) as Array<readonly [string, string]>;
+            const exists = cell_strongest_base_value(existsCell!);
+            expect(Array.isArray(rows)).toBe(true);
+            expect(rows).toContainEqual(["a", "p"]);
+            expect(exists).toBe(true);
+        });
+
         // test("graph:card: can be called with graph and cardId, writes subgraph with only that card's nodes", async () => {
         //     const env = primitive_env();
         //     raw_compile("(network with_graph (>:: a) (::> g) (graph:trace a g))", env);
@@ -489,7 +551,7 @@ describe("Compiler (compile function) Tests", () => {
             run("(add1_inc 5 out_inc)", env, applicationSource, 0);
             await execute_all_tasks_sequential(console.error);
 
-            const e = cell_strongest_base_value(env);
+            const e = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
             const out = e.get("out_inc");
             expect(out).toBeDefined();
             expect(cell_strongest_base_value(out)).toBe(6);
@@ -506,7 +568,7 @@ describe("Compiler (compile function) Tests", () => {
             run("(magic2_inc 1 out_reload)", env, applicationSource, 0);
             await execute_all_tasks_sequential(console.error);
 
-            let e = cell_strongest_base_value(env);
+            let e = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
             let out = e.get("out_reload");
             expect(out).toBeDefined();
             expect(cell_strongest_base_value(out)).toBe(2);
@@ -514,7 +576,7 @@ describe("Compiler (compile function) Tests", () => {
             run(`(network magic2_inc (>:: x) (::> z) (- x 1 z))`, env, definitionSource, 1);
             await execute_all_tasks_sequential(console.error);
 
-            e = cell_strongest_base_value(env);
+            e = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
             out = e.get("out_reload");
             expect(out).toBeDefined();
             expect(cell_strongest_base_value(out)).toBe(0);
@@ -526,7 +588,7 @@ describe("Compiler (compile function) Tests", () => {
             await execute_all_tasks_sequential(console.error);
             raw_compile("(add1 5 out)", env);
             await execute_all_tasks_sequential(console.error);
-            const e = cell_strongest_base_value(env);
+            const e = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
             const out = e.get("out");
             expect(out).toBeDefined();
             expect(cell_strongest_base_value(out)).toBe(6);
@@ -555,7 +617,7 @@ describe("Compiler (compile function) Tests", () => {
             raw_compile(add1_again, env) 
 
             await execute_all_tasks_sequential(console.error)
-            const e2 = cell_strongest_base_value(env) 
+            const e2 = cell_strongest_base_value(env) as Map<string, Cell<unknown>>
             expect(cell_strongest_base_value(e2.get("out2"))).toBe(9);
         });
     });
