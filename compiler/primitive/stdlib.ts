@@ -1,7 +1,6 @@
 import { 
     type Cell, p_add, p_subtract, p_multiply, p_divide, 
     p_greater_than, p_less_than, p_equal, p_not, cell_strongest, construct_propagator,
-    p
 } from "ppropogator";
 import { p_greater_than_or_equal, p_less_than_or_equal, bi_sync, p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { socket_IO_client_cell } from "ppropogator/Cell/RemoteCell/SocketClientCell";
@@ -12,7 +11,8 @@ import { construct_env_with_inital_value } from "../env";
 import { make_primitive, make_two_arity_primitive } from "./base";
 import { trace_upstream_periodically, trace_upstream_reactively } from "../tracer/tracer";
 import { p_graph_card, p_graph_connected_prefix, p_graph_label_prefix, p_graph_name, p_graph_nodes } from "../tracer/graph_queries";
-import { trace_upstream, trace_upstream_primitive } from "../tracer/generalized_tracer";
+import { trace_upstream, trace_upstream_primitive, trace_downstream, trace_upstream_periodic, trace_downstream_periodic } from "../tracer/generalized_tracer";
+import { p_graph_kind, p_graph_namespace, p_graph_at_level, p_graph_intersect, p_graph_union, p_graph_collapse_accessors, p_graph_annotate_content } from "../tracer/graph_combinators";
 
 export const two_arity_prims: [string, any][] = [
     ["+", p_add],
@@ -99,7 +99,12 @@ export const primitive_env = (id: string = "root") => {
         ["graph:trace", make_primitive("graph:trace", 1, 1, trace_upstream_reactively)],
         // @ts-ignore
         ["graph:active-trace", make_primitive("graph:active-trace", 1, 1, trace_upstream_periodically)],
-        ["graph:dependents", make_primitive("graph:dependents", 1, 1, trace_upstream)],
+        // graph:dependents and graph:downstream use the periodic (interval-based) trace variants.
+        // The reactive trace installs p_tap on every visited cell; when the gatherer is connected
+        // to the env via selective_sync, any write to the gatherer triggers a re-traversal →
+        // dead loop. The periodic variants rebuild on setInterval (default 400ms) without p_tap,
+        // so combinator outputs can write back to the env freely. First rebuild is synchronous.
+        ["graph:dependents", make_primitive("graph:dependents", 1, 1, trace_upstream_periodic)],
         ["graph:prim-dependents", make_primitive("graph:primitive-dependents", 1, 1, trace_upstream_primitive)],
         ["graph:card", make_primitive("graph:card", 2, 1, p_graph_card)],
         ["graph:prefix", make_primitive("graph:label", 2, 1, p_graph_label_prefix)],
@@ -107,6 +112,14 @@ export const primitive_env = (id: string = "root") => {
         ["graph:prefix:connected", make_primitive("graph:prefix:connected", 2, 1, p_graph_connected_prefix)],
         ["graph:nodes", make_primitive("graph:nodes", 2, 1, p_graph_nodes)],
         ["graph:name", make_primitive("graph:name", 2, 1, p_graph_name)],
+        ["graph:downstream",  make_primitive("graph:downstream",  1, 1, trace_downstream_periodic)],
+        ["graph:kind",        make_primitive("graph:kind",        2, 1, p_graph_kind)],
+        ["graph:namespace",   make_primitive("graph:namespace",   2, 1, p_graph_namespace)],
+        ["graph:at-level",    make_primitive("graph:at-level",    2, 1, p_graph_at_level)],
+        ["graph:intersect",         make_primitive("graph:intersect",         2, 1, p_graph_intersect)],
+        ["graph:union",             make_primitive("graph:union",             2, 1, p_graph_union)],
+        ["graph:collapse-accessors",make_primitive("graph:collapse-accessors",1, 1, p_graph_collapse_accessors)],
+        ["graph:annotate-content",  make_primitive("graph:annotate-content",  1, 1, p_graph_annotate_content)],
         ["socket:client", make_primitive("socket:client", 5, 0, p_socket_client)],
         ["socket:server", make_primitive("socket:server", 4, 0, p_socket_server)],
     ];
