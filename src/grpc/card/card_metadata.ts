@@ -105,8 +105,10 @@ export const tracked_apply_propagator = (tracker: Map<string, Propagator>) =>
  * The unfolder and all other card propagators are registered for `card_metadata_remove`.
  */
 export const construct_card_metadata = (id: string) => {
-    const card = construct_cell(make_name([card_header, id])) as Cell<unknown>;
-    // update_cell(card, new Map());
+    const card = construct_cell(make_name([card_header, id]), id) as Cell<unknown>;
+    // initialize the card with first seed, for some reason 
+    // this is working and we should not touch it
+    update_cell(card, new Map());
     // execute_all_tasks_sequential(console.error);
 
     const compile_source = source_constant_cell(`card-compile:${id}`) as Cell<unknown>;
