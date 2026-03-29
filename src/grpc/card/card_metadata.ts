@@ -26,7 +26,7 @@ import { LayeredObject } from "sando-layer/Basic/LayeredObject";
 import { is_equal } from "generic-handler/built_in_generics/generic_arithmetic";
 import { update_specialized_reactive_value } from "../better_runtime";
 import { to_string } from "generic-handler/built_in_generics/generic_conversation";
-import { card_header, make_name } from "../../../compiler/naming";
+import { card_header, create_card_cell_name, make_name } from "../../../compiler/naming";
 
 type CardMetadata = {
     id : string;
@@ -117,19 +117,19 @@ export const construct_card_metadata = (id: string) => {
     const tracking_internal_cells = new Map<string, Cell<any>>();
     const tracking_propagators = new Map<string, Propagator>();
 
-    const tracked_cell_construct = (name: string) => {
-        const cell = construct_cell(name) as Cell<any>;
-        tracking_internal_cells.set(name, cell);
+    const tracked_cell_construct = (key: string, cellName?: string) => {
+        const cell = construct_cell(cellName ?? key) as Cell<any>;
+        tracking_internal_cells.set(key, cell);
         return cell;
     };
 
     const tracked_propagator_construct = tracked_apply_propagator(tracking_propagators);
 
-    const card_this = tracked_cell_construct(slot_this);
-    const card_left = tracked_cell_construct(slot_left);
-    const card_right = tracked_cell_construct(slot_right);
-    const card_above = tracked_cell_construct(slot_above);
-    const card_below = tracked_cell_construct(slot_below);
+    const card_this = tracked_cell_construct(slot_this, create_card_cell_name(id, slot_this));
+    const card_left = tracked_cell_construct(slot_left, create_card_cell_name(id, slot_left));
+    const card_right = tracked_cell_construct(slot_right, create_card_cell_name(id, slot_right));
+    const card_above = tracked_cell_construct(slot_above, create_card_cell_name(id, slot_above));
+    const card_below = tracked_cell_construct(slot_below, create_card_cell_name(id, slot_below));
 
     tracked_propagator_construct(
         "unfolder",

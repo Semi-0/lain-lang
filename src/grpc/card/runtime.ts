@@ -22,6 +22,7 @@ import {
     make_connector_key,
     make_connector_key_from_ids,
 } from "./connector_key.js";
+import { get_card_metadata } from "./card_metadata.js";
 
 const connector_storage = new Map<string, Propagator>();
 const internal_network_storage = new Map<string, Propagator>();
@@ -119,7 +120,7 @@ export const runtime_add_card = (id: string): Cell<unknown> => {
 };
 
 export const runtime_get_card = (id: string): Cell<unknown> | undefined =>
-    card_storage.get(id);
+    card_storage.get(id) ?? get_card_metadata(id)?.card;
 
 
 export const runtime_build_card = (env: LexicalEnvironment) => (id: string): Cell<unknown> => {
