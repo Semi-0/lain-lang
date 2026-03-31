@@ -16,7 +16,13 @@
 >
 > Security hardening and sandboxing are important future directions, but they are **not the primary research focus at this stage**, which is interaction with a shared, incremental, multi-peer programming environment. 
 
-Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. The system supports hot-swapping of closures without losing state,  allowing you to modify function definitions on one machine and have those changes automatically propagate to all connected peers while preserving execution state. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
+萊因者，傳衍立道，活演四達。
+視文如生，定更輒化。
+鑄樞降式入圖，鑄道自衍，感而漸就。
+藏術即換，綱動而目張，態勢悉存。
+籌格感輸自更，矢時定序，因果不紊。
+
+Lain is a propagator-based, highly expressive programming language and live coding runtime for distributed computation. Built with incremental compilation, lain-lang treats code as live data that automatically recompiles when definitions change. Conceptually, the compiler lowers programs directly into a propagator graph, and the compiler pipeline itself is organized as propagators so compilation becomes reactive and incremental. The system supports hot-swapping of closures without losing state, allowing you to modify function definitions on one machine and have those changes automatically propagate to all connected peers while preserving execution state. Computation happens reactively through cells and propagators that automatically update when their inputs change, with vector clocks ensuring correct causality in distributed scenarios.
 
 Lain is an experimental research system. The design is evolving rapidly. Feedback, discussion, and careful experimentation are welcome.
 

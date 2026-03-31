@@ -1,5 +1,7 @@
 /**
  * Unit tests for Card API: add_card, remove_card, connect_cards, detach_cards, build_card.
+ * Stress suite (`Card API stress probes`): strict contracts; **S1, S2, S7** currently fail
+ * until rebuild re-pulls neighbors and mid–mid–mid horizontal chains work without a bridge.
  * Verifies topology of the propagator graph: cells and propagators are truly connected
  * via Cell.getNeighbors() and Propagator.getInputs()/getOutputs().
  *
@@ -1146,6 +1148,236 @@ describe("Card API Tests", () => {
 
             expect(final_value_3).toBe(5)
         })
+    });
+
+    /**
+     * Stress probes: strict contracts (ideal behavior). They **fail** when rebuild does not
+     * re-pull neighbors, topology is wrong, or swap/connect does not restabilize immediately.
+     */
+    describe("Card API stress probes", () => {
+        const add1 = "(+ ::left 1 ::right)";
+
+        /** Readable snapshot for debugging failing stress runs. */
+        const stressLog = (tag: string, payload: Record<string, unknown>) => {
+            console.warn(`[card-api stress] ${tag}`, payload);
+        };
+
+        test("S1. vertical: rebuild new formula + flush must refresh sink without update_card on above", async () => {
+            const env = primitive_env();
+            add_card("s1-above");
+            add_card("s1-center");
+            add_card("s1-right");
+            const right = get_card("s1-right")!;
+            connect_cards("s1-above", "s1-center", slot_below, slot_above);
+            connect_cards("s1-center", "s1-right", slot_right, slot_left);
+            update_card("s1-center", "(+ ::above 1 ::right)");
+            build_card(env)("s1-center");
+            execute_all_tasks_sequential(() => {});
+            update_card("s1-above", 40);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(41);
+
+            update_card("s1-center", "(+ ::above 5 ::right)");
+            build_card(env)("s1-center");
+            execute_all_tasks_sequential(() => {});
+            const sinkAfterRebuild = read_slot_value(right, internal_cell_this);
+            stressLog("S1", { sinkAfterRebuildNoAboveTick: sinkAfterRebuild });
+            expect(sinkAfterRebuild).toBe(45);
+
+            update_card("s1-above", 41);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(right, internal_cell_this)).toBe(46);
+        });
+
+        test("S2. horizontal: mid–mid–mid (no bridge) sink must be numeric pipeline 4+1+1", async () => {
+            const env = primitive_env();
+            const src = add_card("s2-src");
+            const midA = add_card("s2-midA");
+            const midB = add_card("s2-midB");
+            const fin = add_card("s2-final");
+            connect_cards(src, midA, slot_right, slot_left);
+            connect_cards(midA, midB, slot_right, slot_left);
+            connect_cards(midB, fin, slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            update_card(midA, add1);
+            build_card(env)(midA);
+            update_card(midB, add1);
+            build_card(env)(midB);
+            execute_all_tasks_sequential(() => {});
+            update_card(src, 4);
+            execute_all_tasks_sequential(() => {});
+            const v = read_slot_value(get_card(fin)!, internal_cell_this);
+            stressLog("S2", { sink: v });
+            expect(v).toBe(6);
+        });
+
+        test("S3. horizontal with bridge (test-10 shape): swap two mids, then new source update reaches sink", async () => {
+            const env = primitive_env();
+            const s1 = add_card("s3-s1");
+            const ma = add_card("s3-ma");
+            const br = add_card("s3-bridge");
+            const mb = add_card("s3-mb");
+            const f = add_card("s3-final");
+            connect_cards(s1, ma, slot_right, slot_left);
+            connect_cards(ma, br, slot_right, slot_left);
+            connect_cards(br, mb, slot_right, slot_left);
+            connect_cards(mb, f, slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            update_card(ma, add1);
+            build_card(env)(ma);
+            update_card(mb, add1);
+            build_card(env)(mb);
+            execute_all_tasks_sequential(() => {});
+            update_card(s1, 4);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(get_card(f)!, internal_cell_this)).toBe(6);
+
+            detach_cards(mb, f);
+            detach_cards(br, mb);
+            detach_cards(ma, br);
+            detach_cards(s1, ma);
+            execute_all_tasks_sequential(() => {});
+            connect_cards(s1, mb, slot_right, slot_left);
+            connect_cards(mb, br, slot_right, slot_left);
+            connect_cards(br, ma, slot_right, slot_left);
+            connect_cards(ma, f, slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            update_card(s1, 10);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(get_card(f)!, internal_cell_this)).toBe(12);
+        });
+
+        test("S4. same bridge graph: after swap, flush only — sink should match pre-swap (no update_card on s1)", async () => {
+            const env = primitive_env();
+            const s1 = add_card("s4-s1");
+            const ma = add_card("s4-ma");
+            const br = add_card("s4-bridge");
+            const mb = add_card("s4-mb");
+            const f = add_card("s4-final");
+            connect_cards(s1, ma, slot_right, slot_left);
+            connect_cards(ma, br, slot_right, slot_left);
+            connect_cards(br, mb, slot_right, slot_left);
+            connect_cards(mb, f, slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            update_card(ma, add1);
+            build_card(env)(ma);
+            update_card(mb, add1);
+            build_card(env)(mb);
+            execute_all_tasks_sequential(() => {});
+            update_card(s1, 7);
+            execute_all_tasks_sequential(() => {});
+            const before = read_slot_value(get_card(f)!, internal_cell_this);
+            expect(before).toBe(9);
+
+            detach_cards(mb, f);
+            detach_cards(br, mb);
+            detach_cards(ma, br);
+            detach_cards(s1, ma);
+            execute_all_tasks_sequential(() => {});
+            connect_cards(s1, mb, slot_right, slot_left);
+            connect_cards(mb, br, slot_right, slot_left);
+            connect_cards(br, ma, slot_right, slot_left);
+            connect_cards(ma, f, slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            const after = read_slot_value(get_card(f)!, internal_cell_this);
+            stressLog("S4", { before, after, ideal: before });
+            expect(after).toBe(before);
+        });
+
+        test("S5. build order: connect-then-build vs build-empty-then-connect-then-rebuild — sink should match", async () => {
+            const env = primitive_env();
+            add_card("s5-a");
+            add_card("s5-c");
+            add_card("s5-r");
+            connect_cards("s5-a", "s5-c", slot_below, slot_above);
+            connect_cards("s5-c", "s5-r", slot_right, slot_left);
+            update_card("s5-c", "(+ ::above 2 ::right)");
+            build_card(env)("s5-c");
+            execute_all_tasks_sequential(() => {});
+            update_card("s5-a", 11);
+            execute_all_tasks_sequential(() => {});
+            const pathA = read_slot_value(get_card("s5-r")!, internal_cell_this);
+
+            add_card("s5b-a");
+            add_card("s5b-c");
+            add_card("s5b-r");
+            build_card(env)("s5b-a");
+            build_card(env)("s5b-c");
+            build_card(env)("s5b-r");
+            connect_cards("s5b-a", "s5b-c", slot_below, slot_above);
+            connect_cards("s5b-c", "s5b-r", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            update_card("s5b-c", "(+ ::above 2 ::right)");
+            build_card(env)("s5b-c");
+            execute_all_tasks_sequential(() => {});
+            update_card("s5b-a", 11);
+            execute_all_tasks_sequential(() => {});
+            const pathB = read_slot_value(get_card("s5b-r")!, internal_cell_this);
+
+            stressLog("S5", { pathA, pathB });
+            expect(pathA).toBe(13);
+            expect(pathB).toBe(13);
+        });
+
+        test("S6. vertical swap right: new right sees current sum immediately; old right stays detached", async () => {
+            const env = primitive_env();
+            add_card("s6-above");
+            add_card("s6-center");
+            add_card("s6-oldR");
+            add_card("s6-newR");
+            const aboveSrc = construct_cell("s6-aboveSrc");
+            p_sync(aboveSrc, internal_cell_this(get_card("s6-above")!));
+            update_card("s6-center", "(+ ::above 1 ::right)");
+            build_card(env)("s6-center");
+            connect_cards("s6-above", "s6-center", slot_below, slot_above);
+            connect_cards("s6-center", "s6-oldR", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            update_source_cell(aboveSrc, 8);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(get_card("s6-oldR")!, internal_cell_this)).toBe(9);
+
+            detach_cards("s6-center", "s6-oldR");
+            connect_cards("s6-center", "s6-newR", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+            const newRBeforeTick = read_slot_value(get_card("s6-newR")!, internal_cell_this);
+            stressLog("S6", { newRBeforeTick });
+            expect(newRBeforeTick).toBe(9);
+
+            update_source_cell(aboveSrc, 9);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(get_card("s6-oldR")!, internal_cell_this)).toBe(9);
+            expect(read_slot_value(get_card("s6-newR")!, internal_cell_this)).toBe(10);
+        });
+
+        test("S7. after formula rebuild, sink is new sum; idempotent above update still leaves sink correct", async () => {
+            const env = primitive_env();
+            add_card("s7-a");
+            add_card("s7-c");
+            add_card("s7-r");
+            connect_cards("s7-a", "s7-c", slot_below, slot_above);
+            connect_cards("s7-c", "s7-r", slot_right, slot_left);
+            update_card("s7-c", "(+ ::above 1 ::right)");
+            build_card(env)("s7-c");
+            execute_all_tasks_sequential(() => {});
+            update_card("s7-a", 100);
+            execute_all_tasks_sequential(() => {});
+            expect(read_slot_value(get_card("s7-r")!, internal_cell_this)).toBe(101);
+
+            update_card("s7-c", "(+ ::above 3 ::right)");
+            build_card(env)("s7-c");
+            execute_all_tasks_sequential(() => {});
+            const afterRebuild = read_slot_value(get_card("s7-r")!, internal_cell_this);
+            stressLog("S7", { afterRebuild });
+            expect(afterRebuild).toBe(103);
+
+            const again = update_card("s7-a", 100);
+            execute_all_tasks_sequential(() => {});
+            const afterNoop = read_slot_value(get_card("s7-r")!, internal_cell_this);
+            stressLog("S7", { afterNoop, updatedFlag: again.updated });
+            expect(afterNoop).toBe(103);
+        });
     });
 
     /**
