@@ -3,7 +3,7 @@
 // ============================================================================
 
 import type { Cell } from "ppropogator/Cell/Cell";
-import { cell_content, cell_id, cell_name, cell_neightbor_set, cell_strongest, primitive_construct_cell } from "ppropogator/Cell/Cell";
+import { cell_content, cell_id, cell_name, cell_neighbor_set, cell_strongest, primitive_construct_cell } from "ppropogator/Cell/Cell";
 import { register_predicate } from "generic-handler/Predicates";
 // Type for the encode function to avoid circular dependency
 type EncodeFn = (x: any) => any;
@@ -19,7 +19,7 @@ export const cell_schema_encode = (cell: Cell<any>, encode: EncodeFn): CellSchem
     name: cell_name(cell),
     content: encode(cell_content(cell)),
     strongest: encode(cell_strongest(cell)),
-    neighbors: encode(cell_neightbor_set(cell)),
+    neighbors: encode(cell_neighbor_set(cell)),
 });
 
 // should we store all content?
