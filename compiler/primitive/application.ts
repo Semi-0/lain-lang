@@ -46,11 +46,13 @@ export const apply_primitive = (primitive: Cell<Primitive>, operands_expr: LainE
             }
         )
 
+        // is this really needed?
+        
         return compound_propagator(
             inputs,
             outputs,
             () => {
-                console.log("prim built")
+                console.log("primitive propagator activated")
                 const prim = cell_strongest_base_value(primitive)
                 const args = [...inputs, ...outputs]
                 // @ts-ignore
