@@ -53,18 +53,14 @@ export const incremental_apply_closure = (
        
         const closure_base = cell_strongest_base_value(closure) as ClosureTemplate
         const outputs_cell = closure_outputs_cells(closure_base, operands_expr, (expr: LainElement) => compile_cells(make_output(expr), env, compile))
- 
-
-   
-        // })
         const inputs_cell = closure_inputs_cells(closure_base, operands_expr, (expr: LainElement) => compile_cells(expr, env, compile))
         // console.log("inputs cell", inputs_cell)
 
-        const scoped_inputs_cell = inputs_cell.map((i: Cell<any>) => {
-            const scoped_input = construct_cell("scoped_input")
-            p_combine_dependences_with_value_from_right([closure, i], scoped_input)
-            return scoped_input
-        })
+        // const scoped_inputs_cell = inputs_cell.map((i: Cell<any>) => {
+        //     const scoped_input = construct_cell("scoped_input")
+        //     p_combine_dependences_with_value_from_right([closure, i], scoped_input)
+        //     return scoped_input
+        // })
 
         const unfolded_closure = ce_apply_closure(
             compile,
