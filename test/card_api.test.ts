@@ -1389,6 +1389,113 @@ describe("Card API Tests", () => {
      * Contract: delta must be 0. As of a local run, this fails (e.g. ~+880 over 80 rebuilds),
      * indicating growth in the global registry — treat as a leak to fix, not a flaky test.
      */
+    /**
+     * **Bug probe (intentionally red):** detach → swap SRC–A–B–SINK vs SRC–B–A–SINK → reconnect →
+     * `update_card` with `(+ ::left 2 ::right)` / `(- ::left 20 ::right)` → **always** `build_card(A)`
+     * then `build_card(B)` (no source→sink order, no pre-seed before compile). Drives subtract during
+     * B’s compile with non-numeric `::left`, wrong build order on swapped topology, and/or
+     * `&&the_nothing&&` at the sink. Run `bun test test/card_api.test.ts -t "BUG PROBE: swap mids"` to
+     * see **which round** and **which error** surface first.
+     */
+    describe("BUG PROBE: swap mids + (+2)/(−20) rebuild (expected failure)", () => {
+        const SRC = "rds-src";
+        const MID_A = "rds-a";
+        const MID_B = "rds-b";
+        const SINK = "rds-sink";
+        const CODE_PLUS = "(+ ::left 2 ::right)";
+        const CODE_MINUS = "(- ::left 20 ::right)";
+
+        const detach_chain_ab = () => {
+            detach_cards(MID_B, SINK);
+            detach_cards(MID_A, MID_B);
+            detach_cards(SRC, MID_A);
+        };
+
+        const detach_chain_ba = () => {
+            detach_cards(MID_A, SINK);
+            detach_cards(MID_B, MID_A);
+            detach_cards(SRC, MID_B);
+        };
+
+        const connect_chain_ab = () => {
+            connect_cards(SRC, MID_A, slot_right, slot_left);
+            connect_cards(MID_A, MID_B, slot_right, slot_left);
+            connect_cards(MID_B, SINK, slot_right, slot_left);
+        };
+
+        const connect_chain_ba = () => {
+            connect_cards(SRC, MID_B, slot_right, slot_left);
+            connect_cards(MID_B, MID_A, slot_right, slot_left);
+            connect_cards(MID_A, SINK, slot_right, slot_left);
+        };
+
+        /**
+         * Naive lifecycle on purpose: exposes scheduler/compile/neighbor-order bugs instead of masking them.
+         */
+        test("BUG PROBE: swap mids — reports first failing round (subtract / nothing / topology)", () => {
+            const env = primitive_env();
+            add_card(SRC);
+            add_card(MID_A);
+            add_card(MID_B);
+            add_card(SINK);
+            execute_all_tasks_sequential(() => {});
+
+            let wiring_is_ab = true;
+            const MAX_ROUNDS = 250;
+
+            for (let round = 0; round < MAX_ROUNDS; round++) {
+                try {
+                    if (round > 0) {
+                        if (wiring_is_ab) detach_chain_ab();
+                        else detach_chain_ba();
+                        execute_all_tasks_sequential(() => {});
+                        wiring_is_ab = !wiring_is_ab;
+                    }
+
+                    if (wiring_is_ab) connect_chain_ab();
+                    else connect_chain_ba();
+                    execute_all_tasks_sequential(() => {});
+
+                    update_card(MID_A, CODE_PLUS);
+                    update_card(MID_B, CODE_MINUS);
+                    /** Deliberately wrong when topology is SRC–B–A–SINK: B should compile before A. */
+                    build_card(env)(MID_A);
+                    execute_all_tasks_sequential(console.error);
+                    build_card(env)(MID_B);
+                    execute_all_tasks_sequential(console.error);
+
+                    const srcVal = 300 + round;
+                    update_card(SRC, srcVal);
+                    execute_all_tasks_sequential(() => {});
+
+                    const sinkCell = get_card(SINK)!;
+                    const got = read_slot_value(sinkCell, internal_cell_this);
+                    const expected = srcVal - 18;
+
+                    if (is_contradiction(got)) {
+                        throw new Error(
+                            `round ${round}: sink contradiction (wiring_is_ab=${wiring_is_ab}, srcVal=${srcVal})`,
+                        );
+                    }
+                    if (got !== expected) {
+                        throw new Error(
+                            `round ${round}: expected sink ${expected}, got ${String(got)} (wiring_is_ab=${wiring_is_ab}, srcVal=${srcVal})`,
+                        );
+                    }
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    console.error(
+                        `[BUG PROBE: swap mids] first failure at round ${round}/${MAX_ROUNDS}:`,
+                        msg,
+                    );
+                    throw new Error(
+                        `BUG PROBE swap+mids: failed at round ${round} (max ${MAX_ROUNDS}): ${msg}`,
+                    );
+                }
+            }
+        });
+    });
+
     describe("GC: repeated center rebuild (global registry)", () => {
         test("many rebuilds do not monotonically grow cell + propagator counts", () => {
             const env = primitive_env();
