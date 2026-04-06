@@ -1,4 +1,4 @@
-import { Cell, cell_strongest, is_contradiction, match_args, register_predicate, strongest_value, the_contradiction, the_nothing } from "ppropogator";
+import { Cell, cell_strongest, get_base_value, is_contradiction, match_args, register_predicate, strongest_value, the_contradiction, the_nothing } from "ppropogator";
 import {
     construct_vector_clock,
     get_vector_clock_layer,
@@ -77,14 +77,28 @@ export const init_specialized_reactive_runtime = () => {
                 const result = reduce(
                     rest(set),
                     (acc: LayeredObject<any>, value: LayeredObject<any>) => {
-                        if (is_contradiction(acc)) {
-                            return merge_vector_clock_from(acc, value);
+                        if (is_layered_object(acc as any) && is_contradiction(get_base_value(acc as any))) {
+                            // Layered contradiction: allow a strictly newer value to supersede it
+                            if (has_walltime_clock_layer(value) && get_wallclock_timestamp(value) > get_wallclock_timestamp(acc)) {
+                                return merge_vector_clock_from(value, acc);
+                            }
+                            return acc;
+                        } else if (is_contradiction(acc)) {
+                            // Plain contradiction: cannot recover
+                            return acc;
                         } else if (walltime_greater_than(value, acc)) {
                             return merge_vector_clock_from(value, acc);
                         } else if (walltime_less_than(value, acc)) {
                             return merge_vector_clock_from(acc, value);
                         } else {
-                            return merge_vector_clock_from(the_contradiction, acc);
+                            // Same walltime → contradiction, but preserve walltime for future supersession
+                            return construct_layered_datum(
+                                the_contradiction,
+                                walltime_clock_layer,
+                                get_wallclock_timestamp(acc),
+                                vector_clock_layer,
+                                merge_vector_clocks(get_vector_clock(acc), get_vector_clock(value))
+                            );
                         }
                     },
                     first(set),

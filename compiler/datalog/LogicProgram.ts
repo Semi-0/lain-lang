@@ -13,6 +13,10 @@
 //   Pred(variable, fn)   — arbitrary JS predicate on a bound variable
 //   StartsWith(var, str) — string prefix filter
 //   Contains(var, str)   — string inclusion filter
+//   NegFact(atom)        — succeeds when no fact in the DB unifies with the
+//                          ground template (use in a stratum that does not derive
+//                          the negated predicate; often a second LogicProgram
+//                          over an EDB that already closed that predicate).
 //
 // Re-exports everything needed for writing rules so callers only import this file.
 
@@ -54,7 +58,15 @@ export const Contains = (variable: any, substr: string): BuiltinPred =>
 export const Is = (variable: any, val: any): BuiltinPred =>
     Pred(variable, (s: any) => s === val)
 
-export type ExtendedBodyAtom = BodyAtom | BuiltinPred
+/** Succeeds when no fact in the current fact set equals this template (ground after substitution).
+ *  Earlier body literals must bind any variables in `template`.  Do not use in the same program
+ *  that is still deriving the negated predicate unless you rely on a separate evaluation stratum
+ *  (e.g. second stage in `wire_sequential_programs`). */
+export type NegFactClause = { readonly neg_fact: any[] }
+
+export const NegFact = (template: any[]): NegFactClause => ({ neg_fact: template })
+
+export type ExtendedBodyAtom = BodyAtom | BuiltinPred | NegFactClause
 
 /** A rule that may use BuiltinPred body atoms in addition to standard Datalog atoms. */
 export type ExtendedRule = { readonly head: any[]; readonly body: ExtendedBodyAtom[] }
@@ -135,6 +147,26 @@ const add_if_new = (set: Fact[], fact: Fact): boolean => {
 const is_builtin_pred = (a: any): a is BuiltinPred =>
     a != null && typeof a === "object" && "pred" in a && !Array.isArray(a)
 
+const is_neg_fact_clause = (a: any): a is NegFactClause =>
+    a != null &&
+    typeof a === "object" &&
+    "neg_fact" in a &&
+    Array.isArray((a as NegFactClause).neg_fact)
+
+/** True when this body atom (recursively) needs the extended naive evaluator. */
+const body_atom_requires_extended = (a: ExtendedBodyAtom): boolean => {
+    if (is_builtin_pred(a) || is_neg_fact_clause(a)) return true
+    if (is_or(a))
+        return (a as any).or.some((branch: BodyAtom[]) =>
+            branch.some(b => body_atom_requires_extended(b as ExtendedBodyAtom))
+        )
+    if (is_and(a))
+        return (a as any).and.some((b: BodyAtom) =>
+            body_atom_requires_extended(b as ExtendedBodyAtom)
+        )
+    return false
+}
+
 const is_eq = (a: any): boolean =>
     Array.isArray(a) && a.length === 3 && a[0] === "="
 
@@ -209,6 +241,15 @@ const resolve_extended = (
         return resolve_extended(head, [...(first as any).and, ...rest], facts, dict)
     }
 
+    // Negated fact test (closed-world absence of a ground atom)
+    if (is_neg_fact_clause(first)) {
+        const probe_raw = match_dict_substitute(dict)((first as NegFactClause).neg_fact)
+        if (!is_ground(probe_raw)) return []
+        const probe = probe_raw as Fact
+        if (facts.some(f => fact_equal(f, probe))) return []
+        return resolve_extended(head, rest, facts, dict)
+    }
+
     // Regular database atom
     const results: Fact[] = []
     for (const fact of facts) {
@@ -221,9 +262,9 @@ const resolve_extended = (
 
 // ─── Evaluation engine ────────────────────────────────────────────────────────
 
-/** True when any rule body contains at least one BuiltinPred. */
+/** True when any rule body needs the extended naive evaluator (Pred, NegFact, nested Or/And with those). */
 const has_extended_atoms = (rules: ExtendedRule[]): boolean =>
-    rules.some(r => r.body.some(is_builtin_pred))
+    rules.some(r => r.body.some(body_atom_requires_extended))
 
 /** Naive bottom-up fixpoint for extended rules (handles BuiltinPred). */
 const evaluate_extended_naive = (rules: ExtendedRule[], edb: Fact[]): Fact[] => {

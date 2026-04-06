@@ -49,6 +49,11 @@ import {
     construct_grounded_query_propagator,
 } from "../compiler/datalog/NetworkDatalogPipeline"
 import { topology_path3_program } from "../compiler/datalog/TopologyPathPrograms"
+import {
+    topology_mutual_reach_program,
+    topology_triad_surface_program,
+    topology_triad_one_way_surface_program,
+} from "../compiler/datalog/TopologyOrientationPrograms"
 
 beforeEach(() => {
     init_system()
@@ -117,6 +122,66 @@ const programPlusNeighborsByName = () =>
             atom("propagator", V("P"), "+")
         )
     )
+
+/**
+ * Three distinct cell ids spread across the sorted id list (deterministic, not
+ * `Math.random` — stable in CI). Acts as a cheap “sample three cells” probe.
+ */
+const pickThreeSpreadCellIds = (facts: Fact[]): [string, string, string] | undefined => {
+    const ids = [
+        ...new Set(
+            facts
+                .filter(f => f[0] === "cell" && typeof f[1] === "string")
+                .map(f => f[1] as string)
+        ),
+    ].sort((a, b) => a.localeCompare(b))
+    if (ids.length < 3) return undefined
+    return [ids[0]!, ids[Math.floor(ids.length / 2)]!, ids[ids.length - 1]!]
+}
+
+const flowsToAdjacency = (facts: Fact[]): Map<string, Set<string>> => {
+    const m = new Map<string, Set<string>>()
+    for (const f of facts) {
+        if (
+            f[0] === "flows_to" &&
+            typeof f[1] === "string" &&
+            typeof f[2] === "string"
+        ) {
+            if (!m.has(f[1])) m.set(f[1], new Set())
+            m.get(f[1])!.add(f[2])
+        }
+    }
+    return m
+}
+
+const bfsReachOnAdj = (adj: Map<string, Set<string>>, from: string, to: string): boolean => {
+    if (from === to) return true
+    const seen = new Set<string>([from])
+    const queue = [from]
+    while (queue.length > 0) {
+        const x = queue.shift()!
+        for (const y of adj.get(x) ?? []) {
+            if (y === to) return true
+            if (!seen.has(y)) {
+                seen.add(y)
+                queue.push(y)
+            }
+        }
+    }
+    return false
+}
+
+const hasReachableFact = (facts: Fact[], from: string, to: string): boolean =>
+    facts.some(f => f[0] === "reachable" && f[1] === from && f[2] === to)
+
+const hasSurfaceDirFact = (facts: Fact[], from: string, to: string): boolean =>
+    facts.some(f => f[0] === "surface_dir" && f[1] === from && f[2] === to)
+
+const hasSurfaceMutualFact = (facts: Fact[], x: string, y: string): boolean =>
+    facts.some(f => f[0] === "surface_mutual" && f[1] === x && f[2] === y)
+
+const hasSurfaceOneWayFact = (facts: Fact[], from: string, to: string): boolean =>
+    facts.some(f => f[0] === "surface_one_way" && f[1] === from && f[2] === to)
 
 describe("NetworkDatalogPipeline — topology snapshot cell", () => {
     test("wire_topology_snapshot_cell refreshes FactSet when trigger updates", () => {
@@ -342,6 +407,147 @@ describe("NetworkTopologyGraphology — ids → graphology + live handles", () =
         const g = cell_strongest_base_value(graphCell) as DirectedGraph
         expect(g).toBeInstanceOf(DirectedGraph)
         expect(g.order).toBeGreaterThan(0)
+    })
+})
+
+describe("Topology reachability — three spread cells, direction & disconnection", () => {
+    test("reachable matches BFS on flows_to for six directed pairs (who reaches whom)", () => {
+        const env = primitive_env("tri-reach-env")
+        run("(+ 1 2 tri-reach-out)", env)
+        execute_all_tasks_sequential(() => {})
+
+        const trigger = construct_cell<number>("tri-reach-trig")
+        const { derived } = wire_topology_datalog_pipeline(
+            trigger,
+            topology_reachability_program("naive"),
+            "tri_reach"
+        )
+
+        update_cell(trigger, 1)
+        execute_all_tasks_sequential(() => {})
+
+        const dVal = cell_strongest_base_value(derived)
+        expect(is_fact_set(dVal)).toBe(true)
+        if (!is_fact_set(dVal)) return
+        const dFacts = (dVal as FactSet).facts
+
+        expect(dFacts.some(f => f[0] === "flows_to")).toBe(true)
+        expect(dFacts.some(f => f[0] === "reachable")).toBe(true)
+
+        const trio = pickThreeSpreadCellIds(dFacts)
+        expect(trio).toBeDefined()
+        if (!trio) return
+        const [c0, c1, c2] = trio
+        expect(new Set([c0, c1, c2]).size).toBe(3)
+
+        const adj = flowsToAdjacency(dFacts)
+        const directedPairs: [string, string][] = [
+            [c0, c1],
+            [c1, c0],
+            [c0, c2],
+            [c2, c0],
+            [c1, c2],
+            [c2, c1],
+        ]
+
+        for (const [a, b] of directedPairs) {
+            const fromDatalog = hasReachableFact(dFacts, a, b)
+            const fromBfs = bfsReachOnAdj(adj, a, b)
+            expect(fromDatalog).toBe(fromBfs)
+        }
+        // Interpretation per unordered pair {x,y}: compare hasReachableFact(x,y) vs hasReachableFact(y,x)
+        // → both true (same SCC), one true (directional), neither (disconnected that way).
+    })
+
+    test("triad surface_dir / surface_mutual mirror reachable + mutual_reach (datalog-only summary)", () => {
+        const env = primitive_env("tri-surf-env")
+        run("(+ 1 2 tri-surf-out)", env)
+        execute_all_tasks_sequential(() => {})
+
+        const trio = pickThreeSpreadCellIds(snapshot_topology_facts())
+        expect(trio).toBeDefined()
+        if (!trio) return
+        const [c0, c1, c2] = trio
+
+        const trigger = construct_cell<number>("tri-surf-trig")
+        const prog = topology_triad_surface_program(c0, c1, c2, "naive")
+        const { derived } = wire_topology_datalog_pipeline(trigger, prog, "tri_surf")
+
+        update_cell(trigger, 1)
+        execute_all_tasks_sequential(() => {})
+
+        const dVal = cell_strongest_base_value(derived)
+        expect(is_fact_set(dVal)).toBe(true)
+        if (!is_fact_set(dVal)) return
+        const dFacts = (dVal as FactSet).facts
+
+        const directedPairs: [string, string][] = [
+            [c0, c1],
+            [c1, c0],
+            [c0, c2],
+            [c2, c0],
+            [c1, c2],
+            [c2, c1],
+        ]
+        for (const [x, y] of directedPairs) {
+            expect(hasSurfaceDirFact(dFacts, x, y)).toBe(hasReachableFact(dFacts, x, y))
+        }
+
+        const undirected: [string, string][] = [
+            [c0, c1],
+            [c0, c2],
+            [c1, c2],
+        ]
+        for (const [x, y] of undirected) {
+            const mutual =
+                hasReachableFact(dFacts, x, y) && hasReachableFact(dFacts, y, x)
+            expect(hasSurfaceMutualFact(dFacts, x, y)).toBe(mutual)
+            expect(hasSurfaceMutualFact(dFacts, y, x)).toBe(mutual)
+        }
+    })
+
+    test("sequential stage: NegFact yields surface_one_way iff asymmetric reach among triad", () => {
+        const env = primitive_env("tri-neg-env")
+        run("(+ 1 2 tri-neg-out)", env)
+        execute_all_tasks_sequential(() => {})
+
+        const trio = pickThreeSpreadCellIds(snapshot_topology_facts())
+        expect(trio).toBeDefined()
+        if (!trio) return
+        const [c0, c1, c2] = trio
+
+        const trigger = construct_cell<number>("tri-neg-trig")
+        const topo = wire_topology_snapshot_cell(trigger, "tri_neg_topo")
+        const [, finalStage] = wire_sequential_programs(
+            topo,
+            [
+                topology_mutual_reach_program("naive"),
+                topology_triad_one_way_surface_program(c0, c1, c2, "naive"),
+            ],
+            "tri_neg_seq"
+        )
+
+        update_cell(trigger, 1)
+        execute_all_tasks_sequential(() => {})
+
+        const dVal = cell_strongest_base_value(finalStage)
+        expect(is_fact_set(dVal)).toBe(true)
+        if (!is_fact_set(dVal)) return
+        const dFacts = (dVal as FactSet).facts
+
+        const directedPairs: [string, string][] = [
+            [c0, c1],
+            [c1, c0],
+            [c0, c2],
+            [c2, c0],
+            [c1, c2],
+            [c2, c1],
+        ]
+        for (const [x, y] of directedPairs) {
+            const asymmetric =
+                hasReachableFact(dFacts, x, y) && !hasReachableFact(dFacts, y, x)
+            expect(hasSurfaceOneWayFact(dFacts, x, y)).toBe(asymmetric)
+        }
     })
 })
 

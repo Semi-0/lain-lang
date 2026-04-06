@@ -63,7 +63,7 @@ import {
 import {
     V, Eq, Neq, Or, And,
     atom, rule, program, query_decl,
-    Pred, StartsWith, Contains, Is,
+    Pred, StartsWith, Contains, Is, NegFact,
 } from "../compiler/datalog/LogicProgram"
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
@@ -228,6 +228,100 @@ describe("Built-in constraints", () => {
         const conns = val.facts.filter(f => f[0] === "connected")
         expect(conns).toContainEqual(["connected","a","b"])
         expect(conns).toContainEqual(["connected","a","c"])
+    })
+})
+
+describe("NegFact — absent ground atom (not the same as Neq)", () => {
+    test("Neq is term inequality; it cannot express 'no reachable(b,a) fact'", () => {
+        const prog = program(
+            "naive",
+            rule(
+                atom("bogus", V("A"), V("B")),
+                atom("reachable", V("A"), V("B")),
+                Neq(V("A"), V("B"))
+            )
+        )
+        const edb = construct_cell<FactSet>("neq_vs_neg_edb")
+        const out = run_program(prog, [edb], "neq_vs_neg_out")
+        update_cell(
+            edb,
+            make_fact_set([
+                ["reachable", "a", "b"],
+                ["reachable", "b", "a"],
+            ])
+        )
+        execute_all_tasks_sequential(() => {})
+        const val = cell_strongest_base_value(out) as FactSet
+        const bogus = val.facts.filter(f => f[0] === "bogus")
+        expect(bogus).toContainEqual(["bogus", "a", "b"])
+        expect(bogus).toContainEqual(["bogus", "b", "a"])
+    })
+
+    test("NegFact derives one_way only when the reverse reachable tuple is missing", () => {
+        const prog = program(
+            "naive",
+            rule(
+                atom("one_way", "a", "b"),
+                atom("reachable", "a", "b"),
+                NegFact(atom("reachable", "b", "a"))
+            )
+        )
+        const edb = construct_cell<FactSet>("negf_edb")
+        const out = run_program(prog, [edb], "negf_out")
+        update_cell(edb, make_fact_set([["reachable", "a", "b"]]))
+        execute_all_tasks_sequential(() => {})
+        const val = cell_strongest_base_value(out) as FactSet
+        expect(val.facts).toContainEqual(["one_way", "a", "b"])
+    })
+
+    test("NegFact blocks derivation when the negated fact is present", () => {
+        const prog = program(
+            "naive",
+            rule(
+                atom("one_way", "a", "b"),
+                atom("reachable", "a", "b"),
+                NegFact(atom("reachable", "b", "a"))
+            )
+        )
+        const edb = construct_cell<FactSet>("negf_sym_edb")
+        const out = run_program(prog, [edb], "negf_sym_out")
+        update_cell(
+            edb,
+            make_fact_set([
+                ["reachable", "a", "b"],
+                ["reachable", "b", "a"],
+            ])
+        )
+        execute_all_tasks_sequential(() => {})
+        const val = cell_strongest_base_value(out) as FactSet
+        expect(val.facts.some(f => f[0] === "one_way")).toBe(false)
+    })
+
+    test("NegFact with variables after reachable(X,Y) binds reverse pattern", () => {
+        const prog = program(
+            "naive",
+            rule(
+                atom("one_way", V("X"), V("Y")),
+                atom("reachable", V("X"), V("Y")),
+                NegFact(atom("reachable", V("Y"), V("X")))
+            )
+        )
+        const edb = construct_cell<FactSet>("negf_var_edb")
+        const out = run_program(prog, [edb], "negf_var_out")
+        update_cell(
+            edb,
+            make_fact_set([
+                ["reachable", "a", "b"],
+                ["reachable", "b", "c"],
+                ["reachable", "c", "b"],
+            ])
+        )
+        execute_all_tasks_sequential(() => {})
+        const val = cell_strongest_base_value(out) as FactSet
+        const ow = val.facts.filter(f => f[0] === "one_way")
+        expect(ow).toContainEqual(["one_way", "a", "b"])
+        expect(ow).not.toContainEqual(["one_way", "b", "c"])
+        expect(ow).not.toContainEqual(["one_way", "c", "b"])
     })
 })
 
