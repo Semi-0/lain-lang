@@ -1,4 +1,4 @@
-import { Cell, cell_strongest, construct_cell, execute_all_tasks_sequential, get_base_value, is_contradiction, is_nothing, Propagator } from "ppropogator";
+import { Cell, cell_strongest, construct_cell, execute_all_tasks_sequential, get_base_value, Propagator } from "ppropogator";
 import { update_cell } from "ppropogator/Cell/Cell";
 import { source_constant_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
 import { create_observer_link, p_sync_to_link } from "ppropogator/DataTypes/ObserverCarriedCell";
@@ -188,6 +188,46 @@ export const card_metadata_compiled = (metadata: CardMetadata) => {
     return metadata.tracking_propagators.has("compiled_network");
 }
 
+
+// export const compile_internal_network_with_metadata = (
+//     metadata: CardMetadata,
+//     env: LexicalEnvironment,
+// ) => compound_propagator(
+//     [env, metadata.card],
+//     [],
+//     () => {
+//         console.log("compiling internal network with metadata");
+//         const card_this = guarantee_get(metadata.tracking_internal_cells, slot_this);
+//         const card_left = guarantee_get(metadata.tracking_internal_cells, slot_left);
+//         const card_right = guarantee_get(metadata.tracking_internal_cells, slot_right);
+//         const card_above = guarantee_get(metadata.tracking_internal_cells, slot_above);
+//         const card_below = guarantee_get(metadata.tracking_internal_cells, slot_below);
+//         // so 7b fails exactly happened when we try to 
+//         // GC local environment
+//         // but why?
+//         const local_env = extends_local_environment(
+//             env,
+//             [
+//                 [slot_this, card_this],
+//                 [slot_left, card_left],
+//                 [slot_right, card_right],
+//                 [slot_above, card_above],
+//                 [slot_below, card_below],
+//             ]
+//         )
+//         compile_card_internal_code(
+//             card_this,
+//             local_env,
+//             metadata.compile_source,
+//             metadata.compile_timestamp
+//         )
+
+//     },
+//     "compile_internal_network_with_metadata"
+// )
+
+
+
 export const card_metadata_build = (env: LexicalEnvironment, metadata: CardMetadata) => {
 
     if (card_metadata_compiled(metadata)) {
@@ -224,35 +264,6 @@ export const card_metadata_build = (env: LexicalEnvironment, metadata: CardMetad
     metadata.compile_timestamp = ts + 1;
 
     execute_all_tasks_sequential(console.error);
-
-    // Re-push numeric input slot cells with a fresh walltime so that formula
-    // propagators (e.g. p_add) fire a second time AFTER bi_sync is installed.
-    //
-    // Root cause: on the first flush above, FIFO scheduling causes p_add to fire
-    // before the accessor compound_propagator has run its body (which installs
-    // bi_sync between the formula's output cell and the tracked slot cell). The
-    // first p_add output and the old tracked slot value share the same walltime
-    // (both inherited from the same upstream update_card call), so the merge
-    // produces a contradiction rather than picking the new value.
-    //
-    // The second flush re-triggers p_add with a strictly newer walltime, so the
-    // new computed value supersedes both the old slot value and the contradiction,
-    // and the result propagates correctly to downstream cards.
-    let did_repush = false;
-    for (const slotKey of [slot_above, slot_below, slot_left, slot_right]) {
-        const slot_cell = metadata.tracking_internal_cells.get(slotKey);
-        if (!slot_cell) continue;
-        const current = cell_strongest(slot_cell);
-        if (is_nothing(current) || is_contradiction(current)) continue;
-        const base_val = get_base_value(current as LayeredObject<any>);
-        if (typeof base_val !== 'number') continue;
-        update_specialized_reactive_value(slot_cell, `${metadata.id}:repush:${slotKey}`, base_val);
-        did_repush = true;
-    }
-    if (did_repush) {
-        execute_all_tasks_sequential(console.error);
-    }
-
     return metadata;
 };
 
@@ -297,33 +308,25 @@ export const card_metadata_connect = (
     const Athis = guarantee_get(metadataA.tracking_internal_cells, slot_this);
     const Bthis = guarantee_get(metadataB.tracking_internal_cells, slot_this);
 
-    // Three forward sync links (no backward links — avoids formula-string feedback loops):
-    //   kA → Bthis : A's connector slot value goes to B's display (::this)
-    //   kA → kB    : A's connector slot value also goes to B's corresponding input slot
-    //                (enables pipeline chains like (+ ::left 1 ::right) across cards)
-    //   Athis → kB : A's identity value (::this) goes to B's input slot
-    //                (enables leaf-card values to reach formula inputs, e.g. above→center::above)
+    // One source_constant_cell per sync direction — updateable via vector clock (substitutes, not merges)
     const link_kA_to_Bthis  = source_constant_cell(`link:${forwardKey}:kA→Bthis`);
     const link_Bthis_to_kA  = source_constant_cell(`link:${forwardKey}:Bthis→kA`);
     const link_kB_to_Athis  = source_constant_cell(`link:${forwardKey}:kB→Athis`);
     const link_Athis_to_kB  = source_constant_cell(`link:${forwardKey}:Athis→kB`);
-    const link_kA_to_kB     = source_constant_cell(`link:${forwardKey}:kA→kB`);
 
     // Permanent propagators — no-ops when link is the_nothing, active when link resolves to a cell
     p_sync_to_link(kA,    link_kA_to_Bthis);
     p_sync_to_link(Bthis, link_Bthis_to_kA);
     p_sync_to_link(kB,    link_kB_to_Athis);
     p_sync_to_link(Athis, link_Athis_to_kB);
-    p_sync_to_link(kA,    link_kA_to_kB);
 
     // Activate: point each link at its target
     update_source_cell(link_kA_to_Bthis,  create_observer_link(Bthis));
     update_source_cell(link_Bthis_to_kA,  create_observer_link(kA));
     update_source_cell(link_kB_to_Athis,  create_observer_link(Athis));
     update_source_cell(link_Athis_to_kB,  create_observer_link(kB));
-    update_source_cell(link_kA_to_kB,     create_observer_link(kB));
 
-    const links = [link_kA_to_Bthis, link_Bthis_to_kA, link_kB_to_Athis, link_Athis_to_kB, link_kA_to_kB];
+    const links = [link_kA_to_Bthis, link_Bthis_to_kA, link_kB_to_Athis, link_Athis_to_kB];
     metadataA.connector_links.set(forwardKey, links);
     metadataB.connector_links.set(reverseKey, links);
 }
