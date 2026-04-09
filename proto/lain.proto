@@ -28,8 +28,9 @@ message NetworkUpdate {
   StrongestValueLayer strongest_value = 3;
 }
 
-// Only success or error_message; NetworkStream provides all network updates.
+// Returned by deprecated unary `Compile` only. Lain-viz uses `OpenSession` + `PushDeltas` + `CardBuild` instead.
 message CompileResponse {
+  option deprecated = true;
   bool success = 1;
   string error_message = 2;  // empty when success
 }
@@ -79,10 +80,20 @@ message CardBuildResponse {
 
 message Empty {}
 
+// Browser client (lain-viz): use OpenSession + PushDeltas + CardBuild only.
 service LainViz {
-  rpc Compile(CompileRequest) returns (CompileResponse);
-  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate);
-  rpc Session(stream CardsDelta) returns (stream ServerMessage);
+  // Deprecated: not used by lain-viz; server handler was a stub (`compile_for_viz` / no-op bind). Prefer PushDeltas + CardBuild.
+  rpc Compile(CompileRequest) returns (CompileResponse) {
+    option deprecated = true;
+  }
+  // Deprecated: not used by lain-viz; legacy server stream (heartbeats stub). Prefer OpenSession for outbound updates.
+  rpc NetworkStream(CompileRequest) returns (stream NetworkUpdate) {
+    option deprecated = true;
+  }
+  // Deprecated: not used by lain-viz; non-browser bidi path. Prefer OpenSession + PushDeltas.
+  rpc Session(stream CardsDelta) returns (stream ServerMessage) {
+    option deprecated = true;
+  }
   rpc OpenSession(OpenSessionRequest) returns (stream ServerMessage);
   rpc PushDeltas(PushDeltasRequest) returns (Empty);
   rpc CardBuild(CardBuildRequest) returns (CardBuildResponse);

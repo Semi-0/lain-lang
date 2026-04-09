@@ -1,6 +1,7 @@
 /**
- * Connect RPC server for LainViz (Compile + NetworkStream + Session, OpenSession + PushDeltas).
- * Session: bidi stream (non-browser). OpenSession + PushDeltas: browser-compatible.
+ * Connect RPC server for LainViz.
+ * **Active for lain-viz (browser):** `openSession`, `pushDeltas`, `cardBuild` — see `lain-viz/src/transport/grpc_transport.ts`.
+ * **Stubbed (not called by lain-viz):** `compile`, `networkStream`, bidi `session` — former handlers kept in file; re-wire in `create_connect_routes` to restore.
  */
 import { ConnectRouter } from "@bufbuild/connect"
 import { connectNodeAdapter } from "@connectrpc/connect-node"
@@ -14,7 +15,7 @@ import { apply_cards_delta_to_slot_map } from "./delta/cards_delta_apply.js"
 import { encode_network_update, type NetworkUpdateData } from "./codec/encode.js"
 import { delta_to_server_messages } from "./session/connect_session_helpers.js"
 import { get_or_create_session, get_session, type SessionState } from "./session/session_store.js"
-import { create_session_combinator } from "./session/session_combinator.js"
+import { create_session } from "./session/session_combinator.js"
 import { bind_context_slots_io, compile_for_viz, type CompileResult } from "./handlers/compile_handler.js"
 import { cell_updates_iterable } from "./handlers/network_stream_handler.js"
 import {
@@ -152,38 +153,12 @@ function push_deltas_apply_io(
   req: Parameters<typeof to_push_deltas_data>[0],
   env: LexicalEnvironment
 ): Empty {
-  return Effect.runSync(
-    pipe(
-      Effect.sync(() => decode_push_deltas_io(req)),
-      Effect.map((decoded) => ({
-        decoded,
-        resolved: resolve_push_session_io(decoded.sessionId),
-      })),
-      Effect.map((ctx) => ({
-        ...ctx,
-        transition: derive_push_transition(ctx.resolved.state.slotMap, ctx.decoded.delta),
-      })),
-      Effect.tap((ctx) =>
-        Effect.sync(() => apply_push_events_and_bind_io(env, ctx.resolved.state, ctx.transition))
-      ),
-      Effect.tap((ctx) =>
-        Effect.sync(() =>
-          trace_push_outcome_io(
-            ctx.decoded.traceData,
-            ctx.resolved.existed,
-            ctx.transition.events,
-            ctx.transition.report
-          )
-        )
-      ),
-      // Effect.tap((ctx) =>
-      //   Effect.sync(() =>
-      //     enqueue_push_messages_io(ctx.resolved.state, ctx.decoded.delta, ctx.resolved.existed)
-      //   )
-      // ),
-      Effect.map(() => new Empty())
-    )
-  )
+  const decoded = decode_push_deltas_io(req)
+  const resolved = resolve_push_session_io(decoded.sessionId)
+  const transition = derive_push_transition(resolved.state.slotMap, decoded.delta)
+  apply_push_events_and_bind_io(env, resolved.state, transition)
+  trace_push_outcome_io(decoded.traceData, resolved.existed, transition.events, transition.report)
+  return new Empty()
 }
 
 type PushDeltaDecoded = {
@@ -209,7 +184,7 @@ function decode_push_deltas_io(
     slotKeys: Object.keys(delta.slots),
     removeKeys: [...delta.remove],
   }
-  Effect.runSync(Effect.sync(() => trace_push_deltas_io(req, traceData)))
+  trace_push_deltas_io(req, traceData)
   return {
     sessionId,
     delta,
@@ -249,11 +224,8 @@ function apply_push_events_and_bind_io(
   state: SessionState,
   transition: { nextSlotMap: CompileRequestData; events: ReturnType<typeof diff_slot_maps_to_card_api_events>; report?: CardApiApplyReport }
 ): void {
-  const report = Effect.runSync(
-    Effect.sync(() => apply_card_api_events_io(env, transition.events))
-  )
+  transition.report = apply_card_api_events_io(env, transition.events)
   state.slotMap = transition.nextSlotMap
-  transition.report = report
 }
 
 function trace_push_outcome_io(
@@ -262,19 +234,15 @@ function trace_push_outcome_io(
   events: ReturnType<typeof diff_slot_maps_to_card_api_events>,
   report?: CardApiApplyReport
 ): void {
-  Effect.runSync(
-    Effect.sync(() => {
-      if (!existed) {
-        trace_card_events_io("push_deltas_no_session", [
-          { type: "session_created_for_push_deltas", session_id: traceData.sessionId },
-        ])
-      }
-      trace_card_events_io("push_deltas", events)
-      if (report != null && report.issues.length > 0) {
-        trace_card_events_io("push_deltas_apply", report.issues)
-      }
-    })
-  )
+  if (!existed) {
+    trace_card_events_io("push_deltas_no_session", [
+      { type: "session_created_for_push_deltas", session_id: traceData.sessionId },
+    ])
+  }
+  trace_card_events_io("push_deltas", events)
+  if (report != null && report.issues.length > 0) {
+    trace_card_events_io("push_deltas_apply", report.issues)
+  }
 }
 
 function enqueue_push_messages_io(
@@ -299,7 +267,7 @@ function card_build_apply_io(
   env: LexicalEnvironment
 ): CardBuildResponse {
   const { sessionId, cardId } = to_card_build_data(req)
-  Effect.runSync(Effect.sync(() => trace_card_build_io(req, { sessionId, cardId })))
+  trace_card_build_io(req, { sessionId, cardId })
   if (cardId.length === 0) {
     return new CardBuildResponse({ success: false, errorMessage: "card_id is required" })
   }
@@ -328,19 +296,51 @@ async function* handle_network_stream_route(
   yield* stream_connect_updates(data, context)
 }
 
+/**
+ * lain-viz only calls `openSession`, `pushDeltas`, and `cardBuild` (see
+ * `lain-viz/src/transport/grpc_transport.ts`). `grpc_stream_io` (networkStream) is exported there
+ * but not referenced by the app. These stubs replace the former handlers so unused RPCs do not run
+ * server logic; restore wiring below to re-enable Compile / NetworkStream / bidi Session.
+ */
+function stub_compile_unused_by_lain_viz(): CompileResponse {
+  return new CompileResponse({
+    success: false,
+    errorMessage:
+      "Compile RPC disabled: lain-viz does not use client.compile (see lain-viz/src/transport/grpc_transport.ts). Re-wire handle_compile in connect_server.ts to enable.",
+  })
+}
+
+async function* stub_network_stream_unused_by_lain_viz(): AsyncGenerator<NetworkUpdate> {
+  return
+}
+
+async function* stub_session_bidi_unused_by_lain_viz(
+  _stream: AsyncIterable<{ slots?: Record<string, unknown>; remove?: readonly string[] }>,
+  _ctx: unknown
+): AsyncGenerator<ServerMessage> {
+  return
+}
+
+/** Keeps legacy handler fns from being tree-shaken / “unused” while router uses stubs above. */
+const _retain_connect_handlers_for_restore = [
+  handle_compile,
+  handle_network_stream_route,
+  handle_session_route,
+] as const
+void _retain_connect_handlers_for_restore
+
 export function create_connect_routes(env: LexicalEnvironment): (router: ConnectRouter) => void {
   load_vector_clock_serializer_deserializer()
   load_graphology_serializer()
-  const session = create_session_combinator(env)
-  session.init()
+  const session = create_session(env)
 
   return (router: ConnectRouter) => {
     router.service(LainViz, {
-      compile: (req) => handle_compile(req, env),
-      networkStream: (req, ctx) => handle_network_stream_route(req, ctx),
-      session: (stream, ctx) => handle_session_route(stream, ctx, env),
+      /** Client opens the stream; server pushes `ServerMessage` (heartbeats, card/slot updates) → browser. */
       openSession: (req, ctx) => session.openSession(req, ctx),
+      /** Browser → server: `CardsDelta` slot diff → `apply_card_api_events_io` (add/connect/detach/remove/update_card). */
       pushDeltas: (req) => Promise.resolve(push_deltas_apply_io(req, env)),
+      /** Browser → server: compile internal network for `cardId` (`update_card` from `{cardId}code` slot if present, then `build_card`). */
       cardBuild: (req) => Promise.resolve(card_build_apply_io(req, env)),
     })
   }

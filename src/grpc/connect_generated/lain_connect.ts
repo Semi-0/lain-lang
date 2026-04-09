@@ -7,13 +7,18 @@ import { CardBuildRequest, CardBuildResponse, CardsDelta, CompileRequest, Compil
 import { MethodKind } from "@bufbuild/protobuf";
 
 /**
+ * Browser client (lain-viz): use OpenSession + PushDeltas + CardBuild only.
+ *
  * @generated from service lain.viz.LainViz
  */
 export const LainViz = {
   typeName: "lain.viz.LainViz",
   methods: {
     /**
+     * Deprecated: not used by lain-viz; server handler was a stub (`compile_for_viz` / no-op bind). Prefer PushDeltas + CardBuild.
+     *
      * @generated from rpc lain.viz.LainViz.Compile
+     * @deprecated
      */
     compile: {
       name: "Compile",
@@ -22,7 +27,10 @@ export const LainViz = {
       kind: MethodKind.Unary,
     },
     /**
+     * Deprecated: not used by lain-viz; legacy server stream (heartbeats stub). Prefer OpenSession for outbound updates.
+     *
      * @generated from rpc lain.viz.LainViz.NetworkStream
+     * @deprecated
      */
     networkStream: {
       name: "NetworkStream",
@@ -31,7 +39,10 @@ export const LainViz = {
       kind: MethodKind.ServerStreaming,
     },
     /**
+     * Deprecated: not used by lain-viz; non-browser bidi path. Prefer OpenSession + PushDeltas.
+     *
      * @generated from rpc lain.viz.LainViz.Session
+     * @deprecated
      */
     session: {
       name: "Session",

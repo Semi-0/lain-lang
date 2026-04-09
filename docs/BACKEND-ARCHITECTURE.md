@@ -1,249 +1,219 @@
-# Backend Architecture: Two-Part Separation
+# Backend Architecture (As-Built)
 
-**Status:** IN PROGRESS (Part A->Part B wiring + CardBuild implemented; spawn still pending)  
-**Aligned with:** [CARDS-IMPLEMENTATION-PLAN.md](./CARDS-IMPLEMENTATION-PLAN.md)
-
----
-
-## Overview
-
-The backend is split into two parts:
-
-1. **Part A — Slot-to-Event Layer:** Transforms reserved slot updates (CardsDelta) into **card events** and handles **cards-updates I/O** (sends slot updates back to the frontend).
-2. **Part B — Structure & Propagation Layer:** Consumes card events and card slot updates to **rebuild the card structure** and **build the propagation graph**.
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  connect_server (Session / OpenSession + PushDeltas)                         │
-│  receives CardsDelta (slot updates)                                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PART A: Slot-to-Event Layer                                                 │
-│  • Parse reserved slot updates (directional: CardIdRef, CardDesc; code, etc.)│
-│  • Reducer: diff prev/next → infer events                                    │
-│  • Emit: CardDetach | CardConnect | CardAdd | CardRemove | SpawnRequest     │
-│  • Observe Part B runtime output events (::this)                             │
-│  • Cards-updates I/O: send slot updates (CardUpdate, Heartbeat) to frontend  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                       │
-                    card events        │        slot updates (out)
-                                       ▼
-┌─────────────────────────────────────────────────────────────────────────────┐
-│  PART B: Structure & Propagation Layer                                       │
-│  • Maintain: cards { card_id, code_string }, edges { from, dir, to }         │
-│  • Apply events: add/remove cards, connect/detach edges                      │
-│  • Build propagation graph: CarriedCells, bi_sync wiring                     │
-│  • Compile per card (localized env)                                          │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+**Status:** Current runtime architecture for the Connect backend used by `lain-viz`.  
+**Scope:** `src/grpc/connect_server.ts`, session layer, slot sync, card runtime APIs.
 
 ---
 
-## Part A: Slot-to-Event Layer
+## TL;DR
 
-**Input:** Reserved slot updates from CardsDelta (decoded slot map, including directional slots with `CardIdRef`, `CardDesc`, etc.).
+The browser client uses **three RPCs only**:
 
-**Responsibilities:**
+- `OpenSession` (server stream, outbound updates/heartbeat)
+- `PushDeltas` (unary, inbound slot-map deltas)
+- `CardBuild` (unary, explicit compile/build trigger)
 
-1. **Maintain previous slot state** per session.
-2. **Apply delta** to get next slot map.
-3. **Diff directional structural refs** only (type law: only `CardIdRef`, `CardDesc` trigger topology ops).
-4. **Infer card events:**
-   - `nil → CardIdRef(B)` → **CardConnect** (A-dir to B)
-   - `CardIdRef(B) → nil` → **CardDetach** (A-dir from B)
-   - `CardIdRef(B) → CardIdRef(C)` → **CardDetach** then **CardConnect**
-   - `nil → CardDesc(code)` → **SpawnRequest(A, dir, CardDesc)** (or **CardSpawnRequested**) — intent inferred from slot diff; materialization is Part B's responsibility
-   - `CardDesc(code) → nil` → cancel spawn
-5. **Cards-updates I/O:** Produce `ServerMessage` (Heartbeat, CardUpdate) and send to frontend. This includes:
-   - Reflecting slot changes (set/remove) as CardUpdate
-   - Heartbeats for connection health
-
-**Output:**
-- Stream of **card events** (CardDetach, CardConnect, CardAdd, CardRemove, SpawnRequest) to Part B.
-- Stream of **ServerMessage** (Heartbeat, CardUpdate) to frontend.
-
-**Location:** `connect_server.ts` (route wiring), `card_slot_sync.ts` (diff + apply events), `session/` (session state and combinator).
+`Compile`, `NetworkStream`, and bidi `Session` exist in proto as **deprecated** and are stubbed in route wiring for the current browser path.
 
 ---
 
-## Part B: Structure & Propagation Layer
+## Runtime Topology
 
-**Input:**
-- **Card events** from Part A (CardDetach, CardConnect, CardAdd, CardRemove, SpawnRequest).
-- **Card slot updates** (the current slot map after Part A’s reducer); used to know code strings, refs, and to derive structural truth.
-
-**Responsibilities:**
-
-1. **Maintain structural state:**
-   - `cards: { card_id, code_string }` — via `card_storage`
-   - `edges: { from_card_id, direction, to_card_id }` — via `connector_storage`
-2. **Apply events:**
-   - **CardAdd:** `add_card(id)` — create card, add to storage; returns card id (string) for piping.
-   - **CardRemove:** `remove_card(id)` — detach incident connectors, dispose card.
-   - **CardConnect:** `connect_cards(idA, idB, slotA, slotB)` — add bi_sync connector; takes card IDs only (no Cell). Returns `Either<void, string>` (Left on missing card).
-   - **CardDetach:** `detach_cards(idA, idB)` — dispose connector, remove from storage; takes card IDs only.
-   - **SpawnRequest(A, dir, CardDesc):** *Not yet implemented.* TODO: materialize new card from CardDesc when direction is unoccupied.
-   - **BuildCard(cardId):** `build_card(env)(id)` — compile existing card (CarriedCells, internal network); returns card id (string). Card must already exist (via add_card).
-3. **Build propagation graph:**
-   - Build CarriedCell per card (::this, ::left, ::right, ::above, ::below) — `p_construct_card_cell`, `unfold_card_internal_network`.
-   - Wire `bi_sync` per adjacency via `card_connector_constructor_cell` (slot cells ↔ neighbor ::this).
-   - Compile per card via `compile_card_internal_code` (incremental compiler).
-4. **Emit runtime output events (observer hook):**
-   - Part B emits card runtime updates (`card_id`, `::this`, `value`) via `emit_runtime_card_output_io`.
-   - The session layer forwards these to frontend `CardUpdate` via `sessions_push` (broadcast to all session queues).
-
-**Output:**
-- Updated propagation network (cells, propagators).
-- Runtime output events (`::this`) to Part A callback channel.
-
-**Implementation (Part B):** `src/grpc/card/` — `card_api.ts` (unified API), `storage.ts` (add/remove/connect/detach), `schema.ts` (card structure, slots, connectors), and split internals `graph.ts` (structural model) + `runtime.ts` (cells/propagators lifecycle). Slot-map synchronization is now wired via `src/grpc/card_slot_sync.ts`.
-
----
-
-## Card Event Types
-
-| Event                | Meaning                                                         |
-|----------------------|------------------------------------------------------------------|
-| **CardAdd**          | New card created                                                |
-| **CardRemove**       | Card removed from structure                                     |
-| **CardConnect**      | Edge added (A-dir to B)                                         |
-| **CardDetach**       | Edge removed; card may become orphan                            |
-| **SpawnRequest(A, dir, CardDesc)** | Intent inferred from slot diff; Part B accepts or rejects |
-| **CardMaterialized(newId)**       | Internal (Part B): spawn accepted; new card created       |
-| **BuildCard(cardId)**             | User pressed Build on a card; triggers compile for that card (manual; auto-diff planned for later stage) |
-
----
-
-## Data Flow Summary
-
-```
-CardsDelta (slots + remove)
-        │
-        ▼
-┌───────────────────┐
-│  Part A: Reducer  │  prev_slots, apply delta, diff directional refs
-│  + Cards I/O      │  → card events
-│                   │  → ServerMessage (Heartbeat, CardUpdate) → frontend
-└─────────┬─────────┘
-          │ card events
-          ▼
-┌───────────────────┐
-│  Part B: Structure│  apply events → update cards + edges
-│  + Propagation    │  SpawnRequest: accept (CardMaterialized) or reject (⊤+annotation)
-│                   │  compile per card
-└───────────────────┘
+```text
+Frontend (lain-viz)
+  ├─ OpenSession(session_id, initial_data) ───────────────┐
+  ├─ PushDeltas(session_id, CardsDelta) ─────────────────┐│
+  └─ CardBuild(session_id, card_id) ───────────────────┐ ││
+                                                        │ ││
+                                                        v vv
+                ┌──────────────────────────────────────────────────────┐
+                │ connect_server.ts                                    │
+                │  - create_session_combinator(env).init()            │
+                │  - route wiring: openSession / pushDeltas / cardBuild│
+                └──────────────┬───────────────────────────────────────┘
+                               │
+                               v
+        ┌──────────────────────────────────────────────────────────────┐
+        │ Slot map transition + event derivation                       │
+        │  apply_cards_delta_to_slot_map(prev, delta) -> next          │
+        │  diff_slot_maps_to_card_api_events(prev, next) -> events     │
+        │  apply_card_api_events_io(env, events)                       │
+        └──────────────┬───────────────────────────────────────────────┘
+                       │
+                       v
+        ┌──────────────────────────────────────────────────────────────┐
+        │ Card runtime / propagation                                   │
+        │  add_card / remove_card / connect_cards / detach_cards       │
+        │  update_card / build_card                                    │
+        │  emits RuntimeCardOutputEvent(::this) via bridge             │
+        └──────────────┬───────────────────────────────────────────────┘
+                       │
+                       v
+        ┌──────────────────────────────────────────────────────────────┐
+        │ Session fan-out                                              │
+        │  session_push_constructor(get_all_sessions)                  │
+        │  queue ServerMessage(CardUpdate|Heartbeat) per session       │
+        │  openSession stream drains queue + heartbeats                │
+        └──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Current State vs. Target
+## Connect Routes (Current)
 
-| Component             | Current                                                         | Target / Remaining                                      |
-|-----------------------|------------------------------------------------------------------|---------------------------------------------------------|
-| Part A (reducer)      | `apply_cards_delta_to_slot_map` + `card_slot_sync`               | Formalize explicit event objects for tracing/metrics    |
-| Part A (I/O)          | `delta_to_server_messages` + push                                | Same; ensure CardUpdate reflects slot state             |
-| Part B (structure)    | **Card API:** `add_card`, `remove_card`, `connect_cards`, `detach_cards` | ID-first API for Part A integration ergonomics          |
-| Part B (propagation)  | **Card API:** `build_card`, CarriedCells, bi_sync wiring         | Same; build via `CardBuild` and connect-driven ensure    |
-| Part B (spawn)        | *Not implemented*                                                | **TODO:** Card spawn API — accept SpawnRequest, materialize card from CardDesc |
+In `create_connect_routes(env)`:
+
+- **Active**
+  - `openSession` → `session.openSession(req, ctx)`
+  - `pushDeltas` → `push_deltas_apply_io(req, env)`
+  - `cardBuild` → `card_build_apply_io(req, env)`
+
+- **Inactive for browser path**
+  - `compile` / `networkStream` / bidi `session` are stubbed in route wiring.
+  - Their legacy handlers remain in file for restore/debug, but are not bound.
+
+Proto (`proto/lain.proto`) marks these legacy RPCs as deprecated.
 
 ---
 
-## Implementation Notes
+## Data Model & Ownership
 
-### Implemented in this iteration
+### Session-owned
 
-- Added protocol command `CardBuild` (`CardBuildRequest`, `CardBuildResponse`) in `proto/lain.proto`.
-- `connect_server.ts` now applies slot-map card events (diff + apply) on:
-  - Session stream deltas
-  - OpenSession initial slot map
-  - PushDeltas unary updates
-- Added `card_slot_sync.ts` to apply structural diffs:
-  - card remove from observed slot keys
-  - edge connect/detach from directional slot references
-  - reciprocal directional refs are canonicalized to one logical connect
-  - code slot updates into `internal_cell_this` (missing card is skipped + traced)
-  - `::this` value changes emit internal `card_update` events (stable-signature compared)
-- Added `cardBuild` route in Connect server and gRPC server.
-- Added/updated tests:
-  - `test/session_open_push.test.ts` for `to_card_build_data`
-  - `test/connect_server.test.ts` for `CardBuild`
+- `SessionState.slotMap` (current canonical slot-map for a session)
+- `SessionState.queue` (pending outbound `ServerMessage`s)
 
-### Lifecycle contract (current)
+From `session_store.ts`:
+- `get_or_create_session`, `get_session`, `remove_session`
+- `session_push`, `wait_for_message_or_timeout`, `get_all_sessions`
 
-- Backend builds cards in two scenarios:
-  - explicit `CardBuild(card_id)` command from frontend,
-  - `CardConnect` apply path (connect implies existence; endpoints are ensured).
-- Backend does not auto-build from code-only deltas.
-- Frontend-driven card value writes are applied via `card_update` -> `update_card` only.
-- Backend applies `card_update` (`::this` value changes) only for existing runtime cards:
-  - missing card case is skipped and exposed via debug tracing (`missing_card_for_update_card`).
-- `PushDeltas` diff no longer emits unconditional `card_build` events.
-- Runtime observer channel:
-  - Part B emits `::this` updates via `emit_runtime_card_output_io`.
-  - `sessions_push` (from session combinator) forwards each event as `CardUpdate` to all active session queues.
-  - Each OpenSession stream yields from its session queue.
+### Card-runtime-owned
 
-### Session layer (combinator architecture)
+- Card graph/cells/propagators and connector lifecycle
+- Compile/build behavior per card
 
-Session-related logic is centralized in the session layer so `connect_server` only wires routes.
+From `src/grpc/card/card_api.ts` and internals:
+- `add_card`, `remove_card`, `connect_cards`, `detach_cards_by_key`
+- `update_card`, `build_card`
 
-**Primitives:**
-- `session_store.ts` — `get_all_sessions`, `get_or_create_session`, `session_push`, `wait_for_message_or_timeout`, `remove_session`
-- `session_push_constructor.ts` — `(get_sessions) => (event) => void` — forwards runtime events to all session queues
-- `connect_session_helpers.ts` — pure helpers: `delta_to_server_messages`, `open_session_initial_slot_map`
+---
 
-**Combinator:**
-- `session_combinator.ts` — `create_session_combinator(env)` returns:
-  - `sessions_push` — `session_push_constructor(get_all_sessions)`
-  - `init` — calls `init_runtime_card_output_io(sessions_push)` to wire Part B output → session queues
-  - `openSession` — handler: setup, yield loop (drain queue or heartbeat), cleanup on close
+## PushDeltas Pipeline
 
-**Wire-up in `connect_server.ts`:**
-```ts
-const session = create_session_combinator(env)
-session.init()
-// ...
-openSession: (req, ctx) => session.openSession(req, ctx)
-```
+`push_deltas_apply_io` performs:
 
-### Runtime output pipeline: propagation → frontend
+1. Decode request (`to_push_deltas_data`)
+2. Resolve/create session (`get_session` or `get_or_create_session`)
+3. Compute transition:
+   - `nextSlotMap = apply_cards_delta_to_slot_map(prevSlotMap, delta)`
+   - `events = diff_slot_maps_to_card_api_events(prevSlotMap, nextSlotMap)`
+4. Apply events to runtime:
+   - `apply_card_api_events_io(env, events)`
+5. Persist `state.slotMap = nextSlotMap`
+6. Trace outcome (events + apply issues)
 
-**Purpose:** When the propagation layer computes a new `::this` value for a card, it must be sent to the frontend as `CardUpdate`.
+Key point: this path is **state transition + side-effect apply**, not direct one-off mutators.
 
-**Where to call `emit_runtime_card_output_io`:** In the **propagation layer** — wherever a card's `::this` cell value changes (e.g. when `bi_sync` or compiled propagator writes to `::this`).
+---
 
-**Pipeline flow:**
-1. Propagation updates cell → `emit_runtime_card_output_io` in `src/grpc/bridge/card_runtime_events.ts`
-2. `init_runtime_card_output_io(sessions_push)` is called at Connect server startup (from `session.init()`)
-3. `sessions_push` = `session_push_constructor(get_all_sessions)` — for each event, pushes `CardUpdate` to every session queue via `session_push(state, msg)`
-4. `open_session_yield_loop` in `session_combinator.ts` yields from `state.queue` → streamed to frontend
+## OpenSession Pipeline
 
-### OpenSession logging (DEBUG_GRPC=1)
+`create_session_combinator(env)` centralizes open-session behavior:
 
-- **Backend** logs when messages are pushed to the session queue and when they are yielded to the client:
-  - `[grpc] OpenSession queue push` — `sessionId`, summary of each message (heartbeat / cardUpdate key set|remove)
-  - `[grpc] OpenSession yield to client` — `sessionId`, summary of the message sent
-- **Frontend:** when consuming the OpenSession stream, log each received `ServerMessage` to compare with backend. Example (pseudocode):
-  - For each message: `console.log("[OpenSession] received", msg.kind?.case, msg.kind?.case === "cardUpdate" ? { cardId: msg.kind.value?.cardId, slot: msg.kind.value?.slot, ref: msg.kind.value?.ref } : null)`
+- `init()` wires runtime output bridge:
+  - `init_runtime_card_output_io(sessions_push)`
+- `openSession(req, ctx)`:
+  1. Decode open payload (`sessionId`, optional `initialData`)
+  2. Create/get session with initial slot map
+  3. If initial slots exist:
+     - diff `{}` -> `initialSlotMap`
+     - apply via `apply_card_api_events_io`
+     - call `bind_context_slots_io` (currently no-op stub)
+  4. Yield one immediate heartbeat
+  5. Loop:
+     - wait for queue or timeout
+     - drain queued messages, else emit heartbeat
+  6. Cleanup on stream end: `remove_session(sessionId)`
 
-**Echo loop avoidance:** `state.slotMap` is updated when CardsDelta is applied (frontend input). Deduplication of echoed values may be handled in the propagation layer or frontend; the session layer broadcasts all emitted events to session queues.
+---
 
-### Detach and disposal timing
+## CardBuild Pipeline
 
-`detach_cards` marks the connector for disposal; actual cleanup runs only when `execute_all_tasks_sequential` is invoked. Inside that call, **propagation runs first, then cleanup**. So if you detach and immediately trigger new propagation (e.g. via `update_source_cell`), the bi_sync child propagators are still active during that propagation step and will continue to push values across the detached link.
+`card_build_apply_io`:
 
-**Fix:** Run `execute_all_tasks_sequential` right after detach, before the next update. That ensures cleanup runs before any further propagation. See `card_api.test.ts` tests 1 and 6 for the pattern.
+1. Decode `{sessionId, cardId}`
+2. Validate card id; validate session existence when `sessionId` provided
+3. Load code from session slot-map key `${cardId}code`
+4. If code is string: `update_card(cardId, code)`
+5. Execute `build_card(env)(cardId)`
+6. Return `CardBuildResponse { success, error_message }`
+
+This keeps **build explicit** and tied to current slot-map code.
+
+---
+
+## Slot Sync Rules (Current)
+
+`diff_slot_maps_to_card_api_events(prev, next)` in `delta/card_slot_sync.ts`:
+
+- Detects structural edges from directional slots (`::left/right/above/below`) and canonicalizes reciprocal refs.
+- Emits events:
+  - `card_detach`
+  - `card_remove`
+  - `card_add`
+  - `card_connect`
+  - `card_update` (currently from `code` slot sync path)
+
+`apply_card_api_events_io` maps each event to card API calls.
+
+Note: issues array exists in `CardApiApplyReport`, but current implementation mostly applies directly and returns empty unless custom issue collection is added.
+
+---
+
+## Runtime Output to Frontend
+
+Bridge: `src/grpc/bridge/card_runtime_events.ts`
+
+- Runtime emits `RuntimeCardOutputEvent { cardId, slot: "::this", value }`
+- `emit_runtime_card_output_io(event)` forwards to:
+  - configured `sessions_push` callback (if initialized)
+  - local subscribers
+
+Fan-out: `session_push_constructor(get_all_sessions)`
+
+- Converts runtime event -> `ServerMessage.CardUpdate`
+- Pushes to every session queue via `session_push`
+- `openSession` streams those queued messages to connected frontend clients
+
+---
+
+## Deprecated / Legacy Paths
+
+Still present in code but not used by browser route wiring:
+
+- unary `Compile`
+- server-stream `NetworkStream`
+- bidi `Session`
+
+Also, `compile_for_viz` and `bind_context_slots_io` in `handlers/compile_handler.ts` are legacy/stub-oriented for the deprecated unary compile path; `bind_context_slots_io` remains called in open/push setup but is currently a no-op.
+
+---
+
+## Operational Notes
+
+- `pushDeltas` can create a session if missing (`get_or_create_session`) and logs that path.
+- `openSession` removes session state when stream closes.
+- Detach/cleanup semantics in propagation may require scheduler flush ordering; see `docs/CARD-COMPILE-NEIGHBOR-BUG.md` and `test/card_api.test.ts` for lifecycle edge cases.
 
 ---
 
 ## References
 
-- [CARDS-IMPLEMENTATION-PLAN.md](./CARDS-IMPLEMENTATION-PLAN.md) — Ontology, CardDesc, reducer rules, spawn, contradiction
-- [card_api.ts](../src/grpc/card/card_api.ts) — Part B: build, add, remove, connect, detach
-- [connect_server.ts](../src/grpc/connect_server.ts) — Route wiring; Compile, NetworkStream, Session, OpenSession, PushDeltas, CardBuild
-- [session_combinator.ts](../src/grpc/session/session_combinator.ts) — Session combinator: `sessions_push`, `init`, `openSession` from session store
-- [session_store.ts](../src/grpc/session/session_store.ts) — Session state, `get_all_sessions`, `session_push`, `wait_for_message_or_timeout`
-- [session_push_constructor.ts](../src/grpc/session/session_push_constructor.ts) — `(get_sessions) => (event) => void` — forward runtime events to all sessions
-- [card_runtime_events.ts](../src/grpc/bridge/card_runtime_events.ts) — `init_runtime_card_output_io`, `emit_runtime_card_output_io`
+- `src/grpc/connect_server.ts` — route wiring + push/build pipelines
+- `src/grpc/session/session_combinator.ts` — open-session lifecycle and bridge init
+- `src/grpc/session/session_store.ts` — session state and queue primitives
+- `src/grpc/session/session_push_constructor.ts` — runtime event fan-out to sessions
+- `src/grpc/delta/card_slot_sync.ts` — slot-map diff -> card events -> card API apply
+- `src/grpc/card/card_api.ts` — card runtime API surface
+- `src/grpc/bridge/card_runtime_events.ts` — runtime output bridge
+- `proto/lain.proto` — RPC surface and deprecations

@@ -41,6 +41,9 @@ type CardMetadata = {
 
 const card_metadata_storage = new Map<string, CardMetadata>();
 
+// it will be great if we can simply knows the exact cell value of card so when it bugged 
+// we knows what is going on
+
 export const remove_card_metadata = (id: string) => {
     card_metadata_storage.delete(id);
 }
@@ -188,43 +191,6 @@ export const card_metadata_compiled = (metadata: CardMetadata) => {
     return metadata.tracking_propagators.has("compiled_network");
 }
 
-
-// export const compile_internal_network_with_metadata = (
-//     metadata: CardMetadata,
-//     env: LexicalEnvironment,
-// ) => compound_propagator(
-//     [env, metadata.card],
-//     [],
-//     () => {
-//         console.log("compiling internal network with metadata");
-//         const card_this = guarantee_get(metadata.tracking_internal_cells, slot_this);
-//         const card_left = guarantee_get(metadata.tracking_internal_cells, slot_left);
-//         const card_right = guarantee_get(metadata.tracking_internal_cells, slot_right);
-//         const card_above = guarantee_get(metadata.tracking_internal_cells, slot_above);
-//         const card_below = guarantee_get(metadata.tracking_internal_cells, slot_below);
-//         // so 7b fails exactly happened when we try to 
-//         // GC local environment
-//         // but why?
-//         const local_env = extends_local_environment(
-//             env,
-//             [
-//                 [slot_this, card_this],
-//                 [slot_left, card_left],
-//                 [slot_right, card_right],
-//                 [slot_above, card_above],
-//                 [slot_below, card_below],
-//             ]
-//         )
-//         compile_card_internal_code(
-//             card_this,
-//             local_env,
-//             metadata.compile_source,
-//             metadata.compile_timestamp
-//         )
-
-//     },
-//     "compile_internal_network_with_metadata"
-// )
 
 
 

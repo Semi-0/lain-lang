@@ -202,9 +202,10 @@ export class NetworkUpdate extends Message<NetworkUpdate> {
 }
 
 /**
- * Only success or error_message; NetworkStream provides all network updates.
+ * Returned by deprecated unary `Compile` only. Lain-viz uses `OpenSession` + `PushDeltas` + `CardBuild` instead.
  *
  * @generated from message lain.viz.CompileResponse
+ * @deprecated
  */
 export class CompileResponse extends Message<CompileResponse> {
   /**

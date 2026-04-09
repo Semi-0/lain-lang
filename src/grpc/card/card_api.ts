@@ -60,7 +60,7 @@ export {
 
 export {
     emit_runtime_card_output_io,
-    init_runtime_card_output_io,
+    subscribe_runtime_card_output,
     type RuntimeCardOutputEvent,
 } from "../bridge/card_runtime_events.js";
 
