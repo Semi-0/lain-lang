@@ -6,7 +6,7 @@
 // + graph_combinators) as Datalog facts and run LogicPrograms through the
 // existing FactSet / propagator stack.
 //
-// Coverage vs docs/propagation-tracing.md–style queries (graph_combinators_card):
+// Coverage vs docs/reference/propagation-tracing.md–style queries (graph_combinators_card):
 //   Q1 namespace / intersect(kind, namespace)     — fully via datalog on this EDB
 //   Q3 kind / level filters                       — fully via datalog
 //   Q4 union / intersect of node sets (two traces)— fully via trace_mem facts + rules

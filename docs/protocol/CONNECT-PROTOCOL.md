@@ -145,6 +145,6 @@ The frontend sends **CardsDelta** with slot keys of the form `"${cardId}${slot}"
 
 ## See also
 
-- **Server components and CLI:** [CONNECT-SERVER.md](./CONNECT-SERVER.md)
-- **Client transport and config:** lain-viz repo — `docs/CONNECT-TRANSPORT.md`
+- **Server components and CLI:** [CONNECT-SERVER.md](../architecture/CONNECT-SERVER.md)
+- **Client transport and config:** lain-viz repo — `docs/transport/CONNECT-TRANSPORT.md`
 - **Connect spec:** [connectrpc.com](https://connectrpc.com) — protocol specification and references.

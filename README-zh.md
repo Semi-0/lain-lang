@@ -130,6 +130,10 @@ bun test
 - **同儕（Peer Client）**：`bun run lain-peer`
 - **互動式殼（REPL）**：`bun run lain-repl`
 
+## 文檔
+
+倉內說明見 [`docs/README.md`](docs/README.md)（架構、Connect 協定、規劃、參考、指南含 [Worker 執行緒](docs/guides/WORKER_THREADS.md) 等）。
+
 ## 要旨與特色
 
 ### 分散式即時編碼

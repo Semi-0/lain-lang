@@ -120,7 +120,9 @@ After installation, you can use the following commands:
 - **Peer Client**: `bun run lain-peer`
 - **REPL**: `bun run lain-repl`
 
+## Documentation
 
+In-repo notes live under [`docs/`](docs/README.md): architecture, Connect protocol, planning, reference material, guides (including [worker threads](docs/guides/WORKER_THREADS.md)), and issue write-ups.
 
 ## Key Features
 

@@ -203,7 +203,7 @@ Also, `compile_for_viz` and `bind_context_slots_io` in `handlers/compile_handler
 
 - `pushDeltas` can create a session if missing (`get_or_create_session`) and logs that path.
 - `openSession` removes session state when stream closes.
-- Detach/cleanup semantics in propagation may require scheduler flush ordering; see `docs/CARD-COMPILE-NEIGHBOR-BUG.md` and `test/card_api.test.ts` for lifecycle edge cases.
+- Detach/cleanup semantics in propagation may require scheduler flush ordering; see [Card compile / neighbor bug](../issues/CARD-COMPILE-NEIGHBOR-BUG.md) and `test/card_api.test.ts` for lifecycle edge cases.
 
 ---
 

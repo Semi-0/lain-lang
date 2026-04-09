@@ -1,7 +1,7 @@
 # Cards Implementation Plan (lain-lang)
 
 **Status:** DRAFT  
-**Aligned with:** [lain-viz design-principles.md](../lain-viz/docs/design-principles.md)
+**Aligned with:** [lain-viz design principles](../../../lain-viz/docs/design/design-principles.md) (relative link valid when `lain-viz` sits next to `lain-lang` under a common parent)
 
 ---
 
@@ -276,7 +276,7 @@ Yield CardUpdate(s) to frontend
 
 ## 16. References
 
-- `lain-viz/docs/design-principles.md` — Contextual sensing, layout, layers
+- `lain-viz/docs/design/design-principles.md` — Contextual sensing, layout, layers
 - `lain-viz/TODO` — Card lifecycle, local env, CarriedCell mapping
 - `Propogator/DataTypes/CarriedCell` — `merge_carried_map`, `make_map_carrier`, `ce_struct`, etc.
 - `lain-lang/compiler/incremental_compiler.ts` — Compilation entry
