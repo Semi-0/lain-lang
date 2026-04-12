@@ -1,7 +1,7 @@
 import { type Cell, construct_propagator } from "ppropogator";
 import { cell_strongest, update_cell } from "ppropogator/Cell/Cell";
 import { is_unusable_value } from "ppropogator/Cell/CellValue";
-import { curried_for_each, curried_map } from "ppropogator/Helper/Helper";
+import { curried_for_each } from "ppropogator/Helper/Helper";
 import { pipe } from "effect";
 
 

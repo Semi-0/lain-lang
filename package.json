@@ -44,6 +44,7 @@
     "drawille-canvas": "^1.2.1",
     "effect": "^3.16.8",
     "generic-handler": "workspace:*",
+    "kiroshi": "workspace:*",
     "graphology": "^0.25.4",
     "graphology-operators": "^1.6.1",
     "graphology-shortest-path": "^2.1.0",

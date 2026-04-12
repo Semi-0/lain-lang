@@ -1,7 +1,6 @@
 import { 
     type Cell, cell_strongest_base_value, compound_propagator, 
-    type Propagator, construct_propagator, cell_strongest, 
-
+    type Propagator, construct_propagator,
 } from "ppropogator";
 import { type LexicalEnvironment } from "../env";
 import { make_output, type LainElement } from "../lain_element";
@@ -46,13 +45,10 @@ export const apply_primitive = (primitive: Cell<Primitive>, operands_expr: LainE
             }
         )
 
-        // is this really needed?
-        
-        return compound_propagator(
+        const inner = compound_propagator(
             inputs,
             outputs,
             () => {
-                console.log("primitive propagator activated")
                 const prim = cell_strongest_base_value(primitive)
                 const args = [...inputs, ...outputs]
                 // @ts-ignore

@@ -12,6 +12,7 @@ Docs are grouped by role. Start here, then open the folder that matches what you
 | [`issues/`](issues/) | Focused bug / edge-case write-ups |
 | [`meta/`](meta/) | Contributor tooling (e.g. LLM notes) |
 | [`TODOS/`](TODOS/) | Dated / themed task lists |
+| [`research/`](research/) | Design notes (higher-order propagation, premises / retraction, …) |
 
 ## Quick links
 
@@ -41,6 +42,11 @@ Docs are grouped by role. Start here, then open the folder that matches what you
 ### Meta
 
 - [LLM guideline](meta/llm-guideline.md)
+
+### Research
+
+- [Higher-order propagators](research/HIGHER-ORDER-PROPAGATOR.md)
+- [Premises and retraction](research/PREMISES-RETRACTION.md) — `ValueSet`, global store, `PremisesSource`, `TemporaryValueSet`, open problems
 
 ---
 
