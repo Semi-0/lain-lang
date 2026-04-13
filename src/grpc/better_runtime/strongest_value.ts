@@ -108,6 +108,7 @@ export const init_specialized_reactive_runtime = () => {
             }
         },
     );
+    console.log("strongest_value handler installed");
 };
 
 export const update_specialized_reactive_value = (

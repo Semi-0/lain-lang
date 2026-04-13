@@ -1,8 +1,8 @@
 import { Cell, cell_strongest, construct_cell, execute_all_tasks_sequential, get_base_value, Propagator } from "ppropogator";
 import { update_cell } from "ppropogator/Cell/Cell";
-import { source_constant_cell, update_source_cell } from "ppropogator/DataTypes/PremisesSource";
-import { create_observer_link, p_sync_to_link } from "ppropogator/DataTypes/ObserverCarriedCell";
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 import {
+    card_connector_constructor_cell,
     compile_card_internal_code,
     compile_internal_network_precise,
     extends_local_environment,
@@ -33,7 +33,6 @@ type CardMetadata = {
     card : Cell<any>;
     tracking_internal_cells: Map<string, Cell<any>>;
     tracking_propagators: Map<string, Propagator>;
-    connector_links: Map<string, Cell<any>[]>;
     compile_source: Cell<any>
     compile_timestamp: number;
     local_env: import("../../../compiler/env").LexicalEnvironment | null;
@@ -168,7 +167,6 @@ export const construct_card_metadata = (id: string) => {
         card,
         tracking_internal_cells,
         tracking_propagators,
-        connector_links: new Map(),
         compile_source,
         compile_timestamp,
         local_env: null,
@@ -256,79 +254,46 @@ export const card_metadata_connect = (
 ) => {
     const forwardKey = `${metadataA.id}->${metadataB.id}`;
     const reverseKey = `${metadataB.id}->${metadataA.id}`;
-
-    // Clear any previous connection on this slot pair
-    const existing_links = metadataA.connector_links.get(forwardKey);
-    if (existing_links !== undefined) {
-        const dummy = construct_cell(`disconnected:${forwardKey}:prev`);
-        const disconnected_link = create_observer_link(dummy);
-        for (const link of existing_links) {
-            update_source_cell(link, disconnected_link);
-        }
-        metadataA.connector_links.delete(forwardKey);
-        metadataB.connector_links.delete(reverseKey);
+    const existing = metadataA.tracking_propagators.get(forwardKey);
+    if (existing !== undefined) {
+        dispose_propagator(existing);
+        metadataA.tracking_propagators.delete(forwardKey);
+        metadataB.tracking_propagators.delete(reverseKey);
     }
 
-    const kA    = guarantee_get(metadataA.tracking_internal_cells, connector_keyA); // A.::right
-    const kB    = guarantee_get(metadataB.tracking_internal_cells, connector_keyB); // B.::left
-    const Athis = guarantee_get(metadataA.tracking_internal_cells, slot_this);
-    const Bthis = guarantee_get(metadataB.tracking_internal_cells, slot_this);
+    const connector_keyA_cell = guarantee_get(metadataA.tracking_internal_cells, connector_keyA);
+    const connector_keyB_cell = guarantee_get(metadataB.tracking_internal_cells, connector_keyB);
+    const cardAthis = guarantee_get(metadataA.tracking_internal_cells, slot_this);
+    const cardBthis = guarantee_get(metadataB.tracking_internal_cells, slot_this);
 
-    // One source_constant_cell per sync direction — updateable via vector clock (substitutes, not merges)
-    const link_kA_to_Bthis  = source_constant_cell(`link:${forwardKey}:kA→Bthis`);
-    const link_Bthis_to_kA  = source_constant_cell(`link:${forwardKey}:Bthis→kA`);
-    const link_kB_to_Athis  = source_constant_cell(`link:${forwardKey}:kB→Athis`);
-    const link_Athis_to_kB  = source_constant_cell(`link:${forwardKey}:Athis→kB`);
+    const connector = card_connector_constructor_cell(
+        connector_keyB_cell,
+        connector_keyA_cell
+    )(
+        cardAthis,
+        cardBthis
+    );
 
-    // Permanent propagators — no-ops when link is the_nothing, active when link resolves to a cell
-    p_sync_to_link(kA,    link_kA_to_Bthis);
-    p_sync_to_link(Bthis, link_Bthis_to_kA);
-    p_sync_to_link(kB,    link_kB_to_Athis);
-    p_sync_to_link(Athis, link_Athis_to_kB);
-
-    // Activate: point each link at its target
-    update_source_cell(link_kA_to_Bthis,  create_observer_link(Bthis));
-    update_source_cell(link_Bthis_to_kA,  create_observer_link(kA));
-    update_source_cell(link_kB_to_Athis,  create_observer_link(Athis));
-    update_source_cell(link_Athis_to_kB,  create_observer_link(kB));
-
-    const links = [link_kA_to_Bthis, link_Bthis_to_kA, link_kB_to_Athis, link_Athis_to_kB];
-    metadataA.connector_links.set(forwardKey, links);
-    metadataB.connector_links.set(reverseKey, links);
-}
+    metadataA.tracking_propagators.set(forwardKey, connector);
+    metadataB.tracking_propagators.set(reverseKey, connector);
+};
 
 export const card_metadata_remove = (metadata: CardMetadata) => {
     metadata.tracking_propagators.forEach((propagator, key) => {
         dispose_propagator(propagator);
     });
-    metadata.connector_links.forEach((links, key) => {
-        const dummy = construct_cell(`disconnected:${key}`);
-        const disconnected_link = create_observer_link(dummy);
-        for (const link of links) {
-            update_source_cell(link, disconnected_link);
-        }
-    });
-    metadata.connector_links.clear();
 
     remove_card_metadata(metadata.id);
-}
+};
 
 export const card_metadata_detach = (metadataA: CardMetadata, metadataB: CardMetadata) => {
     const forwardKey = `${metadataA.id}->${metadataB.id}`;
     const reverseKey = `${metadataB.id}->${metadataA.id}`;
-    const links = metadataA.connector_links.get(forwardKey);
-    if (links === undefined) {
+    const connector = metadataA.tracking_propagators.get(forwardKey);
+    if (connector === undefined) {
         throw new Error(`Connector not found for cards ${metadataA.id} and ${metadataB.id}`);
     }
-    // Redirect every link to a fresh throwaway cell so p_sync_to_link propagators push
-    // harmlessly into the void instead of into the old neighbor's slots.
-    // (update_source_cell requires a proper LayeredObject value; the_nothing is a plain string
-    // that doesn't advance the vector clock, so pointing at a dummy cell is the safe alternative.)
-    const dummy = construct_cell(`disconnected:${forwardKey}`);
-    const disconnected_link = create_observer_link(dummy);
-    for (const link of links) {
-        update_source_cell(link, disconnected_link);
-    }
-    metadataA.connector_links.delete(forwardKey);
-    metadataB.connector_links.delete(reverseKey);
-}
+    dispose_propagator(connector);
+    metadataA.tracking_propagators.delete(forwardKey);
+    metadataB.tracking_propagators.delete(reverseKey);
+};
