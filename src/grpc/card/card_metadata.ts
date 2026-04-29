@@ -254,11 +254,17 @@ export const card_metadata_connect = (
 ) => {
     const forwardKey = `${metadataA.id}->${metadataB.id}`;
     const reverseKey = `${metadataB.id}->${metadataA.id}`;
-    const existing = metadataA.tracking_propagators.get(forwardKey);
-    if (existing !== undefined) {
-        dispose_propagator(existing);
+    const existingForward = metadataA.tracking_propagators.get(forwardKey);
+    const existingReverse = metadataB.tracking_propagators.get(reverseKey);
+    const existingConnectors = [existingForward, existingReverse].filter((it): it is Propagator => it !== undefined);
+    if (existingConnectors.length > 0) {
+        const uniqueConnectors = new Set(existingConnectors);
+        uniqueConnectors.forEach((connector) => {
+            dispose_propagator(connector);
+        });
         metadataA.tracking_propagators.delete(forwardKey);
         metadataB.tracking_propagators.delete(reverseKey);
+        execute_all_tasks_sequential(console.error);
     }
 
     const connector_keyA_cell = guarantee_get(metadataA.tracking_internal_cells, connector_keyA);
@@ -289,11 +295,17 @@ export const card_metadata_remove = (metadata: CardMetadata) => {
 export const card_metadata_detach = (metadataA: CardMetadata, metadataB: CardMetadata) => {
     const forwardKey = `${metadataA.id}->${metadataB.id}`;
     const reverseKey = `${metadataB.id}->${metadataA.id}`;
-    const connector = metadataA.tracking_propagators.get(forwardKey);
-    if (connector === undefined) {
+    const connectorForward = metadataA.tracking_propagators.get(forwardKey);
+    const connectorReverse = metadataB.tracking_propagators.get(reverseKey);
+    const connectors = [connectorForward, connectorReverse].filter((it): it is Propagator => it !== undefined);
+    if (connectors.length === 0) {
         throw new Error(`Connector not found for cards ${metadataA.id} and ${metadataB.id}`);
     }
-    dispose_propagator(connector);
+    const uniqueConnectors = new Set(connectors);
+    uniqueConnectors.forEach((connector) => {
+        dispose_propagator(connector);
+    });
     metadataA.tracking_propagators.delete(forwardKey);
     metadataB.tracking_propagators.delete(reverseKey);
+    execute_all_tasks_sequential(console.error);
 };

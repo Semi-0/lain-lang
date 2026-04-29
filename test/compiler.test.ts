@@ -66,6 +66,7 @@ import { trace_cell } from "ppropogator/Shared/GraphTraversal";
 import { propagator_id } from "ppropogator/Propagator/Propagator";
 import { merge_temporary_value_set } from "ppropogator/DataTypes/TemporaryValueSet";
 import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
+import { p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { parse, State } from "parse-combinator";
 import { parseExpr } from "../compiler/parser";
 import { define } from "../compiler/env";
@@ -466,6 +467,80 @@ describe("Compiler (compile function) Tests", () => {
             expect(Array.isArray(rows)).toBe(true);
             expect(rows).toContainEqual(["a", "p"]);
             expect(exists).toBe(true);
+        });
+
+        test("compiler wires datalog:reactive:trace-io for '+' into a graphology graph", async () => {
+            const target = construct_cell<string>("compiler-trace-target");
+            const trigger = construct_cell<number>("compiler-trace-trigger");
+            const env = extend_env(primitive_env("compiler-trace-io"), [
+                ["target", target],
+                ["trigger", trigger],
+            ]);
+
+            raw_compile("(+ 1 2 traced_plus_out)", env);
+            raw_compile("(datalog:reactive:trace-io target trigger traced_graph)", env);
+
+            update_cell(target, "+");
+            update_cell(trigger, 1);
+            await execute_all_tasks_sequential(console.error);
+
+            const envMap = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
+            const tracedGraphCell = envMap.get("traced_graph");
+            expect(tracedGraphCell).toBeDefined();
+
+            const tracedGraph = cell_strongest_base_value(tracedGraphCell!);
+            expect(is_graphology_graph(tracedGraph)).toBe(true);
+
+            const graph = tracedGraph as {
+                forEachNode: (fn: (id: string, attrs: Record<string, unknown>) => void) => void;
+                forEachEdge: (fn: (edge: string, attrs: Record<string, unknown>, source: string, target: string) => void) => void;
+            };
+            let sawPlus = false;
+            let edgeCount = 0;
+
+            graph.forEachNode((_id, attrs) => {
+                if (attrs?.label === "+") sawPlus = true;
+            });
+            graph.forEachEdge(() => {
+                edgeCount++;
+            });
+
+            expect(sawPlus).toBe(true);
+            expect(edgeCount).toBeGreaterThan(0);
+        });
+
+        test("graph:dependents:cards emits card-focused connected subgraph", async () => {
+            const cardA = construct_cell("CARD|trace-a|::this");
+            const bridge = construct_cell("Core|trace-bridge");
+            const cardB = construct_cell("CARD|trace-b|::this");
+            p_sync(cardA, bridge);
+            p_sync(bridge, cardB);
+            update_cell(cardA, 1);
+
+            const env = extend_env(primitive_env("compiler-graph-cards"), [
+                ["root", cardA],
+            ]);
+            raw_compile("(graph:dependents:cards root cards_graph)", env);
+            await execute_all_tasks_sequential(console.error);
+
+            const envMap = cell_strongest_base_value(env) as Map<string, Cell<unknown>>;
+            const graphCell = envMap.get("cards_graph");
+            expect(graphCell).toBeDefined();
+
+            const graphVal = cell_strongest_base_value(graphCell!);
+            const baseGraph = is_layered_object(graphVal) ? get_base_value(graphVal as LayeredObject<unknown>) : graphVal;
+            expect(is_graphology_graph(baseGraph)).toBe(true);
+            const graph = baseGraph as {
+                forEachNode: (fn: (id: string, attrs: Record<string, unknown>) => void) => void;
+            };
+
+            const labels: string[] = [];
+            graph.forEachNode((_id, attrs) => {
+                if (typeof attrs?.label === "string") labels.push(attrs.label as string);
+            });
+
+            const cardLabels = labels.filter(label => label.startsWith("CARD|"));
+            expect(cardLabels.length).toBeGreaterThanOrEqual(1);
         });
 
         // test("graph:card: can be called with graph and cardId, writes subgraph with only that card's nodes", async () => {

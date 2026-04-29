@@ -25,19 +25,19 @@
 //   (datalog:reactive:topology trigger topo_out)
 
 import type { Cell } from "ppropogator/Cell/Cell"
+import { DirectedGraph } from "graphology"
 import {
     construct_propagator,
-    construct_cell,
     cell_strongest_base_value,
     add_cell_content as update_cell,
     is_nothing,
     is_contradiction,
+    cell_id,
 } from "ppropogator"
 import { semi_naive_datalog, query, type Rule } from "pmatcher/new_match/MiniDatalog"
 import type { Fact } from "pmatcher/new_match/MiniDatalog"
 import { match_dict_substitute } from "pmatcher/new_match/Unification"
 import {
-    install_datalog_handlers,
     make_fact_set,
     is_fact_set,
     type FactSet,
@@ -46,8 +46,14 @@ import {
     derive_facts_kiroshi,
     construct_kiroshi_topology_propagator,
 } from "../../datalog/KiroshiPropagator"
+import { snapshot_topology_facts } from "../../datalog/TopologyFacts"
+import {
+    graphology_from_topology_facts,
+    resolve_network_ids,
+} from "../../datalog/NetworkTopologyGraphology"
 import type { LogicProgram } from "../../datalog/LogicProgram"
 import type { SpecialPrimitiveSpec } from "./types"
+import { update_specialized_reactive_value } from "../../../src/grpc/better_runtime"
 
 // ─── p_datalog_assert ─────────────────────────────────────────────────────────
 //
@@ -65,8 +71,6 @@ export const p_datalog_assert = (
     source: Cell<FactSet>,
     output: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     return construct_propagator(
         [source as Cell<any>],
         [],
@@ -92,8 +96,6 @@ export const p_datalog_derive = (
     rules_cell: Cell<Rule[] | LogicProgram>,
     output: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     return construct_propagator(
         [edb_cell, rules_cell],
         [],
@@ -128,8 +130,6 @@ export const p_datalog_union = (
     b: Cell<FactSet>,
     output: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     return construct_propagator(
         [a, b],
         [],
@@ -190,8 +190,6 @@ export const p_datalog_query = (
     pattern: Cell<QueryPattern>,
     results: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     return construct_propagator(
         [derived, pattern],
         [],
@@ -227,8 +225,6 @@ export const p_kiroshi_derive = (
     rules_cell: Cell<Rule[] | LogicProgram>,
     output: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     let wired = false
     let derived_cell: Cell<FactSet> | null = null
 
@@ -275,8 +271,6 @@ export const p_kiroshi_topology = (
     trigger: Cell<any>,
     output: Cell<FactSet>,
 ) => {
-    install_datalog_handlers()
-
     let topo_cell: Cell<FactSet> | null = null
 
     return construct_propagator(
@@ -301,6 +295,89 @@ export const p_kiroshi_topology = (
     )
 }
 
+// ─── p_kiroshi_trace_propagator_io ────────────────────────────────────────────
+//
+// High-level topology tracer for one designated propagator name.
+// On each trigger, snapshot topology facts, project the designated propagator's
+// direct read/write neighborhood, resolve ids back to live entities, then emit
+// the induced Graphology graph.
+//
+//   (datalog:reactive:trace-io "+" trigger traced_graph)
+const trace_ids_from_topology_facts = (
+    facts: Fact[],
+    propagator_name: string,
+): Set<string> => {
+    const out = new Set<string>()
+    const target_props = new Set<string>()
+
+    for (const f of facts) {
+        if (
+            f[0] === "propagator" &&
+            typeof f[1] === "string" &&
+            typeof f[2] === "string" &&
+            f[2] === propagator_name
+        ) {
+            target_props.add(f[1])
+            out.add(f[1])
+        }
+    }
+
+    for (const f of facts) {
+        if (
+            f[0] === "reads" &&
+            typeof f[1] === "string" &&
+            typeof f[2] === "string" &&
+            target_props.has(f[1])
+        ) {
+            out.add(f[2])
+        }
+        if (
+            f[0] === "writes" &&
+            typeof f[1] === "string" &&
+            typeof f[2] === "string" &&
+            target_props.has(f[1])
+        ) {
+            out.add(f[2])
+        }
+    }
+
+    return out
+}
+
+export const p_kiroshi_trace_propagator_io = (
+    designated_propagator: Cell<string>,
+    trigger: Cell<any>,
+    output: Cell<DirectedGraph>,
+) => {
+    return construct_propagator(
+        [designated_propagator, trigger],
+        [output],
+        () => {
+            const target = cell_strongest_base_value(designated_propagator)
+            if (typeof target !== "string" || target.length === 0) return
+            console.log("tracing propagator", target)
+
+            // this is very unefficient, but we will deal with that later
+            const facts = snapshot_topology_facts()
+            const traced_ids = trace_ids_from_topology_facts(facts, target)
+            console.log("traced ids", traced_ids)
+            const resolved = resolve_network_ids(traced_ids)
+            console.log("resolved", resolved)
+            const keep = new Set(
+                [...traced_ids].filter(id => !resolved.unresolved.includes(id))
+            )
+            const graph =
+                keep.size === 0
+                    ? new DirectedGraph()
+                    : graphology_from_topology_facts(facts, keep)
+            console.log("graph", graph)
+            update_specialized_reactive_value(output, cell_id(output), graph)
+            // update_cell(output, graph)
+        },
+        "kiroshi_trace_io_setup"
+    )
+}
+
 // ─── Primitive spec table ─────────────────────────────────────────────────────
 //
 // Note: `p_datalog_assert` is intentionally omitted.  Raw Fact[] arrays have no
@@ -315,4 +392,5 @@ export const datalog_special_primitive_specs: readonly SpecialPrimitiveSpec[] = 
     { key: "datalog:query",              inputs: 2, outputs: 1, constructor: p_datalog_query },
     { key: "datalog:reactive:derive",    inputs: 2, outputs: 1, constructor: p_kiroshi_derive },
     { key: "datalog:reactive:topology",  inputs: 1, outputs: 1, constructor: p_kiroshi_topology },
+    { key: "datalog:reactive:trace-io",  inputs: 2, outputs: 1, constructor: p_kiroshi_trace_propagator_io },
 ]

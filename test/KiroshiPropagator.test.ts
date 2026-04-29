@@ -56,6 +56,7 @@ import { raw_compile } from "../compiler/compiler_entry"
 import { primitive_env } from "../compiler/closure"
 import { extend_env } from "../compiler/env"
 import { ce_constant } from "ppropogator"
+import { is_graphology_graph } from "../src/grpc/codec/session_encode"
 
 const run = () => execute_all_tasks_sequential((e) => { throw e })
 
@@ -260,12 +261,14 @@ describe("stdlib primitives", () => {
         const keys = datalog_special_primitive_specs.map(s => s.key)
         expect(keys).toContain("datalog:reactive:derive")
         expect(keys).toContain("datalog:reactive:topology")
+        expect(keys).toContain("datalog:reactive:trace-io")
     })
 
     test("special_primitive_specs includes the reactive datalog primitives", () => {
         const all_keys = special_primitive_specs.map(s => s.key)
         expect(all_keys).toContain("datalog:reactive:derive")
         expect(all_keys).toContain("datalog:reactive:topology")
+        expect(all_keys).toContain("datalog:reactive:trace-io")
     })
 
     test("special_primitive_specs has no duplicate keys", () => {
@@ -303,6 +306,7 @@ describe("stdlib primitives", () => {
         expect(keys).toContain("datalog:query")
         expect(keys).toContain("datalog:reactive:derive")
         expect(keys).toContain("datalog:reactive:topology")
+        expect(keys).toContain("datalog:reactive:trace-io")
     })
 })
 
@@ -603,5 +607,44 @@ describe("datalog via compiler DSL", () => {
         const out = e.get("out")
         expect(out).toBeDefined()
         expect(has_fact(out, ["path","a","c"])).toBe(true)
+    })
+
+    test("(datalog:reactive:trace-io \"+\" trigger out) builds graph around '+' io cells", async () => {
+        const trigger = construct_cell<number>("dl-reactive-trace-trigger")
+        const target = construct_cell<string>("dl-reactive-trace-target")
+
+        const env = extend_env(primitive_env("dl-reactive-trace"), [
+            ["trigger", trigger],
+            ["target", target],
+        ])
+
+        raw_compile("(+ 1 2 trace_plus_out)", env)
+        raw_compile("(datalog:reactive:trace-io target trigger traced_graph)", env)
+
+        update_cell(target, "+")
+        update_cell(trigger, 1)
+        await execute_all_tasks_sequential(e => { throw e })
+
+        const e = cell_strongest_base_value(env) as Map<string, any>
+        const out = e.get("traced_graph")
+        expect(out).toBeDefined()
+
+        const g = cell_strongest_base_value(out)
+        expect(is_graphology_graph(g)).toBe(true)
+
+        let sawPlus = false
+        let nEdges = 0
+        ;(g as {
+            forEachNode: (fn: (id: string, attrs: Record<string, unknown>) => void) => void
+            forEachEdge: (fn: (edge: string, attrs: Record<string, unknown>, source: string, target: string) => void) => void
+        }).forEachNode((_id, attrs) => {
+            if (attrs?.label === "+") sawPlus = true
+        })
+        ;(g as {
+            forEachEdge: (fn: (edge: string, attrs: Record<string, unknown>, source: string, target: string) => void) => void
+        }).forEachEdge(() => { nEdges++ })
+
+        expect(sawPlus).toBe(true)
+        expect(nEdges).toBeGreaterThan(0)
     })
 })

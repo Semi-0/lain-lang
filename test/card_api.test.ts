@@ -52,6 +52,7 @@ import { run } from "../compiler/compiler_entry";
 import { construct_cell, update_cell } from "ppropogator/Cell/Cell";
 import { p_sync } from "ppropogator/Propagator/BuiltInProps";
 import { update_source_cell } from "ppropogator/DataTypes/PremisesSource";
+import { is_graphology_graph } from "../src/grpc/codec/session_encode";
 
 beforeEach(() => {
     init_system();
@@ -383,6 +384,27 @@ describe("Card API Tests", () => {
             expect(Either.isRight(first)).toBe(true);
 
             expect(() => detach_cards_by_key("d2a", "d2b")).toThrow(/Connector not found/);
+        });
+
+        test("detach removes forward/reverse connector entries from both cards", async () => {
+            const env = primitive_env();
+            add_card("rm-key-a");
+            add_card("rm-key-b");
+            build_card(env)("rm-key-a");
+            build_card(env)("rm-key-b");
+            connect_cards("rm-key-a", "rm-key-b", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            const metadataA = guarantee_get_card_metadata("rm-key-a");
+            const metadataB = guarantee_get_card_metadata("rm-key-b");
+            expect(metadataA.tracking_propagators.has("rm-key-a->rm-key-b")).toBe(true);
+            expect(metadataB.tracking_propagators.has("rm-key-b->rm-key-a")).toBe(true);
+
+            detach_cards_by_key("rm-key-a", "rm-key-b");
+            execute_all_tasks_sequential(() => {});
+
+            expect(metadataA.tracking_propagators.has("rm-key-a->rm-key-b")).toBe(false);
+            expect(metadataB.tracking_propagators.has("rm-key-b->rm-key-a")).toBe(false);
         });
     });
 
@@ -1087,6 +1109,45 @@ describe("Card API Tests", () => {
             const cardA = get_card("trace-api-a")!;
             expect(internal_cell_left(cardA)).toBeDefined();
         }, 15000);
+
+        test("9b. graph:dependents:cards in card code emits graph to ::right (regression probe)", async () => {
+            const env = primitive_env();
+            add_card("trace-cards-source");
+            add_card("trace-cards-center");
+            add_card("trace-cards-sink");
+
+            build_card(env)("trace-cards-source");
+            build_card(env)("trace-cards-center");
+            build_card(env)("trace-cards-sink");
+
+            connect_cards("trace-cards-source", "trace-cards-center", slot_right, slot_left);
+            connect_cards("trace-cards-center", "trace-cards-sink", slot_right, slot_left);
+            execute_all_tasks_sequential(() => {});
+
+            update_card("trace-cards-center", "(graph:dependents:cards ::left ::right)");
+            build_card(env)("trace-cards-center");
+            execute_all_tasks_sequential(() => {});
+
+            update_card("trace-cards-source", 42);
+            execute_all_tasks_sequential(() => {});
+
+            const sink = get_card("trace-cards-sink")!;
+            const value = read_slot_value(sink, internal_cell_this);
+            expect(is_graphology_graph(value)).toBe(true);
+            if (!is_graphology_graph(value)) return;
+            const graph = value as {
+                forEachNode: (fn: (id: string, attrs: Record<string, unknown>) => void) => void;
+            };
+
+            const labels: string[] = [];
+            graph.forEachNode((_id, attrs) => {
+                if (typeof attrs?.label === "string") labels.push(attrs.label);
+            });
+            // Current behavior probe: graph object is emitted, but card labels are often
+            // absent in this card-runtime path. Keep this assertion explicit so we can
+            // detect when the underlying tracing path starts including CARD nodes.
+            expect(labels.some(label => label.includes("CARD|"))).toBe(false);
+        });
 
 
         test("10. contradiction do resolved when we update the cell in the middle", async () => {

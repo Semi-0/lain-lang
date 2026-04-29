@@ -20,6 +20,7 @@ import {
     p_graph_at_level,
     p_graph_intersect,
     p_graph_union,
+    union_graphs,
     p_graph_collapse_accessors,
     p_graph_annotate_content,
 } from "../../tracer/graph_combinators";
@@ -40,17 +41,28 @@ import {
     p_graph_query_reachable,
     p_graph_query_upstream_of,
 } from "../../tracer/graph_relations";
+import {
+    construct_cell,
+    construct_propagator,
+    add_cell_content as update_cell,
+    cell_strongest_base_value,
+    type Cell,
+    compound_propagator,
+} from "ppropogator";
 import type { SpecialPrimitiveSpec } from "./types";
+import { source_constant_cell } from "ppropogator/DataTypes/PremisesSource";
 
 /**
  * graph:dependents and graph:downstream use periodic trace variants so outputs can sync back
- * to the env without reactive p_tap loops when the gatherer is tied to the env.
+ * to the env without reactive p_tap loops when thee
+ gatherer is tied to the env.
  */
 export const graph_special_primitive_specs: readonly SpecialPrimitiveSpec[] = [
     { key: "graph:trace-dependents", inputs: 1, outputs: 1, constructor: trace_upstream },
     { key: "graph:trace-downstream", inputs: 1, outputs: 1, constructor: trace_downstream },
     { key: "graph:active-trace", inputs: 1, outputs: 1, constructor: trace_upstream_periodically },
     { key: "graph:dependents", inputs: 1, outputs: 1, constructor: trace_upstream_periodic },
+    { key: "graph:dependents:cards", inputs: 1, outputs: 1, constructor: p_graph_dependents_cards },
     { key: "graph:prim-dependents", as: "graph:primitive-dependents", inputs: 1, outputs: 1, constructor: trace_upstream_primitive },
     { key: "graph:card", inputs: 2, outputs: 1, constructor: p_graph_card },
     { key: "graph:prefix", as: "graph:label", inputs: 2, outputs: 1, constructor: p_graph_label_prefix },
@@ -82,3 +94,27 @@ export const graph_special_primitive_specs: readonly SpecialPrimitiveSpec[] = [
     { key: "graph:rel:run-query", inputs: 2, outputs: 1, constructor: p_graph_rel_run_query },
     { key: "graph:rel:exists-query", inputs: 2, outputs: 1, constructor: p_graph_rel_exists_query },
 ];
+
+/**
+ * Compound helper for card-focused dependency tracing.
+ *
+ * Equivalent wiring:
+ *   (graph:dependents x mid)
+ *   (graph:prefix:connected mid "CARD" y)
+ */
+export function p_graph_dependents_cards(
+    root: Cell<any>,
+    output: Cell<any>
+){
+    return compound_propagator(
+        [root],
+        [output],
+        () => {
+            const middle = construct_cell("graph_dependents_cards_middle");
+            trace_upstream(root, middle);
+            p_graph_connected_prefix(middle, source_constant_cell("CARD", "CARD"), output);
+        }
+    ,
+    "graph_dependents_cards"
+    )
+}

@@ -19,6 +19,8 @@ import { construct_env_with_inital_value } from "../../env";
 import { make_primitive, make_two_arity_primitive } from "../base";
 import { graph_special_primitive_specs } from "./graph";
 import { datalog_special_primitive_specs } from "./datalog";
+import { install_datalog_handlers } from "../../datalog/DatalogPropagator";
+import { install_kiroshi_merge_handlers } from "../../datalog/KiroshiPropagator";
 import type { SpecialPrimitiveSpec } from "./types";
 
 export type { PropagatorConstructor, SpecialPrimitiveSpec } from "./types";
@@ -115,6 +117,11 @@ const spec_to_entry = (s: SpecialPrimitiveSpec): [string, Cell<any>] => [
 ];
 
 export const primitive_env = (id: string = "root") => {
+    // Runtime-level registration: datalog handlers should not be installed in
+    // individual primitive propagator constructors.
+    install_datalog_handlers();
+    install_kiroshi_merge_handlers();
+
     const primitives: [string, Cell<any>][] = [
         ...two_arity_prims.map(
             ([name, constructor]): [string, Cell<any>] =>

@@ -1,0 +1,10 @@
+
+
+(+ ::left ::right ::below)
+(network +1 (>:: input) (::> output) (+ input 1 output))
+(graph:trace-dependents <root> g)
+
+(graph:prefix:connected <graph> <namespace CARD> <result>)
+(datalog:reactive:trace-io "+" ::left ::right)
+
+(graph:dependents:cards ::left ::right)

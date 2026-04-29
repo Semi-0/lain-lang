@@ -57,6 +57,7 @@ export const detach_cards_by_key = (
     cardA_key: string,
     cardB_key: string
 ): Either.Either<void, string> => {
+    console.log("detach_cards_by_key", cardA_key, cardB_key);
     const metadataA = guarantee_get_card_metadata(cardA_key);
     const metadataB = guarantee_get_card_metadata(cardB_key);
     card_metadata_detach(metadataA, metadataB);
